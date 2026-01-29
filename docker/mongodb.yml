@@ -1,0 +1,16 @@
+name: langlez-mongo
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: langlez-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./volume/mongodb/data:/data/db
+    networks:
+      - langlez-net

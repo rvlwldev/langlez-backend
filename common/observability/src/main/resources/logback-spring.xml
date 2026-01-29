@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Profile specific configuration for Max History -->
+    <springProfile name="local | default">
+        <property name="LOG_MAX_HISTORY" value="30"/>
+    </springProfile>
+    <springProfile name="prod">
+        <property name="LOG_MAX_HISTORY" value="90"/>
+    </springProfile>
+
+    <!-- JSON File Appender -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- daily rollover -->
+            <fileNamePattern>logs/%d{yyyyMMdd}.log</fileNamePattern>
+            <!-- keep history based on profile -->
+            <maxHistory>${LOG_MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+        
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Pretty print JSON in local for better readability (optional, but good for local dev if they check files) -->
+            <!-- <jsonGeneratorDecorator class="net.logstash.logback.decorate.PrettyPrintingJsonGeneratorDecorator"/> -->
+            
+            <!-- Include MDC context (TraceId, SpanId, etc.) -->
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+        </encoder>
+    </appender>
+
+    <!-- App Specific Loggers -->
+    <logger name="com.langlez" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>
