@@ -1,0 +1,58 @@
+name: langlez-monitoring
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.8.1
+    container_name: langlez-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./volume/prometheus:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - langlez-net
+
+  grafana:
+    image: grafana/grafana:12.3.1
+    container_name: langlez-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./volume/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - langlez-net
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: langlez-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./config/monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - langlez-net
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: langlez-promtail
+    volumes:
+      - ./config/monitoring/promtail-config.yaml:/etc/promtail/config.yaml
+      - ../app/log:/var/log/apps
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - langlez-net

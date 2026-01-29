@@ -1,0 +1,44 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: langlez-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: default-app
+          __path__: /var/log/apps/*/logs/*.log
+    pipeline_stages:
+      # 1. Parse JSON content
+      - json:
+          expressions:
+            timestamp: '"@timestamp"'
+            level: 'level'
+            traceId: 'traceId'
+            spanId: 'spanId'
+            thread: 'thread_name'
+            class: 'logger_name'
+            message: 'message'
+      
+      # 2. Extract application name from file path
+      - regex:
+          source: filename
+          expression: "/var/log/apps/(?P<app_name>[^/]+)/logs/.*"
+      
+      # 3. Set labels dynamically
+      - labels:
+          job: app_name
+          level:
+      
+      # 4. Set timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339
