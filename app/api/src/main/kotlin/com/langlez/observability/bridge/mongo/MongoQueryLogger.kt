@@ -1,7 +1,7 @@
 package com.langlez.observability.bridge.mongo
 
-import com.langlez.config.ObservabilityProperties
-import com.langlez.observability.PerformanceLogger
+import com.langlez.logger.PerformanceLogger
+import com.langlez.logger.config.LoggerProperties
 import com.mongodb.event.CommandFailedEvent
 import com.mongodb.event.CommandListener
 import com.mongodb.event.CommandStartedEvent
@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 class MongoQueryLogger(
     private val performanceLogger: PerformanceLogger,
-    private val properties: ObservabilityProperties,
+    private val properties: LoggerProperties,
 ) : CommandListener {
     override fun commandStarted(event: CommandStartedEvent) {
         // We could log start, but usually we care about completion & duration.

@@ -20,19 +20,21 @@ server:
     prometheus:
       enabled: true
 
-observability:
-  mysql:
-    warn-threshold-ms: 1000
-    log-threshold-ms: 0
-  mongo:
-    warn-threshold-ms: 500
-    log-threshold-ms: 0
-  redis:
-    warn-threshold-ms: 500
-    log-threshold-ms: 0
+#observability:
+#  mysql:
+#    warn-threshold-ms: 1000
+#    log-threshold-ms: 0
+#  mongo:
+#    warn-threshold-ms: 500
+#    log-threshold-ms: 0
+#  redis:
+#    warn-threshold-ms: 500
+#    log-threshold-ms: 0
 
 spring:
   profiles:
+    include:
+      - auth
     validate: true
 
 # Swagger Configuration - Only enabled in local environment
