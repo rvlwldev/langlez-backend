@@ -10,9 +10,11 @@ Langlez(랭크즈)는 언어 교환(Language Exchange)을 핵심으로 하는 �
 ### 1.1. 주요 서비스 기능
 Langlez는 언어 교환을 목적으로 하는 글로벌 소셜 플랫폼입니다.
 
-#### A. 인증 및 회원 (Auth & Account)
+#### A. 인증 및 회원 (Auth & Member)
 - **소셜 로그인**: Google, Apple OAuth 2.0 기반 인증 및 JWT 발급/재발급/검증.
-- **프로필 관리**: 닉네임, 사진(S3), 학습 언어(Level 1~5), 구사 언어(Native/Fluent), 관심사 태그, 차단 목록 관리.
+- **회원 관리**: 
+    - **등급 시스템**: 일반(MEMBER), 프리미엄(PREMIUM, 구독형), 관리자(ADMIN).
+    - **프로필 관리**: 닉네임, 사진(S3), 학습 언어(Level 1~5), 구사 언어(Native/Fluent), 관심사 태그, 차단 목록 관리.
 
 #### B. 매칭 시스템 (Matching)
 - **일일 유저 추천 (Daily Recommendation)**: 
@@ -74,7 +76,7 @@ Langlez는 언어 교환을 목적으로 하는 글로벌 소셜 플랫폼입니
 
 #### 비즈니스 도메인 단위 (Module)
 * **module/auth**: 인증, 소셜 로그인, 보안 정책.
-* **module/account**: 유저 프로필, 언어 설정, 관심사.
+* **module/member**: 회원 정보, 등급 관리(Member/Premium/Admin), 언어 설정, 관심사.
 * **module/matching**: 유저 추천 알고리즘 및 랜덤 매칭 대기열.
 * **module/chat**: 메시지 처리, 미디어 전송, MongoDB 저장 및 수명 주기 관리.
 * **module/feed**: SNS 피드, 좋아요/댓글, 팔로우 시스템.
@@ -86,6 +88,26 @@ Langlez는 언어 교환을 목적으로 하는 글로벌 소셜 플랫폼입니
 * **infra/***: MySQL, MongoDB, Redis, Kafka, Files(S3) 설정.
 * **common/exception**: 전역 예외 처리, 표준 에러 응답.
 * **common/observability**: 로깅, 모니터링, 트레이싱.
+
+### 3.3. 패키지 구조 (Layered Architecture)
+각 모듈은 헥사고날 아키텍처 대신 **Layered Architecture**를 기반으로 다음과 같이 구성합니다.
+
+* **api**: 외부 요청 처리 계층.
+    * **api/http**: REST API 컨트롤러 (`@RestController`).
+    * **api/event**: 이벤트 리스너 (Kafka, Spring Event).
+* **application**: 비즈니스 로직 처리 계층 (Service).
+    * Service 객체, DTO, UseCase 등이 위치합니다.
+* **domain**: 핵심 도메인 계층.
+    * **Entity**: JPA 엔티티 및 핵심 도메인 로직.
+* **infrastructure**: 기술적 구현 계층.
+    * **Persistence**: JPA Repository 인터페이스 및 구현체.
+    * **External**: 외부 API 클라이언트, 인프라 설정(Config), 유틸리티 등.
+
+### 3.5. 모듈 추가 절차 (Module Creation)
+새로운 모듈 생성 시 반드시 다음 절차를 따릅니다.
+1. `settings.gradle.kts`에 모듈 경로(`include("...")`)를 추가합니다.
+2. `build.gradle.kts`를 생성하고 필요한 의존성을 설정합니다.
+3. 다른 모듈에서 참조할 경우 `implementation(project(":..."))`로 의존성을 연결합니다.
 
 ---
 
@@ -104,8 +126,27 @@ Langlez는 언어 교환을 목적으로 하는 글로벌 소셜 플랫폼입니
 모든 의존성은 Gradle **Version Catalog** (`gradle/libs.versions.toml`)를 통해 중앙 집중식으로 관리됩니다.
 
 ### 4.4. 테스트 (Testing)
-* **명명 규칙**: 모든 테스트의 표시 이름(`@DisplayName`)은 **한국어**로 작성합니다.
-* **가독성**: 비즈니스 시나리오를 설명하는 문장을 선호합니다.
+* **라이브러리**: 테스트 프레임워크는 **Kotest**와 **MockK**만을 사용합니다. (JUnit5, Mockito 지양)
+* **명명 규칙**: 
+    * 테스트 함수명은 **한국어 문장**으로 작성하며, 백틱(\`\`)으로 감쌉니다.
+    * `@DisplayName` 어노테이션은 사용하지 않습니다. 함수명 자체가 설명을 대신합니다.
+    * 예시: `` fun `구글 로그인 시 신규 회원이면 자동 가입된다`() ``
+* **가독성**: BDD 스타일(Given/When/Then) 또는 행위 중심의 서술형 명세를 지향합니다.
+
+### 4.5. 환경 일관성 (Environment Consistency)
+개발(local)과 운영(prod) 환경은 **단일 코드베이스**를 유지합니다.
+* 환경별 동작 차이는 오직 `application-{profile}.yml` 설정과 Spring Profile(`@Profile`)을 통해서만 제어합니다.
+* 코드 내부에서 `if (env == "prod")`와 같은 명시적 분기 처리를 지양하고, 인터페이스와 구현체 분리(Strategy Pattern)를 통해 해결합니다.
+
+### 4.6. Kotlin 관용구 (Idioms)
+* **Null Safety**: Java의 `Optional` 사용을 **엄격히 금지**하고, Kotlin의 Nullable Type(`?`)을 활용합니다.
+* **JPA**: 
+    - `findById` 대신 Spring Data Kotlin 확장 함수인 `findByIdOrNull`을 사용합니다.
+    - Query Method 정의 시 반환 타입을 `T?`로 명시하여 Null Safety를 보장합니다.
+
+### 4.7. 다국어 지원 (I18n)
+* **지원 언어**: 한국어(KO), 영어(EN), 스페인어(ES), 프랑스어(FR), 일본어(JA), 중국어(ZH).
+* **에러 메시지**: 클라이언트의 `Accept-Language` 헤더에 따라 다국어 에러 메시지를 반환합니다.
 
 ---
 
@@ -131,3 +172,4 @@ Langlez는 언어 교환을 목적으로 하는 글로벌 소셜 플랫폼입니
 * **Architecture**: Modular Monolith 및 Vertical Slice Architecture 구조를 엄격히 준수하십시오.
 * **Storage Strategy**: 파일 저장소 구현 시 환경별(Local/S3) 자동 전환 전략을 유지하십시오.
 * **Refactoring**: 리팩토링 시 기존 테스트가 통과하는지 반드시 확인하십시오.
+* **Commit Strategy**: **커밋은 사용자가 직접 수행합니다.** 에이전트는 명시적인 요청("커밋해줘" 등)이 없는 한 절대 자동으로 커밋을 생성하지 마십시오.

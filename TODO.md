@@ -1,3 +1,39 @@
+# Project Roadmap & TODOs
+
+## 1. Infra & Common Modules (Completed)
+- [x] infra/mysql: JPA, QueryDSL Configuration
+- [x] infra/mongo: Auditing, Transaction Configuration
+- [x] infra/redis: Lettuce, Serializer, Distributed Lock
+- [x] infra/kafka: Producer/Consumer Configuration
+- [x] infra/files: Local/S3 Storage Implementation (Profile-based)
+- [x] common/exception: Global Exception Handling
+- [x] common/observability: Logging, Monitoring
+
+## 2. Core Modules (Pending)
+- [ ] module/auth: Google/Apple OAuth, JWT (API Keys Stubbed)
+- [ ] module/member: Member Entity(Role: MEMBER, PREMIUM, ADMIN), Profile, Language Level
+
+## 3. Feature Modules (Planned)
+- [ ] module/matching: Daily Recommendation, Real-time Queue
+- [ ] module/chat: Messaging, MongoDB Archiving
+- [ ] module/feed: Timeline, Follow System
+- [ ] module/room: WebRTC Signaling
+- [ ] module/notification: FCM Push
+
+## 4. Quality Assurance & Documentation (Partial)
+- [x] I18n: Error Message Support (EN, KO, ES, FR, JA, ZH)
+- [x] Docs: Swagger Configuration
+- [ ] Test: Integration Tests & E2E Tests (Currently DISABLED due to configuration context issues)
+    - `MemberE2ETest`: Disabled (`@Disabled`) - Fails with `ConverterNotFoundException` during binding.
+    - `infra:redis` tests: Disabled (`@Disabled`) - Fails with `BeanDefinitionParsingException`.
+
+## 5. Refactoring (Completed)
+- [x] Module Structure: Refactored to Layered Architecture (api, application, domain, infrastructure).
+- [x] Dependency Injection: Applied DIP for Repositories.
+- [x] Configuration: Fixed module bootJar/jar settings.
+
+---
+
 # 외부 서비스 연동 및 인프라 설정 가이드 (Pre-requisites)
 
 이 문서는 프로젝트 개발 전, 개발자(사용자)가 미리 수행해야 할 외부 서비스(OAuth, FCM, S3)의 계정 설정 및 키 발급 절차를 상세히 안내합니다.
