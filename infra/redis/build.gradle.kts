@@ -13,5 +13,8 @@ dependencies {
 
     testImplementation(libs.test.testcontainers)
     testImplementation(libs.test.testcontainers.junit)
+    testImplementation(libs.test.kotest.spring)
+    testImplementation(libs.test.kotest.assertions)
+    testImplementation(libs.test.kotest.runner)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
