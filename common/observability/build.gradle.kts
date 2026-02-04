@@ -11,4 +11,6 @@ dependencies {
 
     // SQL Monitoring (P6Spy)
     api(libs.dependency.p6spy.starter)
+
+    implementation(kotlin("reflect"))
 }

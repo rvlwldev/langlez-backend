@@ -1,27 +1,30 @@
-package com.langlez.config
+package com.langlez.logger.config
 
-import com.langlez.observability.PerformanceLogger
+import com.langlez.logger.PerformanceLogger
 import com.p6spy.engine.common.PreparedStatementInformation
 import com.p6spy.engine.common.StatementInformation
 import com.p6spy.engine.event.JdbcEventListener
-import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.util.StringUtils
 import java.sql.SQLException
 
+// @EnableConfigurationProperties(ObservabilityProperties::class)
 @Configuration
-@EnableConfigurationProperties(ObservabilityProperties::class)
-class ObservabilityConfiguration {
+@org.springframework.boot.context.properties.EnableConfigurationProperties(LoggerProperties::class)
+class LoggerConfiguration {
+    @Bean
+    fun loggerProperties(): LoggerProperties = LoggerProperties()
+
     @Bean
     fun p6SpyEventListener(
         logger: PerformanceLogger,
-        properties: ObservabilityProperties,
+        properties: LoggerProperties,
     ): P6SpyEventListener = P6SpyEventListener(logger, properties)
 
     class P6SpyEventListener(
         private val logger: PerformanceLogger,
-        private val properties: ObservabilityProperties,
+        private val properties: LoggerProperties,
     ) : JdbcEventListener() {
         // PreparedStatement execution
         override fun onAfterExecute(
