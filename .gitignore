@@ -46,10 +46,5 @@ GEMINI.md
 .env
 .DS_Store
 .sisyphus/
-.idea/
-*.iml
-*.iws
-*.ipr
-out/
-build/
-.gradle/
+.opencode/
+*.heapsnapshot
