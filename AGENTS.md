@@ -64,6 +64,11 @@ These rules are crucial for AI agents working on this project.
     - 메인 브랜치 오염 방지 및 컨텍스트 스위칭 비용 최소화.
     - `git worktree add ../feature-branch feature/new-feature`
 
+### 7. Active Worktrees
+현재 생성된 워크트리 목록입니다. 각 모듈 작업 시 해당 경로를 참조하십시오.
+*   **Member Module**: `../langlez-member` (Branch: `feature/module-member`)
+*   **Auth Module**: `../langlez-auth` (Branch: `feature/module-auth`)
+
 ## COMMANDS
 ```bash
 ./gradlew build -x test      # Fast build
