@@ -1,9 +1,9 @@
-package com.langlez.config
+package com.langlez.logger.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 
-@ConfigurationProperties(prefix = "observability")
-data class ObservabilityProperties(
+@ConfigurationProperties(prefix = "logger")
+data class LoggerProperties(
     val mysql: Thresholds = Thresholds(),
     val mongo: Thresholds = Thresholds(),
     val redis: Thresholds = Thresholds(),

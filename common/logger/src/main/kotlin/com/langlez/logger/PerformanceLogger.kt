@@ -1,4 +1,4 @@
-package com.langlez.observability
+package com.langlez.logger
 
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component

@@ -1,4 +1,4 @@
-package com.langlez.observability
+package com.langlez.logger.config
 
 import com.p6spy.engine.spy.appender.MessageFormattingStrategy
 import org.springframework.util.StringUtils

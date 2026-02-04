@@ -9,6 +9,7 @@ dependencies {
     api(libs.dependency.springboot.validation)
     api(libs.dependency.springboot.jpa)
     api(project(":common:exception"))
+    implementation(kotlin("reflect"))
     implementation(kotlin("stdlib"))
 }
 repositories {
