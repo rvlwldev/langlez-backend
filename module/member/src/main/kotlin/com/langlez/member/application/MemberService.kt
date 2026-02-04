@@ -5,6 +5,8 @@ import com.langlez.member.domain.repository.MemberRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+import com.langlez.common.exception.EntityNotFoundException
+
 @Service
 @Transactional
 class MemberService(
@@ -13,6 +15,17 @@ class MemberService(
     override fun findOrCreateMember(command: CreateMemberCommand): Member =
         memberRepository.findByProviderAndProviderId(command.provider, command.providerId)
             ?: createMember(command)
+
+    @Transactional(readOnly = true)
+    fun getMember(email: String): Member =
+        memberRepository.findByEmail(email)
+            ?: throw EntityNotFoundException("Member not found with email: $email")
+
+    fun updateMember(email: String, command: UpdateMemberCommand): Member {
+        val member = getMember(email)
+        member.updateProfile(command.nickname, command.profileImageUrl)
+        return member
+    }
 
     private fun createMember(command: CreateMemberCommand): Member {
         // 닉네임 중복 방지 로직 등이 필요할 수 있으나, 초기에는 소셜 닉네임 그대로 사용하거나 랜덤 생성

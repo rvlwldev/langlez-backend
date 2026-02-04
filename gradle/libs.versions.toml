@@ -4,7 +4,6 @@ ksp = "2.2.21-2.0.4"
 spring-boot = "3.5.8"
 jjwt = "0.12.5"
 querydsl = "7.1"
-ktlint = "14.0.1"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -14,7 +13,6 @@ kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 springboot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 
 
 [libraries]
@@ -75,17 +73,14 @@ dependency-jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jj
 dependency-jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 
 # Test
-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
-test-mockito = { module = "org.mockito.kotlin:mockito-kotlin", version = "5.4.0" }
-test-mockk = { module = "io.mockk:mockk", version = "1.13.12" }
 test-kotest-assertions = { module = "io.kotest:kotest-assertions-core-jvm", version = "5.9.0" }
 test-kotest-runner = { module = "io.kotest:kotest-runner-junit5-jvm", version = "5.9.0" }
 test-kotest-spring = { module = "io.kotest.extensions:kotest-extensions-spring", version = "1.1.3" }
+test-mockk = { module = "io.mockk:mockk", version = "1.13.10" }
 
 test-springboot = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
 test-springboot-security = { module = "org.springframework.security:spring-security-test", version.ref = "spring-boot" }
 test-testcontainers = { module = "org.testcontainers:testcontainers", version = "1.20.4" }
-test-testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version = "1.20.4" }
 test-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis", version = "2.2.2" }
 
 # AOP

@@ -8,13 +8,13 @@ dependencies {
 
     testImplementation(libs.test.springboot) {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
-        exclude(group = "junit", module = "junit")
+        exclude(group = "org.mockito")
     }
 
     testImplementation(libs.test.testcontainers)
-    testImplementation(libs.test.testcontainers.junit)
+    // testImplementation(libs.test.testcontainers.junit) // Removed junit dependency
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.kotest.assertions)
     testImplementation(libs.test.kotest.runner)
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher") // Needed for Kotest runner
 }

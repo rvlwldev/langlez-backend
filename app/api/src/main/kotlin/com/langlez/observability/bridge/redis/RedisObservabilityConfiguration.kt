@@ -12,7 +12,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.stereotype.Component
 
 @Configuration
-class RedisObservabilityConfiguration {
+open class RedisObservabilityConfiguration {
     // Kept empty or for other configs
 }
 

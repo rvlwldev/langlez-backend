@@ -69,10 +69,13 @@ These rules are crucial for AI agents working on this project.
 *   **Member Module**: `../langlez-member` (Branch: `feature/module-member`)
 *   **Auth Module**: `../langlez-auth` (Branch: `feature/module-auth`)
 
+### 7. Module Responsibilities
+- **app/api**: Only for aggregation, configuration (profiles), and connecting infrastructure. **DO NOT** place domain-specific E2E tests here.
+- **module/***: Each module MUST contain its own Domain, Application, API layers, and **Tests (including E2E)**.
+
 ## COMMANDS
 ```bash
 ./gradlew build -x test      # Fast build
 ./gradlew test               # Run all tests
 ./gradlew app:api:bootRun    # Run API server
-./gradlew ktlintFormat       # Fix style
 ```

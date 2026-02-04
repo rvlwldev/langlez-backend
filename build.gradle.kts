@@ -29,7 +29,7 @@ val pluginId =
     )
 
 plugins {
-    alias(libs.plugins.ktlint)
+
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.kotlin.ksp) apply false
@@ -38,18 +38,6 @@ plugins {
 }
 
 allprojects {
-    apply(plugin = "org.jlleitschuh.gradle.ktlint")
-
-    ktlint {
-        debug.set(true)
-        verbose.set(true)
-        android.set(false)
-        outputToConsole.set(true)
-        filter {
-            exclude("**/generated/**")
-            include("**/kotlin/**")
-        }
-    }
 
     group = "com.template"
     version = "0.0.1-SNAPSHOT"

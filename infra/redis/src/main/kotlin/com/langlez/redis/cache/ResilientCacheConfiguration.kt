@@ -18,11 +18,11 @@ import kotlin.random.Random
 
 @Configuration
 @EnableScheduling
-class ResilientCacheConfiguration {
+open class ResilientCacheConfiguration {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    fun caffeineCacheManager(): CaffeineCacheManager {
+    open fun caffeineCacheManager(): CaffeineCacheManager {
         val caffeineBuilder =
             Caffeine
                 .newBuilder()
@@ -33,7 +33,7 @@ class ResilientCacheConfiguration {
     }
 
     @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
+    open fun redisCacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
         val serializer = fromSerializer(GenericJackson2JsonRedisSerializer())
         val ttl = Duration.ofMinutes(10).plusSeconds(Random.nextLong(60))
 
@@ -53,7 +53,7 @@ class ResilientCacheConfiguration {
 
     @Bean
     @Primary
-    fun cacheManager(
+    open fun cacheManager(
         redisCacheManager: RedisCacheManager,
         caffeineCacheManager: CaffeineCacheManager,
         connectionFactory: RedisConnectionFactory,
