@@ -10,6 +10,11 @@ data class CreateMemberCommand(
     val providerId: String,
 )
 
+data class UpdateMemberCommand(
+    val nickname: String,
+    val profileImageUrl: String?,
+)
+
 interface MemberUseCase {
     fun findOrCreateMember(command: CreateMemberCommand): Member
 }

@@ -27,7 +27,7 @@ dependencies {
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.mockk)
-    testImplementation("io.mockk:mockk:1.13.10")
+    testImplementation(libs.test.springboot)
     implementation(kotlin("stdlib"))
 }
 repositories {

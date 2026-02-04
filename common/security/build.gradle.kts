@@ -19,6 +19,7 @@ dependencies {
     // Let's keep it simple for now and see if we can decouple later.
     
     api("org.springframework.boot:spring-boot-starter-security")
+    api("org.springframework.boot:spring-boot-starter-web")
     api("org.springframework.boot:spring-boot-starter-oauth2-client")
     api("io.jsonwebtoken:jjwt-api:0.12.5")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")

@@ -20,12 +20,6 @@ Built with **Modular Monolith Architecture** to ensure scalability and maintaina
 ./gradlew :app:api:bootRun
 ```
 
-### Code Style
-```bash
-# Apply ktlint formatting
-./gradlew ktlintFormat
-```
-
 ---
 
 ## 2. Project Architecture

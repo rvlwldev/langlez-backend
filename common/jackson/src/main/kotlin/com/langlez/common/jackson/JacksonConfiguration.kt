@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
-class JacksonConfiguration {
+open class JacksonConfiguration {
     @Bean
-    fun objectMapper(): ObjectMapper = ObjectMapper().registerKotlinModule()
+    open fun objectMapper(): ObjectMapper = ObjectMapper().registerKotlinModule()
 }
