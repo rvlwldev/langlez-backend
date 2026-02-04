@@ -1,7 +1,7 @@
 package com.langlez.observability.bridge.redis
 
-import com.langlez.config.ObservabilityProperties
-import com.langlez.observability.PerformanceLogger
+import com.langlez.logger.PerformanceLogger
+import com.langlez.logger.config.LoggerProperties
 import io.lettuce.core.event.command.CommandFailedEvent
 import io.lettuce.core.event.command.CommandListener
 import io.lettuce.core.event.command.CommandStartedEvent
@@ -10,7 +10,7 @@ import io.lettuce.core.protocol.CommandArgs
 
 class RedisQueryLogger(
     private val performanceLogger: PerformanceLogger,
-    private val properties: ObservabilityProperties,
+    private val properties: LoggerProperties,
 ) : CommandListener {
     override fun commandStarted(event: CommandStartedEvent) {
         // No-op

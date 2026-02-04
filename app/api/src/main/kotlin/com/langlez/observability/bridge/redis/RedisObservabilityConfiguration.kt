@@ -1,7 +1,7 @@
 package com.langlez.observability.bridge.redis
 
-import com.langlez.config.ObservabilityProperties
-import com.langlez.observability.PerformanceLogger
+import com.langlez.logger.PerformanceLogger
+import com.langlez.logger.config.LoggerProperties
 import io.lettuce.core.AbstractRedisClient
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -19,7 +19,7 @@ class RedisObservabilityConfiguration {
 @Component
 class RedisQueryListenerRegistrar(
     private val performanceLogger: PerformanceLogger,
-    private val properties: ObservabilityProperties,
+    private val properties: LoggerProperties,
     private val redisConnectionFactory: RedisConnectionFactory,
 ) : ApplicationListener<ApplicationReadyEvent> {
     private val logger = LoggerFactory.getLogger(RedisQueryListenerRegistrar::class.java)

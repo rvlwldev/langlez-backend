@@ -1,6 +1,5 @@
 package com.langlez.observability
 
-import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationFailedEvent
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationEvent
@@ -9,7 +8,7 @@ import org.springframework.context.event.ContextClosedEvent
 import java.time.LocalDateTime
 
 class ApplicationStateLogger : ApplicationListener<ApplicationEvent> {
-    private val logger = LoggerFactory.getLogger(ApplicationStateLogger::class.java)
+    private val logger = org.slf4j.LoggerFactory.getLogger(ApplicationStateLogger::class.java)
 
     override fun onApplicationEvent(event: ApplicationEvent) {
         when (event) {
