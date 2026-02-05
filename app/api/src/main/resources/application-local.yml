@@ -38,10 +38,11 @@ spring:
             token-uri: https://appleid.apple.com/auth/token
             jwk-set-uri: https://appleid.apple.com/auth/keys
             user-name-attribute: sub
-  jwt:
-    secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ=" # Base64 encoded dummy key
-    expiration: 3600000 # 1 hour
-    refresh-expiration: 1209600000 # 14 days
+
+jwt:
+  secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ="
+  access-token-validity-in-seconds: 3600
+  refresh-token-validity-in-seconds: 1209600
 
 # Swagger Configuration - Local Environment
 swagger:
