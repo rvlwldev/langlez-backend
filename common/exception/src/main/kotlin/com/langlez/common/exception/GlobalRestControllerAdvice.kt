@@ -1,5 +1,8 @@
-package com.langlez.common
+package com.langlez.common.exception
 
+import com.langlez.common.CommonErrorResponse
+import com.langlez.common.CommonException
+import com.langlez.common.GlobalCommonError
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
