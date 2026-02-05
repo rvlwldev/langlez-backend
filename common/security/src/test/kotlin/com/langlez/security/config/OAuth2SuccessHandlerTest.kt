@@ -2,7 +2,6 @@ package com.langlez.security.config
 
 import com.langlez.security.token.JwtTokenProvider
 import io.kotest.core.spec.style.BehaviorSpec
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
@@ -11,14 +10,18 @@ import io.mockk.verify
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.core.Authentication
+import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.security.web.RedirectStrategy
 
-class OAuth2AuthenticationSuccessHandlerTest : BehaviorSpec({
+import org.springframework.data.redis.core.StringRedisTemplate
+
+class OAuth2SuccessHandlerTest : BehaviorSpec({
     val jwtTokenProvider = mockk<JwtTokenProvider>()
-    val handler = OAuth2AuthenticationSuccessHandler(jwtTokenProvider)
+    val redisTemplate = mockk<StringRedisTemplate>(relaxed = true)
+    val redirectUri = "http://localhost:3000/oauth2/redirect"
+    val handler = OAuth2SuccessHandler(jwtTokenProvider, redisTemplate, redirectUri)
     
-    // AbstractAuthenticationTargetUrlRequestHandler(상위 클래스)의 리다이렉트 전략을 모킹합니다.
-    // 이는 실제 HTTP 응답을 보내지 않고 리다이렉트 URL 생성 및 호출 여부만 검증하기 위함입니다.
     val redirectStrategy = mockk<RedirectStrategy>(relaxed = true)
     handler.setRedirectStrategy(redirectStrategy)
 
@@ -26,10 +29,18 @@ class OAuth2AuthenticationSuccessHandlerTest : BehaviorSpec({
         val request = mockk<HttpServletRequest>(relaxed = true)
         val response = mockk<HttpServletResponse>(relaxed = true)
         val authentication = mockk<Authentication>()
+        val oAuth2User = mockk<OAuth2User>()
         
-        every { authentication.name } returns "test@example.com"
+        every { authentication.principal } returns oAuth2User
+        every { oAuth2User.attributes } returns mapOf("email" to "test@example.com")
+        
+        // Role 추출 로직 테스트를 위한 Authority 설정
+        every { authentication.authorities } returns listOf(SimpleGrantedAuthority("ROLE_MEMBER"))
+        
         every { response.isCommitted } returns false
-        every { jwtTokenProvider.createToken("test@example.com") } returns "mock-jwt-token"
+        
+        every { jwtTokenProvider.createAccessToken("test@example.com", "ROLE_MEMBER") } returns "mock-access-token"
+        every { jwtTokenProvider.createRefreshToken("test@example.com") } returns "mock-refresh-token"
 
         When("핸들러가 호출되면") {
             handler.onAuthenticationSuccess(request, response, authentication)
@@ -38,8 +49,9 @@ class OAuth2AuthenticationSuccessHandlerTest : BehaviorSpec({
                 val urlSlot = slot<String>()
                 verify { redirectStrategy.sendRedirect(request, response, capture(urlSlot)) }
                 
-                urlSlot.captured shouldContain "http://localhost:3000/oauth2/redirect"
-                urlSlot.captured shouldContain "token=mock-jwt-token"
+                urlSlot.captured shouldContain redirectUri
+                urlSlot.captured shouldContain "accessToken=mock-access-token"
+                urlSlot.captured shouldContain "refreshToken=mock-refresh-token"
             }
         }
     }
