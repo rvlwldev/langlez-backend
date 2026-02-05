@@ -2,6 +2,7 @@ package com.langlez.member.application
 
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.repository.MemberRepository
+import com.langlez.member.domain.TargetLanguage
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,13 +18,26 @@ class MemberService(
             ?: createMember(command)
 
     @Transactional(readOnly = true)
-    fun getMember(email: String): Member =
+    override fun getMember(email: String): Member =
         memberRepository.findByEmail(email)
             ?: throw EntityNotFoundException("Member not found with email: $email")
 
     fun updateMember(email: String, command: UpdateMemberCommand): Member {
         val member = getMember(email)
-        member.updateProfile(command.nickname, command.profileImageUrl)
+        member.updateProfile(
+            nickname = command.nickname,
+            profileImageUrl = command.profileImageUrl,
+            additionalProfileImages = command.additionalProfileImages,
+            locationCountry = command.locationCountry,
+            locationCity = command.locationCity,
+            nationality = command.nationality,
+            interests = command.interests,
+            mbti = command.mbti,
+            nativeLanguage = command.nativeLanguage,
+            targetLanguages = command.targetLanguages?.map { TargetLanguage(it.language, it.level) },
+            wishDestinations = command.wishDestinations,
+            visitedDestinations = command.visitedDestinations,
+        )
         return member
     }
 

@@ -73,9 +73,47 @@ class Member(
         this.role = MemberRole.PREMIUM
     }
 
-    fun updateProfile(nickname: String, profileImageUrl: String?) {
+    fun updateProfile(
+        nickname: String,
+        profileImageUrl: String?,
+        additionalProfileImages: List<String>?,
+        locationCountry: String?,
+        locationCity: String?,
+        nationality: String?,
+        interests: List<String>?,
+        mbti: String?,
+        nativeLanguage: String?,
+        targetLanguages: List<TargetLanguage>?,
+        wishDestinations: List<String>?,
+        visitedDestinations: List<String>?,
+    ) {
         this.nickname = nickname
         this.profileImageUrl = profileImageUrl
+        additionalProfileImages?.let {
+            this.additionalProfileImages.clear()
+            this.additionalProfileImages.addAll(it)
+        }
+        this.locationCountry = locationCountry
+        this.locationCity = locationCity
+        this.nationality = nationality
+        interests?.let {
+            this.interests.clear()
+            this.interests.addAll(it)
+        }
+        this.mbti = mbti
+        this.nativeLanguage = nativeLanguage
+        targetLanguages?.let {
+            this.targetLanguages.clear()
+            this.targetLanguages.addAll(it)
+        }
+        wishDestinations?.let {
+            this.wishDestinations.clear()
+            this.wishDestinations.addAll(it)
+        }
+        visitedDestinations?.let {
+            this.visitedDestinations.clear()
+            this.visitedDestinations.addAll(it)
+        }
     }
 }
 
