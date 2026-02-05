@@ -16,19 +16,19 @@ class File(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,
+
     @Column(nullable = false)
     val url: String = "",
+
     @Column(nullable = false)
     val originalName: String = "",
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val fileType: FileType = FileType.COMMON,
+    val fileType: FileType = FileType.IMAGE,
+
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
-    enum class FileType {
-        COMMON,
-        IMAGE,
-        VIDEO,
-    }
+    enum class FileType { IMAGE, VIDEO }
 }

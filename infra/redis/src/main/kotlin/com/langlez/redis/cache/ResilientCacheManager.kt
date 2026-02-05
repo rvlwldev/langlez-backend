@@ -15,7 +15,8 @@ class ResilientCacheManager(
     private val caffeineCacheManager: CaffeineCacheManager,
     private val connectionFactory: RedisConnectionFactory,
 ) : CacheManager {
-    private val log = LoggerFactory.getLogger(javaClass)
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     @Volatile
     var isRedisAvailable = true
@@ -37,7 +38,7 @@ class ResilientCacheManager(
 
     fun markRedisDown() {
         if (isRedisAvailable) {
-            log.error("Redis connection failed. Falling back to local cache.")
+            logger.error("Redis connection failed. Falling back to local cache.")
             isRedisAvailable = false
         }
     }
@@ -47,11 +48,10 @@ class ResilientCacheManager(
     @Scheduled(fixedDelay = 5000)
     fun checkRedisAndMigrate() {
         try {
-            val connection = connectionFactory.connection
-            connection.use { it.ping() }
+            connectionFactory.connection.use { it.ping() }
 
             if (!isRedisAvailable) {
-                log.info("Redis is back online! Starting migration from local to Redis...")
+                logger.info("Redis is back online! Starting migration from local to Redis...")
                 migrateLocalToRedis()
                 isRedisAvailable = true
             }
@@ -69,11 +69,12 @@ class ResilientCacheManager(
                 try {
                     redisCache?.put(key, value)
                 } catch (e: Exception) {
-                    log.error("Failed to migrate key $key to Redis", e)
+                    logger.error("Failed to migrate key $key to Redis", e)
                 }
             }
+
             localCache?.clear()
-            log.info("Migrated and cleared local cache for name: $name")
+            logger.info("Migrated and cleared local cache for name: $name")
         }
     }
 }

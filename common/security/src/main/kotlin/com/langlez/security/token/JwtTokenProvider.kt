@@ -10,9 +10,9 @@ import javax.crypto.SecretKey
 
 @Component
 class JwtTokenProvider(
-    @Value("\${jwt.secret}") private val secretKeyString: String,
-    @Value("\${jwt.access-token-validity-in-seconds:3600}") private val accessTokenValidityInSeconds: Long,
-    @Value("\${jwt.refresh-token-validity-in-seconds:1209600}") private val refreshTokenValidityInSeconds: Long,
+    @param:Value("\${jwt.secret}") private val secretKeyString: String,
+    @param:Value("\${jwt.access-token-validity-in-seconds:3600}") private val accessTokenValidityInSeconds: Long,
+    @param:Value("\${jwt.refresh-token-validity-in-seconds:1209600}") private val refreshTokenValidityInSeconds: Long,
 ) {
     private val key: SecretKey by lazy {
         Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKeyString))
@@ -45,7 +45,10 @@ class JwtTokenProvider(
 
     fun validateToken(token: String): Boolean =
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token)
+            Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
             true
         } catch (e: Exception) {
             false
@@ -67,4 +70,3 @@ class JwtTokenProvider(
             .payload
             .get("role", String::class.java) ?: "ROLE_MEMBER"
 }
-

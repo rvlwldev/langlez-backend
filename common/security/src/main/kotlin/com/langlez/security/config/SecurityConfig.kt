@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
-import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.config.http.SessionCreationPolicy.STATELESS
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService
 import org.springframework.security.oauth2.core.user.OAuth2User
@@ -20,20 +20,20 @@ class SecurityConfig {
     @Bean
     fun filterChain(
         http: HttpSecurity,
-        oAuth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>,
-        authenticationSuccessHandler: AuthenticationSuccessHandler,
+        service: OAuth2UserService<OAuth2UserRequest, OAuth2User>,
+        successHandler: AuthenticationSuccessHandler,
         jwtAuthenticationFilter: JwtAuthenticationFilter
     ): SecurityFilterChain {
-        http
-            .csrf { it.disable() }
-            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+        http.csrf { it.disable() }
+            .sessionManagement { it.sessionCreationPolicy(STATELESS) }
             .authorizeHttpRequests {
+                // TODO : Endpoint 정리 후 수정 필요
                 it.requestMatchers("/api/auth/**", "/login/**", "/oauth2/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 it.anyRequest().authenticated()
             }
             .oauth2Login {
-                it.userInfoEndpoint { userInfo -> userInfo.userService(oAuth2UserService) }
-                it.successHandler(authenticationSuccessHandler)
+                it.userInfoEndpoint { userInfo -> userInfo.userService(service) }
+                it.successHandler(successHandler)
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 

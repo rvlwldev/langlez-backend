@@ -17,34 +17,29 @@ internal class S3FileStorage(
     @param:Value($$"${cloud.aws.s3.bucket}") private val bucket: String,
     @param:Value($$"${cloud.aws.s3.region}") private val region: String,
 ) : FileStorage {
-    override fun upload(
-        file: MultipartFile,
-        folder: String,
-    ): String {
+
+    override fun upload(file: MultipartFile, folder: String): String {
         val fileName = "$folder/${UUID.randomUUID()}_${file.originalFilename}"
+        val request = PutObjectRequest
+            .builder()
+            .bucket(bucket)
+            .key(fileName)
+            .contentType(file.contentType)
+            .build()
 
-        val putObjectRequest =
-            PutObjectRequest
-                .builder()
-                .bucket(bucket)
-                .key(fileName)
-                .contentType(file.contentType)
-                .build()
-
-        s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.inputStream, file.size))
+        s3Client.putObject(request, RequestBody.fromInputStream(file.inputStream, file.size))
 
         return "https://$bucket.s3.$region.amazonaws.com/$fileName"
     }
 
     override fun delete(fileUrl: String) {
         val key = fileUrl.substringAfter(".com/")
-        val deleteObjectRequest =
-            DeleteObjectRequest
-                .builder()
-                .bucket(bucket)
-                .key(key)
-                .build()
+        val request = DeleteObjectRequest
+            .builder()
+            .bucket(bucket)
+            .key(key)
+            .build()
 
-        s3Client.deleteObject(deleteObjectRequest)
+        s3Client.deleteObject(request)
     }
 }

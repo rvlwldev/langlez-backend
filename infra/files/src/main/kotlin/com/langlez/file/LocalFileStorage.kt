@@ -11,10 +11,7 @@ import java.util.UUID
 internal class LocalFileStorage : FileStorage {
     private val rootPath = "storage"
 
-    override fun upload(
-        file: MultipartFile,
-        folder: String,
-    ): String {
+    override fun upload(file: MultipartFile, folder: String): String {
         val dir = File("$rootPath/$folder")
         if (!dir.exists()) dir.mkdirs()
 

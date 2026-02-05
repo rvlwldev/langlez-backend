@@ -13,34 +13,28 @@ class ApplicationStateLogger : ApplicationListener<ApplicationEvent> {
     override fun onApplicationEvent(event: ApplicationEvent) {
         when (event) {
             is ApplicationReadyEvent -> {
-                logger.info(
-                        "==========================================================================================",
-                )
-                logger.info("  Application Started Successfully at {}", LocalDateTime.now())
-                logger.info(
-                        "==========================================================================================",
-                )
-            }
-            is ApplicationFailedEvent -> {
-                logger.error(
-                        "==========================================================================================",
-                )
-                logger.error("  Application Failed to Start at {}", LocalDateTime.now())
-                if (event.exception != null) {
-                    logger.error("  Reason: {}", event.exception.message)
+                logger.run {
+                    info("==========================================================================================")
+                    info("  Application Started Successfully at {}", LocalDateTime.now())
+                    info("==========================================================================================")
                 }
-                logger.error(
-                        "==========================================================================================",
-                )
             }
+
+            is ApplicationFailedEvent -> {
+                logger.run {
+                    error("==========================================================================================")
+                    error("  Application Failed to Start at {}", LocalDateTime.now())
+                    if (event.exception != null) logger.error("  Reason: {}", event.exception.message)
+                    error("==========================================================================================")
+                }
+            }
+
             is ContextClosedEvent -> {
-                logger.info(
-                        "==========================================================================================",
-                )
-                logger.info("  Application Stopping (Context Closed) at {}", LocalDateTime.now())
-                logger.info(
-                        "==========================================================================================",
-                )
+                logger.run {
+                    info("==========================================================================================")
+                    info("  Application Stopping (Context Closed) at {}", LocalDateTime.now())
+                    info("==========================================================================================")
+                }
             }
         }
     }

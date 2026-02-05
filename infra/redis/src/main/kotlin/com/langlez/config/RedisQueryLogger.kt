@@ -1,4 +1,4 @@
-package com.langlez.infra.redis.observability
+package com.langlez.config
 
 import com.langlez.logger.PerformanceLogger
 import com.langlez.logger.config.LoggerProperties
@@ -9,8 +9,8 @@ import io.lettuce.core.event.command.CommandSucceededEvent
 import io.lettuce.core.protocol.CommandArgs
 
 class RedisQueryLogger(
-        private val performanceLogger: PerformanceLogger,
-        private val properties: LoggerProperties,
+    private val performanceLogger: PerformanceLogger,
+    private val properties: LoggerProperties,
 ) : CommandListener {
     override fun commandStarted(event: CommandStartedEvent) {
         // No-op
@@ -18,37 +18,36 @@ class RedisQueryLogger(
 
     override fun commandSucceeded(event: CommandSucceededEvent) {
         val command = event.command
-        // event.duration is a java.time.Duration
-        val durationMs = event.duration.toMillis()
+        val durationMs = event.duration.toMillis() // event.duration is a java.time.Duration
 
         val type = command.type.toString()
         val args = extractArgs(command.args)
 
         performanceLogger.log(
-                type = "Redis",
-                command = "$type $args",
-                durationMs = durationMs,
-                thresholdMs = properties.redis.logThresholdMs,
-                warnThresholdMs = properties.redis.warnThresholdMs,
+            type = "Redis",
+            command = "$type $args",
+            durationMs = durationMs,
+            thresholdMs = properties.redis.logThresholdMs,
+            warnThresholdMs = properties.redis.warnThresholdMs,
         )
     }
 
     override fun commandFailed(event: CommandFailedEvent) {
-        val command = event.command
         // Lettuce CommandFailedEvent does not expose duration directly.
+
+        val command = event.command
         val durationMs = 0L
 
         val type = command.type.toString()
         val args = extractArgs(command.args)
 
         performanceLogger.log(
-                type = "Redis",
-                command = "$type $args (FAILED)",
-                durationMs = durationMs,
-                thresholdMs =
-                        properties.redis.logThresholdMs, // Usually we always want to log failures?
-                warnThresholdMs = properties.redis.warnThresholdMs,
-                params = "error=${event.cause.message}",
+            type = "Redis",
+            command = "$type $args (FAILED)",
+            durationMs = durationMs,
+            thresholdMs = properties.redis.logThresholdMs, // Usually we always want to log failures?
+            warnThresholdMs = properties.redis.warnThresholdMs,
+            params = "error=${event.cause.message}",
         )
     }
 

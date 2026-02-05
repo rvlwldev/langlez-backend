@@ -11,16 +11,9 @@ import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 
 @Component
-class JwtAuthenticationFilter(
-    private val jwtTokenProvider: JwtTokenProvider,
-) : OncePerRequestFilter() {
-
-    override fun doFilterInternal(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        filterChain: FilterChain,
-    ) {
-        val token = resolveToken(request)
+class JwtAuthenticationFilter(private val jwtTokenProvider: JwtTokenProvider) : OncePerRequestFilter() {
+    override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
+        val token = resolveToken(req)
 
         if (token != null && jwtTokenProvider.validateToken(token)) {
             val email = jwtTokenProvider.getEmail(token)
@@ -31,14 +24,15 @@ class JwtAuthenticationFilter(
             SecurityContextHolder.getContext().authentication = authentication
         }
 
-        filterChain.doFilter(request, response)
+        chain.doFilter(req, res)
     }
 
     private fun resolveToken(request: HttpServletRequest): String? {
         val bearerToken = request.getHeader("Authorization")
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer "))
             return bearerToken.substring(7)
-        }
+
         return null
     }
 }
