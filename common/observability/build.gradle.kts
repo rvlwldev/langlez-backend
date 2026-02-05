@@ -1,3 +1,8 @@
+plugins {
+    alias(libs.plugins.springboot)
+    alias(libs.plugins.kotlin.spring)
+}
+
 dependencies {
     api(libs.dependency.springboot.starter)
 
@@ -11,6 +16,4 @@ dependencies {
 
     // SQL Monitoring (P6Spy)
     api(libs.dependency.p6spy.starter)
-
-    implementation(kotlin("reflect"))
 }
