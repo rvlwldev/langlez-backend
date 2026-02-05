@@ -1,4 +1,4 @@
-package com.langlez.observability.bridge.redis
+package com.langlez.infra.redis.observability
 
 import com.langlez.logger.PerformanceLogger
 import com.langlez.logger.config.LoggerProperties
@@ -18,16 +18,17 @@ open class RedisObservabilityConfiguration {
 
 @Component
 class RedisQueryListenerRegistrar(
-    private val performanceLogger: PerformanceLogger,
-    private val properties: LoggerProperties,
-    private val redisConnectionFactory: RedisConnectionFactory,
+        private val performanceLogger: PerformanceLogger,
+        private val properties: LoggerProperties,
+        private val redisConnectionFactory: RedisConnectionFactory,
 ) : ApplicationListener<ApplicationReadyEvent> {
     private val logger = LoggerFactory.getLogger(RedisQueryListenerRegistrar::class.java)
 
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         try {
             if (redisConnectionFactory is LettuceConnectionFactory) {
-                // Ensure the client is initialized (getNativeClient might implicitly initialize or return null)
+                // Ensure the client is initialized (getNativeClient might implicitly initialize or
+                // return null)
                 // Note: getNativeClient() is nullable in Kotlin if platform type?
                 val clientObj = redisConnectionFactory.nativeClient
 
@@ -36,12 +37,14 @@ class RedisQueryListenerRegistrar(
                     logger.info("Registered Redis Observability CommandListener successfully.")
                 } else {
                     logger.warn(
-                        "Redis client is not an instance of AbstractRedisClient (found: {}), skipping listener registration.",
-                        clientObj?.javaClass?.name,
+                            "Redis client is not an instance of AbstractRedisClient (found: {}), skipping listener registration.",
+                            clientObj?.javaClass?.name,
                     )
                 }
             } else {
-                logger.warn("RedisConnectionFactory is not LettuceConnectionFactory, skipping listener registration.")
+                logger.warn(
+                        "RedisConnectionFactory is not LettuceConnectionFactory, skipping listener registration."
+                )
             }
         } catch (e: Exception) {
             logger.warn("Failed to register Redis CommandListener: {}", e.message, e)

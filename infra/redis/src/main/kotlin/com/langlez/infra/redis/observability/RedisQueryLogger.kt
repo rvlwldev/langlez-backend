@@ -1,4 +1,4 @@
-package com.langlez.observability.bridge.redis
+package com.langlez.infra.redis.observability
 
 import com.langlez.logger.PerformanceLogger
 import com.langlez.logger.config.LoggerProperties
@@ -9,8 +9,8 @@ import io.lettuce.core.event.command.CommandSucceededEvent
 import io.lettuce.core.protocol.CommandArgs
 
 class RedisQueryLogger(
-    private val performanceLogger: PerformanceLogger,
-    private val properties: LoggerProperties,
+        private val performanceLogger: PerformanceLogger,
+        private val properties: LoggerProperties,
 ) : CommandListener {
     override fun commandStarted(event: CommandStartedEvent) {
         // No-op
@@ -25,11 +25,11 @@ class RedisQueryLogger(
         val args = extractArgs(command.args)
 
         performanceLogger.log(
-            type = "Redis",
-            command = "$type $args",
-            durationMs = durationMs,
-            thresholdMs = properties.redis.logThresholdMs,
-            warnThresholdMs = properties.redis.warnThresholdMs,
+                type = "Redis",
+                command = "$type $args",
+                durationMs = durationMs,
+                thresholdMs = properties.redis.logThresholdMs,
+                warnThresholdMs = properties.redis.warnThresholdMs,
         )
     }
 
@@ -42,12 +42,13 @@ class RedisQueryLogger(
         val args = extractArgs(command.args)
 
         performanceLogger.log(
-            type = "Redis",
-            command = "$type $args (FAILED)",
-            durationMs = durationMs,
-            thresholdMs = properties.redis.logThresholdMs, // Usually we always want to log failures?
-            warnThresholdMs = properties.redis.warnThresholdMs,
-            params = "error=${event.cause.message}",
+                type = "Redis",
+                command = "$type $args (FAILED)",
+                durationMs = durationMs,
+                thresholdMs =
+                        properties.redis.logThresholdMs, // Usually we always want to log failures?
+                warnThresholdMs = properties.redis.warnThresholdMs,
+                params = "error=${event.cause.message}",
         )
     }
 
