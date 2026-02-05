@@ -13,8 +13,6 @@ import java.sql.SQLException
 @Configuration
 @org.springframework.boot.context.properties.EnableConfigurationProperties(LoggerProperties::class)
 class LoggerConfiguration {
-    @Bean
-    fun loggerProperties(): LoggerProperties = LoggerProperties()
 
     @Bean
     fun p6SpyEventListener(

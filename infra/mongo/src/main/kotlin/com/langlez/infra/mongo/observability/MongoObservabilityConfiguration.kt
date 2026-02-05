@@ -1,4 +1,4 @@
-package com.langlez.observability.bridge.mongo
+package com.langlez.infra.mongo.observability
 
 import com.langlez.logger.PerformanceLogger
 import com.langlez.logger.config.LoggerProperties
@@ -13,11 +13,10 @@ open class MongoObservabilityConfiguration {
 
     @Bean
     open fun mongoObservabilityCustomizer(
-        performanceLogger: PerformanceLogger,
-        properties: LoggerProperties,
-    ): MongoClientSettingsBuilderCustomizer =
-        MongoClientSettingsBuilderCustomizer { builder ->
-            builder.addCommandListener(MongoQueryLogger(performanceLogger, properties))
-            logger.info("Registered Mongo Observability CommandListener successfully.")
-        }
+            performanceLogger: PerformanceLogger,
+            properties: LoggerProperties,
+    ): MongoClientSettingsBuilderCustomizer = MongoClientSettingsBuilderCustomizer { builder ->
+        builder.addCommandListener(MongoQueryLogger(performanceLogger, properties))
+        logger.info("Registered Mongo Observability CommandListener successfully.")
+    }
 }

@@ -6,8 +6,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
-class GlobalMetricsConfiguration {
+open class GlobalMetricsConfiguration {
     @Bean
-    fun metricsCommonTags(): MeterRegistryCustomizer<MeterRegistry> =
+    open fun metricsCommonTags(): MeterRegistryCustomizer<MeterRegistry> =
         MeterRegistryCustomizer { registry -> registry.config().commonTags("application", "langlez-server") }
 }
