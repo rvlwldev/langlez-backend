@@ -1,10 +1,11 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.springframework.boot.gradle.tasks.run.BootRun
+import org.springframework.boot.gradle.tasks.bundling.BootJar
 
-group = "com.template"
+group = "com.langlez"
 version = "0.0.1-SNAPSHOT"
-description = "2026-multi-module-template"
+description = "langlez-backend"
 
 data class PluginId(
     val kotlinJvm: String,
@@ -14,22 +15,12 @@ data class PluginId(
 
 val pluginId =
     PluginId(
-        kotlinJvm =
-            libs.plugins.kotlin.jvm
-                .get()
-                .pluginId,
-        springDependency =
-            libs.plugins.spring.dependency.management
-                .get()
-                .pluginId,
-        springboot =
-            libs.plugins.springboot
-                .get()
-                .pluginId,
+        kotlinJvm = libs.plugins.kotlin.jvm.get().pluginId,
+        springDependency = libs.plugins.spring.dependency.management.get().pluginId,
+        springboot = libs.plugins.springboot.get().pluginId,
     )
 
 plugins {
-
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.kotlin.ksp) apply false
@@ -38,8 +29,7 @@ plugins {
 }
 
 allprojects {
-
-    group = "com.template"
+    group = "com.langlez"
     version = "0.0.1-SNAPSHOT"
 
     apply(plugin = pluginId.kotlinJvm)
@@ -81,16 +71,18 @@ subprojects {
     }
 
     plugins.withId(pluginId.springboot) {
-        tasks.named<Jar>("jar") { enabled = true }
+        if (project.path != ":app:api" && project.name != "api") {
+            tasks.named<BootJar>("bootJar") { enabled = false }
+            tasks.named<Jar>("jar") { enabled = true }
+        } else {
+             tasks.named<Jar>("jar") { enabled = true }
+        }
     }
 
     dependencies {
         "testImplementation"(rootProject.libs.bundles.test.kotest)
         "testImplementation"(rootProject.libs.test.mockk)
     }
-}
-repositories {
-    mavenCentral()
 }
 
 dependencies {

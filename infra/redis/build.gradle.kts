@@ -5,6 +5,7 @@ dependencies {
     implementation(libs.dependency.aspectj)
     runtimeOnly(libs.dependency.aspectj.runtime)
     implementation(project(":common:jackson"))
+    implementation(project(":common:logger"))
 
     testImplementation(libs.test.springboot) {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")

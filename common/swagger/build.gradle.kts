@@ -1,6 +1,7 @@
 plugins {
-    kotlin("plugin.spring")
+    alias(libs.plugins.kotlin.spring)
 }
+
 dependencies {
     api(libs.dependency.springboot.web)
     api(libs.dependency.swagger3)
@@ -9,9 +10,4 @@ dependencies {
     api(libs.dependency.springboot.validation)
     api(libs.dependency.springboot.jpa)
     api(project(":common:exception"))
-    implementation(kotlin("reflect"))
-    implementation(kotlin("stdlib"))
-}
-repositories {
-    mavenCentral()
 }
