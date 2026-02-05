@@ -42,6 +42,7 @@ dependency-springboot-cache = { module = "org.springframework.boot:spring-boot-s
 dependency-spring-aspects = { module = "org.springframework:spring-aspects" }
 dependency-spring-kafka = { module = "org.springframework.kafka:spring-kafka", version = "3.3.2" }
 dependency-spring-retry = { module = "org.springframework.retry:spring-retry" }
+dependency-spring-security-core = { module = "org.springframework.security:spring-security-core" }
 
 # QueryDSL
 dependency-querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }
@@ -71,6 +72,7 @@ dependency-caffeine = { module = "com.github.ben-manes.caffeine:caffeine", versi
 dependency-jjwt = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
 dependency-jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
 dependency-jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+dependency-kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version = "5.1.0" }
 
 # Test
 test-kotest-assertions = { module = "io.kotest:kotest-assertions-core-jvm", version = "5.9.0" }
@@ -80,8 +82,13 @@ test-mockk = { module = "io.mockk:mockk", version = "1.13.10" }
 
 test-springboot = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
 test-springboot-security = { module = "org.springframework.security:spring-security-test", version.ref = "spring-boot" }
+test-springboot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers", version.ref = "spring-boot" }
 test-testcontainers = { module = "org.testcontainers:testcontainers", version = "1.20.4" }
-test-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis", version = "2.2.2" }
+test-testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version = "1.20.4" }
+test-testcontainers-mysql = { module = "org.testcontainers:mysql", version = "1.20.4" }
+test-testcontainers-mongodb = { module = "org.testcontainers:mongodb", version = "1.20.4" }
+test-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis-junit", version = "1.6.4" }
+test-restassured = { module = "io.rest-assured:rest-assured", version = "5.3.2" }
 
 # AOP
 dependency-aspectj = { module = "org.aspectj:aspectjweaver", version = "1.9.20" }
@@ -91,3 +98,4 @@ dependency-aspectj-runtime = { module = "org.aspectj:aspectjrt", version = "1.9.
 kotlin = ["dependency-kotlin-reflect", "dependency-kotlin-jackson", "dependency-kotlin-coroutine"]
 test-kotest = ["test-kotest-assertions", "test-kotest-runner"]
 jjwt = ["dependency-jjwt", "dependency-jjwt-impl", "dependency-jjwt-jackson"]
+testcontainers = ["test-testcontainers", "test-testcontainers-junit", "test-testcontainers-mysql"]
