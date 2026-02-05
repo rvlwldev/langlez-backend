@@ -1,6 +1,6 @@
-package com.langlez.auth.infrastructure.config
+package com.langlez.security.filter
 
-import com.langlez.auth.infrastructure.token.JwtTokenProvider
+import com.langlez.security.token.JwtTokenProvider
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -24,7 +24,8 @@ class JwtAuthenticationFilter(
 
         if (token != null && jwtTokenProvider.validateToken(token)) {
             val email = jwtTokenProvider.getEmail(token)
-            val authorities = listOf(SimpleGrantedAuthority("ROLE_MEMBER"))
+            val role = jwtTokenProvider.getRole(token)
+            val authorities = listOf(SimpleGrantedAuthority(role))
 
             val authentication = UsernamePasswordAuthenticationToken(email, null, authorities)
             SecurityContextHolder.getContext().authentication = authentication
