@@ -1,3 +1,7 @@
+plugins {
+    alias(libs.plugins.kotlin.spring)
+}
+
 dependencies {
     implementation(libs.dependency.springboot.web)
     implementation(libs.dependency.springboot.jpa)

@@ -19,36 +19,40 @@ import org.springframework.kafka.support.serializer.JsonSerializer
 
 @Configuration
 @EnableConfigurationProperties(KafkaProperties::class)
-open class KafkaConfiguration(
-    private val kafkaProperties: KafkaProperties,
-) {
+class KafkaConfiguration(private val kafkaProperties: KafkaProperties) {
     @Bean
-    open fun producerFactory(): ProducerFactory<String, Any> {
+    fun producerFactory(): ProducerFactory<String, Any> {
         val configProps = HashMap<String, Any>()
+
         configProps[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaProperties.bootstrapServers
         configProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java
         configProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = JsonSerializer::class.java
+
         return DefaultKafkaProducerFactory(configProps)
     }
 
     @Bean
-    open fun kafkaTemplate(): KafkaTemplate<String, Any> = KafkaTemplate(producerFactory())
+    fun kafkaTemplate(): KafkaTemplate<String, Any> = KafkaTemplate(producerFactory())
 
     @Bean
-    open fun consumerFactory(): ConsumerFactory<String, Any> {
+    fun consumerFactory(): ConsumerFactory<String, Any> {
         val configProps = HashMap<String, Any>()
+
         configProps[ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaProperties.bootstrapServers
         configProps[ConsumerConfig.GROUP_ID_CONFIG] = kafkaProperties.consumer.groupId
         configProps[ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG] = StringDeserializer::class.java
         configProps[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG] = JsonDeserializer::class.java
         configProps[JsonDeserializer.TRUSTED_PACKAGES] = "*"
+
         return DefaultKafkaConsumerFactory(configProps)
     }
 
     @Bean
-    open fun kafkaListenerContainerFactory(): ConcurrentKafkaListenerContainerFactory<String, Any> {
+    fun kafkaListenerContainerFactory(): ConcurrentKafkaListenerContainerFactory<String, Any> {
         val factory = ConcurrentKafkaListenerContainerFactory<String, Any>()
+
         factory.consumerFactory = consumerFactory()
+
         return factory
     }
 }

@@ -11,6 +11,9 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 @EnableMongoRepositories(basePackages = ["com.langlez"])
 @EnableMongoAuditing
 class MongoConfiguration {
+
     @Bean
-    fun mongoTransactionManager(dbFactory: MongoDatabaseFactory): MongoTransactionManager = MongoTransactionManager(dbFactory)
+    fun mongoTransactionManager(dbFactory: MongoDatabaseFactory): MongoTransactionManager =
+        MongoTransactionManager(dbFactory)
+
 }

@@ -1,3 +1,7 @@
+plugins {
+    alias(libs.plugins.kotlin.spring)
+}
+
 dependencies {
     api(libs.dependency.springboot.redis)
     api(libs.dependency.springboot.cache)
@@ -13,9 +17,9 @@ dependencies {
     }
 
     testImplementation(libs.test.testcontainers)
-    // testImplementation(libs.test.testcontainers.junit) // Removed junit dependency
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.kotest.assertions)
     testImplementation(libs.test.kotest.runner)
+
     testRuntimeOnly("org.junit.platform:junit-platform-launcher") // Needed for Kotest runner
 }

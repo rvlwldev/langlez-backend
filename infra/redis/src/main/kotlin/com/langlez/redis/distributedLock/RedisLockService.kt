@@ -6,29 +6,24 @@ import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 
 @Service
-class RedisLockService(
-    private val redisTemplate: RedisTemplate<String, String>,
-) {
-    private val log = LoggerFactory.getLogger(javaClass)
+class RedisLockService(private val redis: RedisTemplate<String, String>) {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
      * 분산 락 획득 시도
-     * @param lockKey 락 키
-     * @param expirationSeconds 락 만료 시간 (초)
+     * @param key 락 키
+     * @param ttl 락 만료 시간 (초)
      * @param block 락 획득 성공 시 실행할 블록
      * @return 락 획득 성공 여부
      */
-    fun <T : Any> acquireLock(
-        lockKey: String,
-        expirationSeconds: Long,
-        block: () -> T,
-    ): Boolean =
-        if (acquireLock(lockKey, expirationSeconds)) {
+    fun <T : Any> acquireLock(key: String, ttl: Long, block: () -> T): Boolean =
+        if (acquireLock(key, ttl)) {
             try {
                 block()
                 true
             } finally {
-                releaseLock(lockKey)
+                releaseLock(key)
             }
         } else {
             false
@@ -36,70 +31,60 @@ class RedisLockService(
 
     /**
      * 락 획득 시도
-     * @param lockKey 락 키
-     * @param expirationSeconds 락 만료 시간 (초)
+     * @param key 락 키
+     * @param ttl 락 만료 시간 (초)
      * @return 락 획득 성공 여부
      */
-    fun acquireLock(
-        lockKey: String,
-        expirationSeconds: Long,
-    ): Boolean {
-        val script =
-            """
-            if redis.call('set', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
-                return 1
-            else
-                return 0
-            end
-            """.trimIndent()
-
-        val redisScript = DefaultRedisScript<Long>()
-        redisScript.setScriptText(script)
-        redisScript.setResultType(Long::class.java)
-
-        val result =
-            redisTemplate.execute(
-                redisScript,
-                listOf(lockKey),
-                "locked",
-                expirationSeconds.toString(),
+    fun acquireLock(key: String, ttl: Long): Boolean {
+        val script = DefaultRedisScript<Long>().apply {
+            setScriptText(
+                """
+                if redis.call('set', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
+                    return 1
+                else
+                    return 0
+                end """.trimIndent()
             )
-
-        val success = result == 1L
-        if (success) {
-            log.debug("Lock acquired successfully: $lockKey")
-        } else {
-            log.debug("Lock acquisition failed: $lockKey")
+            resultType = Long::class.java
         }
+
+        val result = redis.execute(script, listOf(key), "locked", ttl.toString())
+        val success = result == 1L
+
+        if (success) logger.debug("Lock acquired successfully: $key")
+        else logger.debug("Lock acquisition failed: $key")
 
         return success
     }
 
     /**
      * 락 해제
+     * @param key 락 키
      */
-    fun releaseLock(lockKey: String) {
+    fun releaseLock(key: String) {
         try {
-            redisTemplate.delete(lockKey)
-            log.debug("Lock released: $lockKey")
+            val result = redis.delete(key)!!
+            logger.debug("Lock released: $key")
         } catch (e: Exception) {
-            log.error("Failed to release lock: $lockKey", e)
+            logger.error("Failed to release lock: $key", e)
         }
     }
 
     /**
      * 락 존재 여부 확인
+     * @param key 락 키
      */
-    fun isLocked(lockKey: String): Boolean = redisTemplate.hasKey(lockKey)
+    fun isLocked(key: String): Boolean = redis.hasKey(key) ?: false
 
     /**
      * 락 남은 시간 확인 (초 단위)
+     * @param key 락 키
      */
-    fun getLockTtl(lockKey: String): Long? =
+    fun getLockTtl(key: String): Long? =
         try {
-            redisTemplate.getExpire(lockKey)
+            redis.getExpire(key)
         } catch (e: Exception) {
-            log.error("Failed to get TTL for lock: $lockKey", e)
+            logger.error("Failed to get TTL for lock: $key", e)
             null
         }
 }

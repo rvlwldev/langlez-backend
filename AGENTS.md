@@ -68,6 +68,121 @@ These rules are crucial for AI agents working on this project.
 - **Concurrency**: Always consider race conditions. Use Optimistic/Pessimistic Locking where appropriate.
 - **Coroutines**: Use `suspend` functions and Coroutines ONLY when there is a clear performance benefit (e.g., non-blocking I/O with R2DBC, parallel external API calls). Do not force it on JDBC.
 
+#### User's Kotlin Style (AI Agents MUST Follow)
+
+사용자(Owner)의 코딩 스타일을 분석하여 정리한 가이드입니다. AI 에이전트는 이 스타일을 **반드시 모방**해야 합니다.
+
+**1. 간결한 문법 선호 (Concise Syntax)**
+
+- 불필요한 중괄호(`{}`)를 제거합니다.
+- 단일 문장의 `if`, `for`는 한 줄로 작성합니다.
+
+  ```kotlin
+  // ✅ Good
+  if (keys.isNotEmpty()) return keys.sortedBy { it.first }.map { it.second }
+
+  for (i in args.indices) if (parameterAnnotations[i].any { it is LockKey })
+      keys.add(parameterNames[i] to (args[i]?.toString() ?: "null"))
+
+  // ❌ Bad (Verbose)
+  if (keys.isNotEmpty()) {
+      return keys.sortedBy { it.first }.map { it.second }
+  }
+
+  for (i in args.indices) {
+      if (parameterAnnotations[i].any { it is LockKey }) {
+          keys.add(parameterNames[i] to (args[i]?.toString() ?: "null"))
+      }
+  }
+  ```
+
+**2. 단일 표현식 함수 (Single-Expression Functions)**
+
+- 함수 본문이 단일 표현식이면 `=`를 사용합니다.
+
+  ```kotlin
+  // ✅ Good
+  private fun generateLockKey(prefix: String, keys: List<String>): String =
+      "$prefix${keys.joinToString(":")}"
+
+  fun isLocked(key: String): Boolean = redis.hasKey(key) ?: false
+  ```
+
+**3. `apply {}` 블록 적극 활용**
+
+- 객체 초기화 시 `apply {}`로 프로퍼티를 설정합니다.
+
+  ```kotlin
+  // ✅ Good
+  return RedisTemplate<String, Any>().apply {
+      connectionFactory = factory
+      keySerializer = StringRedisSerializer()
+      valueSerializer = jsonSerializer
+  }
+
+  val standaloneConfig = RedisStandaloneConfiguration(properties.host, properties.port)
+      .apply { database = properties.database }
+  ```
+
+**4. 짧은 파라미터명 (Short Parameter Names)**
+
+- 맥락상 명확하면 짧은 이름을 사용합니다.
+
+  ```kotlin
+  // ✅ Good
+  fun redisTemplate(factory: RedisConnectionFactory, mapper: ObjectMapper)
+  fun lock(point: ProceedingJoinPoint, distributedLock: DistributedLock)
+
+  // ❌ Bad (Too verbose)
+  fun redisTemplate(redisConnectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper)
+  ```
+
+**5. KDoc 주석 간소화**
+
+- 한 줄로 작성 가능하면 한 줄로.
+- `@param`, `@return` 등 태그는 생략합니다.
+
+  ```kotlin
+  // ✅ Good
+  /** 메서드 파라미터에서 @LockKey 어노테이션이 붙은 값들을 추출 (파라미터 이름 순 정렬) */
+  private fun extractLockKeys(joinPoint: ProceedingJoinPoint): List<String> { ... }
+
+  // ❌ Bad (Too verbose)
+  /**
+   * 메서드 파라미터에서 @LockKey 어노테이션이 붙은 값들을 추출합니다.
+   * 파라미터 이름 순으로 정렬됩니다.
+   * @param joinPoint AOP JoinPoint
+   * @return 추출된 락 키 목록
+   */
+  ```
+
+**6. 빈 줄 최소화 (Minimal Blank Lines)**
+
+- 논리적 그룹 사이에만 빈 줄을 넣습니다.
+- 메서드 내부에서 불필요한 빈 줄을 넣지 않습니다.
+
+  ```kotlin
+  // ✅ Good
+  val signature = joinPoint.signature as MethodSignature
+  val method = signature.method
+  val parameterAnnotations = method.parameterAnnotations
+  val args = joinPoint.args
+  val parameterNames = signature.parameterNames ?: Array(args.size) { "arg$it" }
+
+  val keys = mutableListOf<Pair<String, String>>()
+  for (i in args.indices) if (parameterAnnotations[i].any { it is LockKey })
+      keys.add(parameterNames[i] to (args[i]?.toString() ?: "null"))
+  ```
+
+**7. Early Return 패턴**
+
+- 조건을 만족하면 즉시 반환하여 중첩을 줄입니다.
+  ```kotlin
+  // ✅ Good
+  if (keys.isNotEmpty()) return keys.sortedBy { it.first }.map { it.second }
+  return listOf(method.declaringClass.name, method.name)
+  ```
+
 ### 5. Testing Protocols
 
 - **Framework**: **Kotest** + **MockK** + **RestAssured** + **Testcontainers**.

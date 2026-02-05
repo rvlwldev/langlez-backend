@@ -17,10 +17,9 @@ class PerformanceLogger {
     ) {
         val payload = arrayOf<Any?>(type, command, durationMs, params ?: "")
 
-        if (durationMs >= warnThresholdMs) {
+        if (durationMs >= warnThresholdMs)
             logger.warn("type={} command={} duration_ms={} params={}", *payload)
-        } else if (durationMs >= thresholdMs) {
+        else if (durationMs >= thresholdMs)
             logger.info("type={} command={} duration_ms={} params={}", *payload)
-        }
     }
 }
