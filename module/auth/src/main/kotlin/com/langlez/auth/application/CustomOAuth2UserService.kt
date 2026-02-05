@@ -3,6 +3,7 @@ package com.langlez.auth.application
 import com.langlez.member.application.CreateMemberCommand
 import com.langlez.member.application.MemberUseCase
 import com.langlez.member.domain.Member
+import org.springframework.context.annotation.Lazy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service
 import java.util.Collections
 
 @Service
+@Lazy
 class CustomOAuth2UserService(
     private val memberUseCase: MemberUseCase,
     private val delegate: OAuth2UserService<OAuth2UserRequest, OAuth2User> = DefaultOAuth2UserService(),
