@@ -1,8 +1,10 @@
 package com.langlez.auth.application
 
-import com.langlez.member.application.CreateMemberCommand
-import com.langlez.member.application.MemberUseCase
+import com.langlez.member.application.MemberService
+import com.langlez.member.application.command.CreateMemberCommand
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.embedded.MemberProvider
+import java.util.*
 import org.springframework.context.annotation.Lazy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
@@ -11,22 +13,25 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User
 import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.stereotype.Service
-import java.util.Collections
+import org.springframework.transaction.annotation.Transactional
 
-@Service
 @Lazy
+@Service
 class CustomOAuth2UserService(
-    private val memberUseCase: MemberUseCase,
+    private val service: MemberService,
     private val delegate: OAuth2UserService<OAuth2UserRequest, OAuth2User> = DefaultOAuth2UserService(),
 ) : OAuth2UserService<OAuth2UserRequest, OAuth2User> {
+
+    @Transactional
     override fun loadUser(userRequest: OAuth2UserRequest): OAuth2User {
-        val oAuth2User = delegate.loadUser(userRequest)
-
+        val user = delegate.loadUser(userRequest)
         val registrationId = userRequest.clientRegistration.registrationId
-        val userNameAttributeName = userRequest.clientRegistration.providerDetails.userInfoEndpoint.userNameAttributeName
-
-        val attributes = OAuthAttributes.of(registrationId, userNameAttributeName, oAuth2User.attributes)
-
+        val userNameAttributeName = userRequest
+            .clientRegistration
+            .providerDetails
+            .userInfoEndpoint
+            .userNameAttributeName
+        val attributes = OAuthAttributes.of(registrationId, userNameAttributeName, user.attributes)
         val member = saveOrUpdate(attributes)
 
         return DefaultOAuth2User(
@@ -36,14 +41,25 @@ class CustomOAuth2UserService(
         )
     }
 
-    private fun saveOrUpdate(attributes: OAuthAttributes): Member =
-        memberUseCase.findOrCreateMember(
+    private fun saveOrUpdate(attributes: OAuthAttributes): Member {
+        val providerType = when (attributes.provider.uppercase()) {
+            "APPLE" -> MemberProvider.Type.APPLE
+            "GOOGLE" -> MemberProvider.Type.GOOGLE
+            else -> throw IllegalArgumentException("Unsupported Provider: ${attributes.provider}")
+        }
+
+        val providerId = attributes.attributes[attributes.nameAttributeKey]?.toString()
+            ?: throw IllegalArgumentException("Provider ID not found in attributes")
+
+        return service.findOrCreateMember(
             CreateMemberCommand(
                 email = attributes.email,
                 nickname = attributes.name,
-                profileImageUrl = attributes.picture,
-                provider = attributes.provider,
-                providerId = attributes.nameAttributeKey,
-            ),
+                agreeTerm = false,
+                providerId = providerId,
+                providerType = providerType,
+                providerUserName = attributes.name
+            )
         )
+    }
 }
