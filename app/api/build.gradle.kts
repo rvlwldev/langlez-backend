@@ -10,7 +10,6 @@ dependencies {
     implementation(project(":common:exception"))
     implementation(project(":common:jackson"))
     implementation(project(":common:observability"))
-    implementation(project(":common:logger"))
     implementation(project(":common:swagger"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:mongo"))

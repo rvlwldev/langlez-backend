@@ -1,3 +1,25 @@
+server:
+  #  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200 # 최대 워커 스레드 수 (default : 200)
+      min-spare: 10 # 최소 유지 스레드 수 (default : 10)
+    connection-timeout: 1m # 연결 타임아웃 (ms) (default : 60000ms = 1m)
+    max-connections: 8192 # 최대 동시 연결 수 (default : 8192)
+    accept-count: 100 # 대기 큐 크기 (default : 100)
+    keep-alive-timeout: 60s # 60s
+  max-http-request-header-size: 8KB
+
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health, info, metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+
 spring:
   config:
     import:
@@ -5,17 +27,28 @@ spring:
       - classpath:mongo-local.yml
       - classpath:redis-local.yml
       - classpath:kafka-local.yml
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
+  messages: # i18n
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: true
+
   logging:
     level:
-      org.hibernate.SQL: INFO # P6Spy handles SQL logging
+      org.hibernate.SQL: INFO # P6Spy 로 SQL Logging
       org.hibernate.orm.jdbc.bind: INFO
+
   decorator:
     datasource:
       enabled: true
       p6spy:
         enable-logging: true
-        multiline: false
-        logging: none # We use P6SpyEventListener via PerformanceLogger
+        multiline: true
+        logging: none # PerformanceLogger 를 통해 P6SpyEventListener 사용중
 
   security:
     oauth2:

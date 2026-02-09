@@ -1,44 +1,42 @@
 package com.langlez.config
 
-import com.langlez.logger.PerformanceLogger
-import com.langlez.logger.config.LoggerProperties
+import com.langlez.observability.PerformanceLogger
 import com.mongodb.event.CommandFailedEvent
 import com.mongodb.event.CommandListener
 import com.mongodb.event.CommandStartedEvent
 import com.mongodb.event.CommandSucceededEvent
 import java.util.concurrent.TimeUnit
 
-class MongoQueryLogger(private val logger: PerformanceLogger, private val properties: LoggerProperties) : CommandListener {
+class MongoQueryLogger(
+    private val logger: PerformanceLogger,
+    private val properties: LoggerProperties
+) : CommandListener {
     override fun commandStarted(event: CommandStartedEvent) {
-        // We could log start, but usually we care about completion & duration.
+        // 시작할 땐 할 필요 없음
     }
 
     override fun commandSucceeded(event: CommandSucceededEvent) {
-        val durationMs = event.getElapsedTime(TimeUnit.MILLISECONDS)
-
         if (event.commandName == "isMaster" || event.commandName == "hello")
             return
 
         logger.log(
             type = "MongoDB",
             command = event.commandName,
-            durationMs = durationMs,
+            durationMs = event.getElapsedTime(TimeUnit.MILLISECONDS),
             thresholdMs = properties.mongo.logThresholdMs,
             warnThresholdMs = properties.mongo.warnThresholdMs,
             params = "requestId=${event.requestId}",
         )
     }
 
-    override fun commandFailed(event: CommandFailedEvent) {
-        val durationMs = event.getElapsedTime(TimeUnit.MILLISECONDS)
-
+    override fun commandFailed(event: CommandFailedEvent) =
         logger.log(
             type = "MongoDB",
             command = "${event.commandName} (FAILED)",
-            durationMs = durationMs,
+            durationMs = event.getElapsedTime(TimeUnit.MILLISECONDS),
             thresholdMs = properties.mongo.logThresholdMs,
             warnThresholdMs = properties.mongo.warnThresholdMs,
             params = "error=${event.throwable.message}",
         )
-    }
 }
+

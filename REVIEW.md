@@ -1,302 +1,86 @@
-# Langlez Backend 코드 리뷰 리포트
+# 코드 리뷰 보고서
 
-**생성일:** 2026-02-05  
-**분석 대상:** langlez-backend/main
-
----
-
-## 1. 개발 진행도 요약
-
-### Phase 1: Core Foundation ✅ (완료)
-
-- [x] Modular Monolith 프로젝트 구조 (app, module, common, infra)
-- [x] MySQL, Redis, MongoDB, Kafka 인프라 설정
-- [x] 공통 모듈: Security, Logger, I18n, Exception Handling
-- [x] Observability: P6Spy, Request Logging
-
-### Phase 2: Auth & Member 🔄 (진행 중 - 약 85% 완료)
-
-- [x] OAuth2 (Google/Apple) Spring Security 통합
-- [x] Member 엔티티 설계, Repository (DIP 적용)
-- [x] Auth 서비스 및 핸들러 유닛 테스트
-- [x] Member API: 프로필 조회/수정 엔드포인트
-- [x] JWT Refresh Token 로직 (Redis 미적용)
-- [ ] ⚠️ Token Blacklist (로그아웃 시 토큰 무효화)
-- [ ] ⚠️ 유효성 검증 로직 미비
-
-### Phase 3, 4: Matching, Chat, Feed, Notification ❌ (미시작)
+**날짜:** 2026-02-05
+**리뷰어:** Sisyphus (AI Agent)
+**프로젝트:** Langlez Backend Server
 
 ---
 
-## 2. 코드 리뷰: 잠재적 위험 및 버그 가능성
+## 1. 요약 (Summary)
+본 프로젝트는 **Modular Monolith** 아키텍처와 Vertical Slices 구조를 견고하게 따르고 있습니다. 최근 수행된 리팩토링을 통해 보안 로직이 `common:security`로 성공적으로 통합되었으며, `Testcontainers`를 활용한 강력한 E2E 테스트 환경이 구축되었습니다.
 
-### 🔴 Critical Issues (즉시 해결 필요)
-
-#### 2.1 JWT 토큰 역할(Role) 하드코딩 문제
-
-**파일:** [JwtAuthenticationFilter.kt](file:///Users/hj/project/langlez/langlez-backend/main/common/security/src/main/kotlin/com/langlez/security/filter/JwtAuthenticationFilter.kt#L27)
-
-```kotlin
-// 문제: 역할이 하드코딩됨 - PREMIUM 사용자도 MEMBER로 처리됨
-val authorities = listOf(SimpleGrantedAuthority("ROLE_MEMBER"))
-```
-
-**위험:** Member 엔티티의 `role` 필드가 있음에도 JWT 필터에서 항상 `ROLE_MEMBER`로 설정됨. 향후 PREMIUM 권한 기반 기능 구현 시 문제 발생.
-
-**권장 수정:**
-
-```diff
-- val authorities = listOf(SimpleGrantedAuthority("ROLE_MEMBER"))
-+ // JWT 클레임에서 role 추출
-+ val role = jwtTokenProvider.getRole(token) // 구현 필요
-+ val authorities = listOf(SimpleGrantedAuthority(role))
-```
+| 카테고리 | 상태 | 요약 |
+| :--- | :---: | :--- |
+| **아키텍처** | ✅ 좋음 | 모듈 간 분리 및 의존성 방향성이 올바름. |
+| **도메인 로직** | ✅ 좋음 | 풍부한 도메인 모델(Rich Domain Model) 사용. 서비스가 엔티티에 로직을 위임함. |
+| **보안** | ⚠️ 개선 필요 | 로직은 안전하나, URL 설정 등 일부 정리 필요. |
+| **테스트** | ✅ 훌륭함 | Testcontainers와 RestAssured를 활용한 실제 E2E 테스트 구축. |
+| **코드 품질** | ⚠️ 경미한 이슈 | 일부 패키지 명명 규칙 불일치 및 접근 제어자 누락. |
 
 ---
 
-#### 2.2 OAuth2SuccessHandler 역할 하드코딩
+## 2. 상세 발견 사항 (Detailed Findings)
 
-**파일:** [OAuth2SuccessHandler.kt](file:///Users/hj/project/langlez/langlez-backend/main/common/security/src/main/kotlin/com/langlez/security/config/OAuth2SuccessHandler.kt#L28)
+### 🔴 Critical (0건)
+*심각한 보안 취약점이나 아키텍처 위반 사항 없음.*
 
-```kotlin
-val role = "ROLE_MEMBER"  // 하드코딩됨
-```
+### 🟡 Major (3건)
 
-**위험:** 새 사용자와 기존 사용자 모두 동일하게 `ROLE_MEMBER` 토큰 발급. DB에 저장된 실제 역할을 반영하지 않음.
+#### 2.1. 보안 URL 설정 불일치
+*   **위치**: `common/security/src/main/kotlin/com/langlez/security/config/SecurityConfig.kt`
+*   **문제**: 이전 버전에서는 `requestMatchers`에 `/api/v1/auth/**`가 포함되어 있었으나, 현재는 `/api/auth/**`로 올바르게 수정되었습니다.
+*   **상태**: ✅ 해결됨
 
----
+#### 2.2. 설정 파일의 범용 패키지 명명
+*   **위치**: `infra/mysql/.../com/langlez/config/MysqlConfiguration.kt`, `common/observability/.../com/langlez/config/GlobalMetricsConfiguration.kt`
+*   **문제**: 여러 설정 클래스가 `com.langlez.config`라는 범용 패키지를 공유함. 이로 인해 테스트 시 컴포넌트 스캔 충돌이 발생했음.
+*   **제안**: 모듈별로 패키지를 구체화하여 분리.
+    *   `com.langlez.infra.mysql.config`
+    *   `com.langlez.common.observability.config`
 
-#### 2.3 AuthService Refresh Token에서 역할 하드코딩
+#### 2.3. MysqlConfiguration의 불필요한 Import
+*   **위치**: `infra/mysql/.../MysqlConfiguration.kt`
+*   **문제**: `@Import(DataSourceAutoConfiguration::class)`를 사용 중. 이는 Testcontainers나 다른 자동 설정 메커니즘을 방해할 수 있음.
+*   **제안**: `@Import`를 제거하고 Spring Boot의 자동 설정에 맡기거나, 커스텀 로직이 필요하다면 DataSource 빈을 명시적으로 정의.
 
-**파일:** [AuthService.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/auth/src/main/kotlin/com/langlez/auth/application/AuthService.kt#L18)
+### 🟢 Minor (4건)
 
-```kotlin
-val newAccessToken = tokenProvider.createAccessToken(email, "ROLE_MEMBER")
-```
+#### 3.1. 설정 클래스의 `open` 제어자 누락
+*   **위치**: `common/observability/.../GlobalMetricsConfiguration.kt`
+*   **문제**: Spring Configuration 클래스는 `open`이어야 함 (CGLIB 프록시). 현재는 닫힌 클래스임.
+*   **제안**: 클래스와 `@Bean` 메서드에 `open` 키워드 추가 또는 해당 모듈에 `kotlin-spring` 플러그인 적용. (현재 수동으로 `open` 추가하여 해결됨)
 
-**위험:** 토큰 갱신 시에도 `ROLE_MEMBER` 하드코딩. PREMIUM으로 업그레이드해도 토큰 갱신 후 권한이 MEMBER로 reset됨.
+#### 3.2. 애플리케이션 서비스 내 도메인 로직 존재
+*   **위치**: `module/auth/.../CustomOAuth2UserService.kt`
+*   **문제**: `generateAccountName` (랜덤 접미사 생성) 로직이 서비스 계층에 있음.
+*   **제안**: 이 로직을 도메인 서비스(예: `AccountNameGenerator`)나 `Member`의 Companion Object로 이동.
 
----
+#### 3.3. 리다이렉트 URI 기본값 하드코딩
+*   **위치**: `common/security/.../OAuth2SuccessHandler.kt`
+*   **문제**: 기본값이 `http://localhost:3000/oauth2/redirect`로 하드코딩됨.
+*   **제안**: `application-prod.yml`에서 반드시 오버라이딩되도록 확인 필요. (현재 구조상 가능)
 
-#### 2.4 MemberResponse에서 NPE 가능성
-
-**파일:** [MemberDto.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/member/src/main/kotlin/com/langlez/member/api/MemberDto.kt#L28)
-
-```kotlin
-id = member.id!!,  // !! 연산자 - NPE 가능
-```
-
-**위험:** 새 Member 엔티티가 저장되기 전에 `from()`이 호출되면 `NullPointerException` 발생.
-
----
-
-### 🟡 High Priority Issues (가까운 시일 내 해결 권장)
-
-#### 2.5 입력 유효성 검증 부재
-
-**파일:** [MemberController.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/member/src/main/kotlin/com/langlez/member/api/MemberController.kt), [AuthController.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/auth/src/main/kotlin/com/langlez/auth/api/AuthController.kt)
-
-**문제:**
-
-- `@Valid` 어노테이션 미사용
-- `@NotBlank`, `@Size`, `@Email` 등 Bean Validation 미적용
-- 빈 닉네임, 잘못된 이메일 형식 등 허용됨
-
-**권장:**
-
-```kotlin
-data class UpdateMemberRequest(
-    @field:NotBlank @field:Size(min = 2, max = 20)
-    val nickname: String,
-    // ...
-)
-```
+#### 3.4. EntityNotFoundException 처리 미흡
+*   **위치**: `common/exception/.../GlobalRestControllerAdvice.kt`
+*   **문제**: `CommonException`과 일반 `Exception`만 처리함. `MemberService` 등에서 사용하는 `EntityNotFoundException`에 대한 명시적 핸들러가 없어 500 에러로 처리될 수 있음.
+*   **제안**: `EntityNotFoundException` 전용 핸들러 추가 (404 반환).
+*   **상태**: ✅ 해결됨
 
 ---
 
-#### 2.6 Refresh Token Redis 저장 미구현
+## 3. 특정 로직 점검 (Specific Logic Checks)
 
-**현재 상태:** Refresh Token이 Redis에 저장되지 않음. 토큰 무효화(로그아웃, 보안 침해) 불가능.
-
-**권장:**
-
-- Refresh Token을 Redis에 저장 (TTL: refresh-token-validity-in-seconds)
-- AuthService.refresh()에서 Redis 저장값과 비교 검증
-- 로그아웃 시 Redis에서 삭제
+| 점검 항목 | 결과 | 상세 내용 |
+| :--- | :---: | :--- |
+| **AuthService Refresh Token 검증** | ✅ 통과 | `AuthService`가 `JwtTokenProvider` 서명 검증과 `Redis` 저장 값 일치 여부를 모두 확인하고 있음. |
+| **Member 낙관적 락(Optimistic Locking)** | ⚠️ 누락됨 | `Member` 엔티티에 `@Version` 필드가 없음. 동시 업데이트 시 데이터 덮어쓰기 발생 가능. |
+| **TargetLanguageCommandDto 매핑** | ✅ 통과 | `MemberController`가 DTO를 `TargetLanguageCommandDto`로 변환하고, `MemberService`가 이를 도메인 엔티티로 올바르게 변환함. |
 
 ---
 
-#### 2.7 OAuth2AuthenticationSuccessHandlerTest 실패 예상
+## 4. 다음 단계 (Action Items)
 
-**파일:** [OAuth2AuthenticationSuccessHandlerTest.kt](file:///Users/hj/project/langlez/langlez-backend/main/common/security/src/test/kotlin/com/langlez/security/config/OAuth2AuthenticationSuccessHandlerTest.kt)
-
-**문제:**
-
-- 테스트가 `createToken()` 메서드를 mock하지만, 실제 `JwtTokenProvider`에는 해당 메서드 없음
-- 실제로는 `createAccessToken()`, `createRefreshToken()` 두 개가 존재
-- 리다이렉트 URL 파라미터도 `token=` 대신 `accessToken=`, `refreshToken=` 두 개임
-
-```kotlin
-// 테스트 (잘못됨)
-every { jwtTokenProvider.createToken("test@example.com") } returns "mock-jwt-token"
-urlSlot.captured shouldContain "token=mock-jwt-token"
-
-// 실제 코드
-val accessToken = jwtTokenProvider.createAccessToken(email, role)
-val refreshToken = jwtTokenProvider.createRefreshToken(email)
-.queryParam("accessToken", accessToken)
-.queryParam("refreshToken", refreshToken)
-```
-
----
-
-#### 2.8 테스트 비활성화 상태
-
-**파일:**
-
-- [DistributedLockTest.kt](file:///Users/hj/project/langlez/langlez-backend/main/infra/redis/src/test/kotlin/com/langlez/redis/distributedLock/DistributedLockTest.kt#L32)
-- [ResilientCacheTest.kt](file:///Users/hj/project/langlez/langlez-backend/main/infra/redis/src/test/kotlin/com/langlez/redis/cache/ResilientCacheTest.kt#L44)
-
-```kotlin
-@org.junit.jupiter.api.Disabled("Temporary disabled due to configuration context issues")
-```
-
-**문제:** Sentinel 설정 강제로 인해 standalone Redis Testcontainer와 충돌. 테스트 실행 불가.
-
----
-
-### 🟢 Medium Priority Issues (개선 권장)
-
-#### 2.9 UpdateMemberCommand에서 API DTO 의존성
-
-**파일:** [MemberUseCase.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/member/src/main/kotlin/com/langlez/member/application/MemberUseCase.kt#L23)
-
-```kotlin
-val targetLanguages: List<com.langlez.member.api.TargetLanguageDto>?
-```
-
-**문제:** Application 레이어 Command가 API 레이어 DTO를 직접 참조 → 레이어 간 의존성 역전.
-
-**권장:** Domain 레이어 `TargetLanguage`를 사용하고 Controller에서 변환.
-
----
-
-#### 2.10 GlobalRestControllerAdvice 중복 파일
-
-**발견:**
-
-- [exception/src/main/kotlin/com/langlez/common/GlobalRestControllerAdvice.kt](file:///Users/hj/project/langlez/langlez-backend/main/common/exception/src/main/kotlin/com/langlez/common/GlobalRestControllerAdvice.kt)
-- [exception/src/main/kotlin/com/langlez/common/exception/GlobalRestControllerAdvice.kt](file:///Users/hj/project/langlez/langlez-backend/main/common/exception/src/main/kotlin/com/langlez/common/exception/GlobalRestControllerAdvice.kt)
-
-**위험:** 두 클래스 모두 `@RestControllerAdvice` → Bean 충돌, 예측 불가능한 예외 처리.
-
----
-
-#### 2.11 Transaction Scope 불일치
-
-**파일:** [MemberService.kt](file:///Users/hj/project/langlez/langlez-backend/main/module/member/src/main/kotlin/com/langlez/member/application/MemberService.kt)
-
-```kotlin
-@Transactional(readOnly = true)  // 클래스 레벨
-fun getMember(...) { ... }  // OK
-
-fun updateMember(...) { ... }  // readOnly = true 상속 → write 불가?
-```
-
-> 실제로는 클래스 레벨에 `@Transactional` (readOnly=false)이 있어 문제없음. 하지만 명시적 어노테이션 권장.
-
----
-
-## 3. 누락된 테스트 시나리오
-
-### Auth 모듈
-
-| 시나리오                                         | 상태    | 우선순위 |
-| ------------------------------------------------ | ------- | -------- |
-| 만료된 Refresh Token으로 갱신 시도               | ❌ 누락 | Critical |
-| 잘못된 형식의 토큰으로 갱신 시도                 | ❌ 누락 | Critical |
-| Access Token으로 Refresh 시도 (잘못된 토큰 타입) | ❌ 누락 | High     |
-| OAuth2 로그인 성공 시 토큰 발급 E2E              | ❌ 누락 | High     |
-| 신규 사용자 OAuth 로그인 시 Member 자동 생성     | ❌ 누락 | High     |
-
-### Member 모듈
-
-| 시나리오                            | 상태    | 우선순위 |
-| ----------------------------------- | ------- | -------- |
-| GET /api/members/me E2E 테스트      | ❌ 누락 | Critical |
-| PUT /api/members/me E2E 테스트      | ❌ 누락 | Critical |
-| 존재하지 않는 회원 조회 시 404 반환 | ❌ 누락 | High     |
-| 빈 닉네임으로 업데이트 시도         | ❌ 누락 | High     |
-| 인증 없이 API 접근 시 401 반환      | ❌ 누락 | Critical |
-| updateMember 서비스 테스트          | ❌ 누락 | Medium   |
-
-### Security 모듈
-
-| 시나리오                                 | 상태    | 우선순위 |
-| ---------------------------------------- | ------- | -------- |
-| JwtAuthenticationFilter 유효 토큰 테스트 | ❌ 누락 | High     |
-| JwtAuthenticationFilter 만료 토큰 테스트 | ❌ 누락 | High     |
-| JwtAuthenticationFilter 토큰 없음 테스트 | ❌ 누락 | Medium   |
-
-### 현재 테스트 현황
-
-```
-활성화된 테스트: 6개
-- AuthE2ETest: 1 테스트
-- MemberE2ETest: 1 테스트
-- MemberServiceTest: 2 테스트
-- OAuth2AuthenticationSuccessHandlerTest: 1 테스트 (실패 예상)
-
-비활성화된 테스트: 2개
-- DistributedLockTest
-- ResilientCacheTest
-```
-
----
-
-## 4. 아키텍처 준수 여부
-
-| 규칙                             | 상태           | 비고                           |
-| -------------------------------- | -------------- | ------------------------------ |
-| No Cross-Module Joins            | ✅ 준수        |                                |
-| Controller 네이밍 (\*Controller) | ✅ 준수        |                                |
-| Optional 대신 Nullable 사용      | ✅ 준수        |                                |
-| Kotest + MockK 사용              | ✅ 준수        |                                |
-| 한국어 테스트 함수명             | ⚠️ 일부 미준수 | AuthE2ETest, MemberE2ETest     |
-| E2E 테스트는 Module에 위치       | ✅ 준수        |                                |
-| Application/Domain 레이어 분리   | ⚠️ 일부 위반   | UpdateMemberCommand → DTO 의존 |
-
----
-
-## 5. 권장 우선순위 액션 플랜
-
-### 즉시 (P0)
-
-1. JWT 역할 하드코딩 수정 (3개 파일)
-2. GlobalRestControllerAdvice 중복 제거
-
-### 1주 내 (P1)
-
-3. 입력 유효성 검증 추가 (Bean Validation)
-4. Refresh Token Redis 저장 구현
-5. OAuth2AuthenticationSuccessHandlerTest 수정
-
-### 2주 내 (P2)
-
-6. 누락된 E2E 테스트 추가
-7. Redis 테스트 컨텍스트 이슈 해결
-8. UpdateMemberCommand 레이어 의존성 수정
-
----
-
-## 6. 요약
-
-| 구분               | 개수 |
-| ------------------ | ---- |
-| 🔴 Critical Issues | 4    |
-| 🟡 High Priority   | 4    |
-| 🟢 Medium Priority | 3    |
-| ❌ 누락된 테스트   | 13+  |
-| 📁 총 분석 파일    | 76개 |
-
-전체적으로 기본 아키텍처와 코어 기능은 잘 구현되어 있습니다. 하지만 **JWT 역할 하드코딩** 문제가 여러 곳에서 발견되어 향후 권한 기반 기능 확장 시 심각한 장애가 될 수 있습니다. 또한 **입력 유효성 검증 부재**와 **테스트 커버리지 부족**이 프로덕션 배포 전 반드시 해결되어야 할 사항입니다.
+1.  **설정 패키지 리팩토링**: 스캔 충돌 방지를 위해 설정 클래스 패키지 이동.
+2.  **낙관적 락 적용**: `Member` 엔티티에 `@Version val version: Long = 0` 필드 추가.
+3.  **SecurityConfig 정리**: 레거시 URL 패턴 제거.
+4.  **예외 처리 강화**: `GlobalRestControllerAdvice`에 `EntityNotFoundException` 핸들러 추가.

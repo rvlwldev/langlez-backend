@@ -1,7 +1,6 @@
 package com.langlez.config
 
-import com.langlez.logger.PerformanceLogger
-import com.langlez.logger.config.LoggerProperties
+import com.langlez.observability.PerformanceLogger
 import io.lettuce.core.AbstractRedisClient
 import io.lettuce.core.RedisClient
 import io.lettuce.core.cluster.RedisClusterClient
@@ -14,18 +13,18 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.stereotype.Component
 
 @Configuration
-open class RedisObservabilityConfiguration {
+class RedisObservabilityConfiguration {
     // Kept empty or for other configs
 }
 
 @Component
-class RedisQueryListenerRegistrar(
+class RedisQueryListenerRegister(
     private val performanceLogger: PerformanceLogger,
     private val properties: LoggerProperties,
     private val redisConnectionFactory: RedisConnectionFactory,
 ) : ApplicationListener<ApplicationReadyEvent> {
 
-    private val logger = LoggerFactory.getLogger(RedisQueryListenerRegistrar::class.java)
+    private val logger = LoggerFactory.getLogger(RedisQueryListenerRegister::class.java)
 
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         try {

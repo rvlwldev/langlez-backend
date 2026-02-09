@@ -3,12 +3,10 @@ package com.langlez.common
 import org.springframework.http.HttpStatus
 
 open class CommonException(
-    val errorCode: CommonError,
-    override val cause: Throwable? = null,
-) : RuntimeException(errorCode.message, cause) {
-    val status: HttpStatus
-        get() = errorCode.status
-
-    val code: String
-        get() = errorCode.code
+    val error: CommonError,
+    message: String?,
+    cause: Throwable?,
+) : RuntimeException(message ?: error.message, cause) {
+    val status: HttpStatus get() = error.status
+    val code: String get() = error.code
 }

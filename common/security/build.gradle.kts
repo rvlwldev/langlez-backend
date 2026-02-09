@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     api(project(":common:exception"))
-    api(project(":common:logger"))
+    api(project(":common:observability"))
     api(project(":infra:redis"))
 
     api(libs.dependency.springboot.security)
