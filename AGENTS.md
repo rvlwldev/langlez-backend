@@ -293,7 +293,8 @@ These rules are crucial for AI agents working on this project.
 ### 6. Git & Commit (Mandatory)
 
 - **Automatic Commit**: 모든 작업 단위(Logical Unit)가 완료될 때마다 반드시 커밋을 수행합니다.
-- **Message Format**: `type: description` (Korean).
+- **Language**: **Commit messages MUST be written in Korean.** (커밋 메시지는 반드시 한국어로 작성해야 합니다).
+- **Message Format**: `type: description`
   - `feat`: 새로운 기능 추가.
   - `fix`: 버그 수정.
   - `chore`: 빌드, 패키지 매니저, 문서 수정 등 (소스 코드 변경 없음).
