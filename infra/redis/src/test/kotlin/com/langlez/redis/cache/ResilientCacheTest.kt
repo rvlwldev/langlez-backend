@@ -1,13 +1,11 @@
 package com.langlez.redis.cache
 
-import com.langlez.common.jackson.JacksonConfiguration
+import com.langlez.config.JacksonConfiguration
 import com.langlez.config.ResilientCacheConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
@@ -22,11 +20,13 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 
 @Configuration
-@EnableAutoConfiguration(exclude = [DataSourceAutoConfiguration::class, HibernateJpaAutoConfiguration::class, JpaRepositoriesAutoConfiguration::class])
-@Import(JacksonConfiguration::class, ResilientCacheConfiguration::class, TestCacheService::class)
 @EnableCaching
+@Import(JacksonConfiguration::class, ResilientCacheConfiguration::class, TestCacheService::class)
+@EnableAutoConfiguration(exclude = [DataSourceAutoConfiguration::class, HibernateJpaAutoConfiguration::class, JpaRepositoriesAutoConfiguration::class])
 class TestConfig
 
 @SpringBootTest(classes = [TestConfig::class], properties = ["spring.data.redis.timeout=2s"])
@@ -47,8 +47,8 @@ class ResilientCacheTest : FunSpec() {
             container.start()
         }
 
-        @DynamicPropertySource
         @JvmStatic
+        @DynamicPropertySource
         fun registerRedisProperties(registry: DynamicPropertyRegistry) {
             registry.add("spring.data.redis.host") { container.host }
             registry.add("spring.data.redis.port") { container.getMappedPort(6379).toString() }
@@ -215,6 +215,7 @@ class ResilientCacheTest : FunSpec() {
             val durationHit = System.currentTimeMillis() - startHit
 
             println("Cache miss: ${durationMiss}ms, Cache hit: ${durationHit}ms")
+
             durationMiss shouldNotBe 0
             (durationHit < durationMiss) shouldBe true
         }

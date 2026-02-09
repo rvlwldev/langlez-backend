@@ -1,7 +1,6 @@
 package com.langlez.config
 
-import com.langlez.logger.PerformanceLogger
-import com.langlez.logger.config.LoggerProperties
+import com.langlez.observability.PerformanceLogger
 import io.lettuce.core.event.command.CommandFailedEvent
 import io.lettuce.core.event.command.CommandListener
 import io.lettuce.core.event.command.CommandStartedEvent

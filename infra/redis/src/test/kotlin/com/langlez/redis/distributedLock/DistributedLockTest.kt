@@ -1,15 +1,11 @@
 package com.langlez.redis.distributedLock
 
-import com.langlez.common.jackson.JacksonConfiguration
+import com.langlez.config.JacksonConfiguration
 import com.langlez.config.RedisConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import java.time.Duration
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
@@ -23,6 +19,10 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
+import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 @Configuration
 @EnableAutoConfiguration(exclude = [DataSourceAutoConfiguration::class, HibernateJpaAutoConfiguration::class, JpaRepositoriesAutoConfiguration::class])
@@ -35,7 +35,9 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
     override fun extensions() = listOf(SpringExtension)
 
     companion object {
-        val container = GenericContainer(DockerImageName.parse("redis:7.2")).withExposedPorts(6379)!!
+        val container = GenericContainer(DockerImageName.parse("redis:7.2"))
+            .withExposedPorts(6379)!!
+
         init {
             container.start()
         }
@@ -109,12 +111,10 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
                         var acquired = false
                         val start = System.currentTimeMillis()
                         while (System.currentTimeMillis() - start < 10000) {
-                            acquired =
-                                redis
-                                    .opsForValue()
-                                    .setIfAbsent(key, "locked", Duration.ofSeconds(5)) ==
-                                        true
+                            acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
+
                             if (acquired) break
+
                             Thread.sleep(10)
                         }
 
@@ -177,10 +177,7 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
                 executor.submit {
                     try {
                         val key = "lock:parallel:$i"
-                        val acquired =
-                            redis
-                                .opsForValue()
-                                .setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
+                        val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
                         synchronized(lock) { results.add(acquired) }
                     } finally {
                         latch.countDown()
@@ -195,7 +192,6 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
         }
 
         // ==================== 엣지 케이스 테스트 ====================
-
         test("`엣지케이스` - 빈 문자열 키에도 락을 걸 수 있다") {
             val key = ""
             val acquired =

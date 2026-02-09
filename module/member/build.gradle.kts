@@ -19,4 +19,5 @@ dependencies {
     testImplementation(libs.test.restassured)
     testImplementation(libs.bundles.testcontainers)
     testImplementation(libs.test.testcontainers.redis)
+    testImplementation(project(":common:security"))
 }
