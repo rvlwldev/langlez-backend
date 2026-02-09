@@ -1,45 +1,45 @@
 package com.langlez.auth.e2e
 
+import com.langlez.auth.api.TokenResponse
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.repository.MemberRepository
-import com.langlez.security.token.JwtTokenProvider
-import io.kotest.core.spec.style.FunSpec
+import com.langlez.member.infrastructure.persistence.JpaMemberRepository
+import io.kotest.core.spec.DisplayName
+import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.springframework.test.context.TestPropertySource
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MySQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 
-import org.springframework.data.redis.core.StringRedisTemplate
-import org.testcontainers.containers.GenericContainer
-
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@TestPropertySource(properties = ["spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=true"])
 @Testcontainers
-class AuthE2ETest : FunSpec() {
+@DisplayName("E2E: 토큰 갱신 통합 테스트")
+class AuthE2ETest : BehaviorSpec() {
     override fun extensions() = listOf(SpringExtension)
 
     @LocalServerPort
     var port: Int = 0
 
     @Autowired
-    lateinit var tokenProvider: JwtTokenProvider
-
-    @Autowired
-    lateinit var memberRepository: MemberRepository
+    lateinit var memberRepository: JpaMemberRepository
 
     @Autowired
     lateinit var redisTemplate: StringRedisTemplate
+
+    @Autowired
+    lateinit var jwtTokenProvider: com.langlez.security.token.JwtTokenProvider
 
     companion object {
         @Container
@@ -51,17 +51,18 @@ class AuthE2ETest : FunSpec() {
         }
 
         @Container
-        val redis = GenericContainer<Nothing>("redis:7.0").apply {
+        val redis = GenericContainer<Nothing>("redis:7-alpine").apply {
             withExposedPorts(6379)
             start()
         }
 
-        @DynamicPropertySource
         @JvmStatic
+        @DynamicPropertySource
         fun registerProperties(registry: DynamicPropertyRegistry) {
             registry.add("spring.datasource.url", mysql::getJdbcUrl)
             registry.add("spring.datasource.username", mysql::getUsername)
             registry.add("spring.datasource.password", mysql::getPassword)
+            registry.add("spring.jpa.hibernate.ddl-auto") { "create" }
 
             registry.add("spring.data.redis.host", redis::getHost)
             registry.add("spring.data.redis.port", redis::getFirstMappedPort)
@@ -71,39 +72,43 @@ class AuthE2ETest : FunSpec() {
     init {
         beforeSpec {
             RestAssured.port = port
+            memberRepository.deleteAll()
+            redisTemplate.keys("*")?.forEach { redisTemplate.delete(it) }
         }
 
-        test("Refresh Token으로 새로운 Access Token을 발급받을 수 있다 (E2E)") {
-            // Given: 회원 저장 및 유효한 Refresh Token 생성
-            val email = "test@example.com"
-            val member = Member(
+        Given("로그인한 회원이 있고 Refresh Token이 발급된 상태에서") {
+            val email = "refresh@test.com"
+            val member = Member.create(
+                nickname = "refresher",
                 email = email,
-                nickname = "test_user",
-                profileImageUrl = "http://test.com/img.png",
-                provider = "google",
-                providerId = "12345"
+                providerId = "google_refresh",
+                providerType = "GOOGLE",
+                providerUserName = "Refresh User"
             )
             memberRepository.save(member)
 
-            val refreshToken = tokenProvider.createRefreshToken(email)
-            redisTemplate.opsForValue().set("refresh_token:$email", refreshToken)
+            val initialRefreshToken = jwtTokenProvider.createRefreshToken(email)
+            redisTemplate.opsForValue().set("refresh_token:$email", initialRefreshToken)
 
-            // When: Refresh API 호출
-            val response = RestAssured.given()
-                .contentType(ContentType.JSON)
-                .body("""{"refreshToken": "$refreshToken"}""")
-                .`when`()
-                .post("/api/auth/refresh")
-                .then()
-                .log().all()
-                .statusCode(200)
-                .extract()
-                .`as`(com.langlez.auth.api.TokenResponse::class.java)
+            Thread.sleep(1100) // JWT iat(초 단위) 차이를 위해 대기
 
-            // Then: 새로운 토큰 발급 확인
-            response.accessToken shouldNotBe null
-            response.refreshToken shouldNotBe null
+            When("Refresh Token으로 토큰 갱신을 요청하면") {
+                val refreshRequest = mapOf("refreshToken" to initialRefreshToken)
+                val response = RestAssured.given()
+                    .contentType(ContentType.JSON)
+                    .body(refreshRequest)
+                    .`when`()
+                    .post("/api/v1/auth/refresh")
+
+                Then("새로운 Access Token과 Refresh Token이 발급되어야 한다") {
+                    response.statusCode shouldBe 200
+
+                    val tokenResponse = response.`as`(TokenResponse::class.java)
+                    tokenResponse.accessToken shouldNotBe null
+                    tokenResponse.refreshToken shouldNotBe null
+                    tokenResponse.refreshToken shouldNotBe initialRefreshToken // Token Rotation
+                }
+            }
         }
     }
 }
-
