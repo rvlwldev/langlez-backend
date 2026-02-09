@@ -15,8 +15,8 @@ class LocalFileStorageTest :
 
             afterSpec {
                 // 테스트로 생성된 파일 및 폴더 정리
-                File("storage/$testFolder").deleteRecursively()
-                val root = File("storage")
+                File("attachments/$testFolder").deleteRecursively()
+                val root = File("attachments")
                 if (root.exists() && root.listFiles()?.isEmpty() == true) {
                     root.delete()
                 }
@@ -29,8 +29,8 @@ class LocalFileStorageTest :
                 When("파일 업로드를 요청하면") {
                     val fileUrl = storage.upload(multipartFile, testFolder)
 
-                    Then("URL이 storage 경로로 시작해야 한다") {
-                        fileUrl shouldStartWith "/storage/$testFolder/"
+                    Then("URL이 attachments 경로로 시작해야 한다") {
+                        fileUrl shouldStartWith "/attachments/$testFolder/"
                     }
 
                     Then("실제 파일이 해당 경로에 존재해야 한다") {

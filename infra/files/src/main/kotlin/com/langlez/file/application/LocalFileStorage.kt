@@ -1,15 +1,15 @@
 package com.langlez.file.application
 
+import java.io.File
+import java.util.UUID
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import org.springframework.web.multipart.MultipartFile
-import java.io.File
-import java.util.UUID
 
 @Component
 @Profile("local")
 internal class LocalFileStorage : FileStorage {
-    private val rootPath = "storage"
+    private val rootPath = "attachments"
 
     override fun upload(file: MultipartFile, folder: String): String {
         val dir = File("$rootPath/$folder")
