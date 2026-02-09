@@ -1,56 +1,60 @@
 package com.langlez.member.application
 
+import com.langlez.common.exception.LanglezException
+import com.langlez.member.application.command.CreateMemberCommand
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.repository.MemberRepository
-import com.langlez.member.domain.TargetLanguage
+import com.langlez.member.domain.MemberRepository
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
-import com.langlez.common.exception.EntityNotFoundException
-
+/**
+ * Member 일반 서비스
+ * - OAuth 로그인 시 Member 조회/생성
+ * - Member 조회
+ */
 @Service
 @Transactional
-class MemberService(
-    private val memberRepository: MemberRepository,
-) : MemberUseCase {
-    override fun findOrCreateMember(command: CreateMemberCommand): Member =
-        memberRepository.findByProviderAndProviderId(command.provider, command.providerId)
-            ?: createMember(command)
+class MemberService(private val repo: MemberRepository) {
+
+    /** OAuth 로그인 시 Member 조회 또는 생성 */
+    fun findOrCreateMember(command: CreateMemberCommand): Member {
+        val member =
+                repo.findByProvider(command.providerId, command.providerType)
+                        ?: repo.findByEmail(command.email)
+
+        if (member != null) {
+            member.login()
+            return member
+        }
+
+        // 신규 회원 생성
+        return with(command) {
+            Member.create(
+                            nickname = nickname,
+                            email = email,
+                            providerId = providerId,
+                            providerType = providerType.name,
+                            providerUserName = providerUserName
+                    )
+                    .apply {
+                        login()
+                        repo.save(this)
+                    }
+        }
+    }
 
     @Transactional(readOnly = true)
-    override fun getMember(email: String): Member =
-        memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("Member not found with email: $email")
+    fun getMember(email: String): Member =
+            repo.findByEmail(email)
+                    ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 
-    fun updateMember(email: String, command: UpdateMemberCommand): Member {
-        val member = getMember(email)
-        member.updateProfile(
-            nickname = command.nickname,
-            profileImageUrl = command.profileImageUrl,
-            additionalProfileImages = command.additionalProfileImages,
-            locationCountry = command.locationCountry,
-            locationCity = command.locationCity,
-            nationality = command.nationality,
-            interests = command.interests,
-            mbti = command.mbti,
-            nativeLanguage = command.nativeLanguage,
-            targetLanguages = command.targetLanguages?.map { TargetLanguage(it.language, it.level) },
-            wishDestinations = command.wishDestinations,
-            visitedDestinations = command.visitedDestinations,
-        )
-        return member
-    }
+    @Transactional(readOnly = true)
+    fun getMemberById(id: Long): Member =
+            repo.findById(id) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 
-    private fun createMember(command: CreateMemberCommand): Member {
-        // 닉네임 중복 방지 로직 등이 필요할 수 있으나, 초기에는 소셜 닉네임 그대로 사용하거나 랜덤 생성
-        val newMember =
-            Member(
-                email = command.email,
-                nickname = command.nickname,
-                profileImageUrl = command.profileImageUrl,
-                provider = command.provider,
-                providerId = command.providerId,
-            )
-        return memberRepository.save(newMember)
-    }
+    @Transactional(readOnly = true)
+    fun getMemberByHandle(handle: String): Member =
+            repo.findByHandle(handle)
+                    ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 }
