@@ -11,15 +11,17 @@ import org.springframework.web.multipart.MultipartFile
 internal class LocalFileStorage : FileStorage {
     private val rootPath = "attachments"
 
-    override fun upload(file: MultipartFile, folder: String): String {
-        val dir = File("$rootPath/$folder")
-        if (!dir.exists()) dir.mkdirs()
+    override fun upload(file: MultipartFile, folder: String?): String {
+        val dir = if (folder.isNullOrBlank()) File(rootPath)
+        else File("$rootPath/$folder").apply { if (!this.exists()) this.mkdirs() }
 
         val fileName = "${UUID.randomUUID()}_${file.originalFilename}"
         val targetFile = File(dir, fileName)
+
         file.transferTo(targetFile)
 
-        return "/$rootPath/$folder/$fileName"
+        return if (folder.isNullOrBlank()) "/$rootPath/$fileName"
+        else "/$rootPath/$folder/$fileName"
     }
 
     override fun delete(fileUrl: String) {

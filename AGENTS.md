@@ -292,7 +292,7 @@ These rules are crucial for AI agents working on this project.
 
 ### 6. Git & Commit (Mandatory)
 
-- **Automatic Commit**: 모든 작업 단위(Logical Unit)가 완료될 때마다 반드시 커밋을 수행합니다.
+- **Commit Policy**: **Do NOT commit automatically.** Only commit when explicitly requested by the user. (사용자가 요청할 때만 커밋합니다).
 - **Language**: **Commit messages MUST be written in Korean.** (커밋 메시지는 반드시 한국어로 작성해야 합니다).
 - **Message Format**: `type: description`
   - `feat`: 새로운 기능 추가.

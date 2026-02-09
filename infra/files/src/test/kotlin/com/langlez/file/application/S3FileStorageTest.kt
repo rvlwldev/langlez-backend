@@ -1,5 +1,6 @@
 package com.langlez.file.application
 
+import io.kotest.core.spec.IsolationMode
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
@@ -16,6 +17,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectResponse
 
 class S3FileStorageTest :
         BehaviorSpec({
+            isolationMode = IsolationMode.InstancePerLeaf
+
             val s3Client = mockk<S3Client>()
             val bucket = "test-bucket"
             val region = "ap-northeast-2"
@@ -78,6 +81,31 @@ class S3FileStorageTest :
                         // URL: ...amazonaws.com/profile/uuid_avatar.png -> Key:
                         // profile/uuid_avatar.png
                         capturedRequest.key() shouldBe "$folder/$fileName"
+                    }
+                }
+            }
+
+            Given("폴더 없이 업로드 요청 시") {
+                val multipartFile =
+                        MockMultipartFile("file", "root.png", "image/png", "data".toByteArray())
+                every { s3Client.putObject(any<PutObjectRequest>(), any<RequestBody>()) } returns
+                        PutObjectResponse.builder().build()
+
+                When("업로드를 요청하면") {
+                    val fileUrl = storage.upload(multipartFile)
+
+                    Then("Key에 폴더 경로가 없어야 한다") {
+                        val requestSlot = slot<PutObjectRequest>()
+                        verify(exactly = 1) {
+                            s3Client.putObject(capture(requestSlot), any<RequestBody>())
+                        }
+
+                        val capturedRequest = requestSlot.captured
+                        val key = capturedRequest.key()
+                        key.contains("/") shouldBe false // 폴더 구분자가 없어야 함 (UUID_filename)
+
+                        fileUrl shouldStartWith "https://$bucket.s3.$region.amazonaws.com/"
+                        fileUrl.substringAfter(".com/").contains("/") shouldBe false
                     }
                 }
             }
