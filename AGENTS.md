@@ -28,6 +28,12 @@ Core domains: `member` (User profiles), `auth` (OAuth2/JWT), `matching`, `chat`.
 
 These rules are crucial for AI agents working on this project.
 
+### 0. ABSOLUTE RULE: KOREAN ONLY 🇰🇷
+
+- **All communication, explanations, and documentation MUST be in Korean.**
+- **모든 대화, 설명, 문서는 반드시 한국어로 작성해야 합니다.**
+- This is a strict requirement for all agents and sessions.
+
 ### 1. Language & Communication
 
 - **Response Language**: All responses must be in **Korean**.
@@ -63,10 +69,87 @@ These rules are crucial for AI agents working on this project.
   - Use `findByIdOrNull` extension for JPA.
 - **Naming**:
   - Controllers MUST be named `*Controller` (e.g., `MemberController`). DO NOT use `*Api`.
+  - API DTOs MUST be named `*Request`, `*Response`. DO NOT use `*Dto`.
+- **Command Objects**:
+  - If a service method has **3 or fewer parameters**, pass them directly (no Command object).
+  - If a service method has **4 or more parameters**, create a Command object.
+
+  ```kotlin
+  // ✅ 3개 이하: 직접 파라미터
+  fun updateNickname(email: String, nickname: String): Member
+
+  // ✅ 4개 이상: Command 객체 사용
+  fun updateProfile(email: String, command: UpdateProfileCommand): Member
+  ```
+
+- **DTO Folder Structure**:
+  - When a module has multiple DTOs, organize them in subdirectories:
+    ```
+    api/
+    ├── request/
+    │   └── UpdateProfileRequest.kt
+    ├── response/
+    │   └── MemberResponse.kt
+    └── MemberController.kt
+    application/
+    ├── command/
+    │   └── CreateMemberCommand.kt
+    └── MemberService.kt
+    ```
+  - One data class per file (flat structure within folders).
+
+- **Country/Language Codes**:
+  - Use **ISO 3166-1 alpha-2** for countries: `KR`, `JP`, `US`
+  - Use **ISO 639-1** for languages: `ko`, `ja`, `en`
+  - Client shows localized names, server stores ISO codes only.
+
+- **API Design - Availability Checks**:
+  - For boolean availability checks (e.g., "is username available?"), use HTTP status codes instead of response body:
+    - `200 OK` → Available / Success
+    - `409 CONFLICT` → Already taken / Conflict
+  - Return empty response body (or minimal info). Client interprets status code.
+
+  ```kotlin
+  // ✅ Simple: HTTP Status only
+  @GetMapping("/check-account-name")
+  fun checkAccountName(@RequestParam accountName: String) {
+      if (!memberService.isAccountNameAvailable(accountName))
+          throw ConflictException("Account name already taken")
+  }
+  ```
+
 - **Logging**: Use `com.langlez.logger.PerformanceLogger` or `slf4j`.
-- **Error Handling**: Use `common:exception` for global error handling.
+- **Error Handling**:
+  - Use `common:exception` for global error handling.
+  - **Single Exception Strategy**: Use **ONLY** `CommonException` for all business logic errors.
+  - Do NOT create specific exception classes like `MemberNotFoundException`. Instead, use `CommonException(GlobalCommonError.RESOURCE_NOT_FOUND, "Member not found")`.
+  - **Exception Translation**: Catch infrastructure exceptions (e.g., `OptimisticLockingFailureException`) in the Service layer and rethrow as `CommonException`.
+  - **Domain Exceptions**: Use standard Java exceptions (`IllegalArgumentException`, `IllegalStateException`) for pure domain logic validation (inside Entities).
+  - Any exception other than `CommonException` is treated as an unexpected/unhandled error (`500 INTERNAL_SERVER_ERROR`).
 - **Concurrency**: Always consider race conditions. Use Optimistic/Pessimistic Locking where appropriate.
 - **Coroutines**: Use `suspend` functions and Coroutines ONLY when there is a clear performance benefit (e.g., non-blocking I/O with R2DBC, parallel external API calls). Do not force it on JDBC.
+- **JPA Entity**:
+  - ID field MUST be declared first with default value `0L`:
+
+  ```kotlin
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  val id: Long = 0,
+  ```
+
+  - **Formatting**: Annotation and field must be on separate lines, with a blank line between fields:
+
+  ```kotlin
+  // ✅ Good
+  @Column(nullable = false, unique = true)
+  val email: String,
+
+  @Column(name = "account_name", nullable = false, unique = true)
+  var accountName: String,
+
+  @Column(nullable = false)
+  var nickname: String,
+  ```
 
 #### User's Kotlin Style (AI Agents MUST Follow)
 
@@ -194,6 +277,18 @@ These rules are crucial for AI agents working on this project.
 - **Naming**: Test function names must be **Korean sentences** enclosed in backticks.
   - Example: ``fun `구글 로그인 시 신규 회원이면 자동 가입된다`()``
 - **Verification**: Tests must pass before any code submission.
+  - **E2E Style Guide**:
+    - Use **BehaviorSpec** (Given-When-Then) for E2E tests.
+    - For sequential flows (Stateful), use **nested** `When`/`Then` blocks to maintain context.
+    - Example:
+      ```kotlin
+      Given("Setup") {
+          When("Step 1") {
+              Then("Verify 1") { ... }
+              When("Step 2") { ... }
+          }
+      }
+      ```
 
 ### 6. Git & Commit (Mandatory)
 
