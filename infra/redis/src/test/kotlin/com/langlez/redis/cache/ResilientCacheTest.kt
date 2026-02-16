@@ -1,7 +1,7 @@
 package com.langlez.redis.cache
 
-import com.langlez.config.JacksonConfiguration
-import com.langlez.config.ResilientCacheConfiguration
+import com.langlez.jackson.config.JacksonConfiguration
+import com.langlez.redis.config.ResilientCacheConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe

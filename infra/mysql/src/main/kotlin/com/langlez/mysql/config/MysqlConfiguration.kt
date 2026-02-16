@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.mysql.config
 
 import com.querydsl.jpa.impl.JPAQueryFactory
 import jakarta.persistence.EntityManager

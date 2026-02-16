@@ -1,4 +1,5 @@
-package com.langlez.config
+package com.langlez.mongo.config
+import com.langlez.observability.config.LoggerProperties
 
 import com.langlez.observability.PerformanceLogger
 import com.mongodb.event.CommandFailedEvent
