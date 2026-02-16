@@ -290,6 +290,8 @@ These rules are crucial for AI agents working on this project.
       }
       ```
 
+- **Log Files**: All test execution logs MUST be saved in the `logs/` directory (e.g., `logs/test_run_01.log`).
+
 ### 6. Git & Commit (Mandatory)
 
 - **Commit Policy**: **Do NOT commit automatically.** Only commit when explicitly requested by the user. (사용자가 요청할 때만 커밋합니다).

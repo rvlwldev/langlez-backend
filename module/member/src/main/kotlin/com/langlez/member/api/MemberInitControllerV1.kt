@@ -12,7 +12,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 
 /**
  * Member 초기화 플로우:
@@ -27,36 +29,43 @@ class MemberInitControllerV1(private val service: MemberInitService) {
 
     @PostMapping("/handle")
     fun initHandle(
-            @AuthenticationPrincipal email: String,
-            @RequestBody @Valid request: InitHandleNicknameRequestV1
+        @AuthenticationPrincipal email: String,
+        @RequestBody @Valid request: InitHandleNicknameRequestV1
     ): MemberResponseV1 =
-            MemberResponseV1.from(service.initHandle(email, request.handle, request.nickname))
+        MemberResponseV1.from(service.initHandle(email, request.handle, request.nickname))
 
     @PostMapping("/personality")
     fun initPersonality(
-            @AuthenticationPrincipal email: String,
-            @RequestBody personality: MemberPersonality
+        @AuthenticationPrincipal email: String,
+        @RequestBody personality: MemberPersonality
     ): MemberResponseV1 = MemberResponseV1.from(service.initPersonality(email, personality))
 
     @PostMapping("/location")
     fun initLocation(
-            @AuthenticationPrincipal email: String,
-            @RequestBody location: MemberLocation
+        @AuthenticationPrincipal email: String,
+        @RequestBody location: MemberLocation
     ): MemberResponseV1 = MemberResponseV1.from(service.initLocation(email, location))
 
     @PostMapping("/introduction")
     fun initIntroduction(
-            @AuthenticationPrincipal email: String,
-            @RequestBody introduction: MemberIntroduction
+        @AuthenticationPrincipal email: String,
+        @RequestBody introduction: MemberIntroduction
     ): MemberResponseV1 = MemberResponseV1.from(service.initIntroduction(email, introduction))
 
     @PostMapping("/languages")
     fun initLanguages(
-            @AuthenticationPrincipal email: String,
-            @RequestBody languages: List<MemberLanguage>
+        @AuthenticationPrincipal email: String,
+        @RequestBody languages: List<MemberLanguage>
     ): MemberResponseV1 = MemberResponseV1.from(service.initLanguages(email, languages))
+
+    @PostMapping("/images", consumes = ["multipart/form-data"])
+    fun initImages(
+        @AuthenticationPrincipal email: String,
+        @RequestPart("profileImage") profileImage: MultipartFile,
+        @RequestPart("otherImages", required = false) otherImages: List<MultipartFile>?,
+    ): MemberResponseV1 = MemberResponseV1.from(service.initProfileImages(email, profileImage, otherImages))
 
     @PostMapping("/finish")
     fun finishInit(@AuthenticationPrincipal email: String): MemberResponseV1 =
-            MemberResponseV1.from(service.finishInit(email))
+        MemberResponseV1.from(service.finishInit(email))
 }

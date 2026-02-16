@@ -1,90 +1,60 @@
 package com.langlez.redis.distributedLock
 
+import java.util.concurrent.TimeUnit
+import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
-import org.springframework.data.redis.core.RedisTemplate
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 
 @Service
-class RedisLockService(private val redis: RedisTemplate<String, String>) {
+class RedisLockService(private val redissonClient: RedissonClient) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * 분산 락 획득 시도
+     * 분산 락을 사용하여 작업을 실행합니다.
      * @param key 락 키
-     * @param ttl 락 만료 시간 (초)
-     * @param block 락 획득 성공 시 실행할 블록
-     * @return 락 획득 성공 여부
+     * @param waitTime 락 획득 대기 시간
+     * @param leaseTime 락 점유 시간
+     * @param unit 시간 단위
+     * @param action 실행할 작업
+     * @return 작업 결과
+     * @throws IllegalStateException 락 획득 실패 시 발생
      */
-    fun <T : Any> acquireLock(key: String, ttl: Long, block: () -> T): Boolean =
-        if (acquireLock(key, ttl)) {
+    fun <T> executeWithLock(
+            key: String,
+            waitTime: Long,
+            leaseTime: Long,
+            unit: TimeUnit,
+            action: () -> T
+    ): T {
+        val rLock = redissonClient.getLock(key)
+
+        val acquired =
+                try {
+                    rLock.tryLock(waitTime, leaseTime, unit)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IllegalStateException("Interrupted while acquiring lock: $key", e)
+                }
+
+        if (!acquired) {
+            logger.error("Lock acquisition failed: $key")
+            throw IllegalStateException("Lock acquisition failed for key: $key")
+        }
+
+        logger.debug("Lock acquired successfully: $key")
+
+        return try {
+            action()
+        } finally {
             try {
-                block()
-                true
-            } finally {
-                releaseLock(key)
+                if (rLock.isHeldByCurrentThread) {
+                    rLock.unlock()
+                    logger.debug("Lock released: $key")
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to release lock: $key", e)
             }
-        } else {
-            false
-        }
-
-    /**
-     * 락 획득 시도
-     * @param key 락 키
-     * @param ttl 락 만료 시간 (초)
-     * @return 락 획득 성공 여부
-     */
-    fun acquireLock(key: String, ttl: Long): Boolean {
-        val script = DefaultRedisScript<Long>().apply {
-            setScriptText(
-                """
-                if redis.call('set', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
-                    return 1
-                else
-                    return 0
-                end """.trimIndent()
-            )
-            resultType = Long::class.java
-        }
-
-        val result = redis.execute(script, listOf(key), "locked", ttl.toString())
-        val success = result == 1L
-
-        if (success) logger.debug("Lock acquired successfully: $key")
-        else logger.debug("Lock acquisition failed: $key")
-
-        return success
-    }
-
-    /**
-     * 락 해제
-     * @param key 락 키
-     */
-    fun releaseLock(key: String) {
-        try {
-            val result = redis.delete(key)!!
-            logger.debug("Lock released: $key")
-        } catch (e: Exception) {
-            logger.error("Failed to release lock: $key", e)
         }
     }
-
-    /**
-     * 락 존재 여부 확인
-     * @param key 락 키
-     */
-    fun isLocked(key: String): Boolean = redis.hasKey(key) ?: false
-
-    /**
-     * 락 남은 시간 확인 (초 단위)
-     * @param key 락 키
-     */
-    fun getLockTtl(key: String): Long? =
-        try {
-            redis.getExpire(key)
-        } catch (e: Exception) {
-            logger.error("Failed to get TTL for lock: $key", e)
-            null
-        }
 }

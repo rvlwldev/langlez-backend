@@ -7,24 +7,11 @@ group = "com.langlez"
 version = "0.0.1-SNAPSHOT"
 description = "langlez-backend"
 
-data class PluginId(
-    val kotlinJvm: String,
-    val springDependency: String,
-    val springboot: String,
-)
-
-val pluginId =
-    PluginId(
-        kotlinJvm = libs.plugins.kotlin.jvm.get().pluginId,
-        springDependency = libs.plugins.spring.dependency.management.get().pluginId,
-        springboot = libs.plugins.springboot.get().pluginId,
-    )
-
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kotlin.spring)
-    alias(libs.plugins.springboot)
-    alias(libs.plugins.kotlin.jpa)
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.spring) apply false
+    alias(libs.plugins.springboot) apply false
+    alias(libs.plugins.kotlin.jpa) apply false
     alias(libs.plugins.kotlin.ksp) apply false
     alias(libs.plugins.spring.dependency.management) apply false
 }
@@ -33,18 +20,17 @@ allprojects {
     group = "com.langlez"
     version = "0.0.1-SNAPSHOT"
 
-    apply(plugin = pluginId.kotlinJvm)
-    apply(plugin = pluginId.springDependency)
-
     repositories {
         mavenCentral()
     }
 }
 
 subprojects {
-    configure<JavaPluginExtension> {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+    plugins.withId("java") {
+        configure<JavaPluginExtension> {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
     }
 
     tasks.withType<KotlinCompile>().configureEach {
@@ -71,21 +57,19 @@ subprojects {
         systemProperties(args)
     }
 
-    plugins.withId(pluginId.springboot) {
+    plugins.withId("org.springframework.boot") {
         if (project.path != ":app:api" && project.name != "api") {
             tasks.named<BootJar>("bootJar") { enabled = false }
             tasks.named<Jar>("jar") { enabled = true }
         } else {
-             tasks.named<Jar>("jar") { enabled = true }
+            tasks.named<Jar>("jar") { enabled = true }
         }
     }
 
-    dependencies {
-        "testImplementation"(rootProject.libs.bundles.test.kotest)
-        "testImplementation"(rootProject.libs.test.mockk)
+    plugins.withId("java") {
+        dependencies {
+            "testImplementation"(rootProject.libs.bundles.test.kotest)
+            "testImplementation"(rootProject.libs.test.mockk)
+        }
     }
-}
-
-dependencies {
-    implementation(kotlin("stdlib"))
 }

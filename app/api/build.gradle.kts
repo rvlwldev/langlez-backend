@@ -1,6 +1,8 @@
 plugins {
-    alias(libs.plugins.springboot)
+    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.springboot)
+    alias(libs.plugins.spring.dependency.management)
 }
 
 dependencies {
@@ -14,7 +16,6 @@ dependencies {
     implementation(project(":infra:mysql"))
     implementation(project(":infra:mongo"))
     implementation(project(":infra:redis"))
-    implementation(project(":infra:kafka"))
     implementation(project(":infra:files"))
 
     // devtools만 개발용으로 직접 선언

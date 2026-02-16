@@ -1,11 +1,15 @@
 package com.langlez.redis.distributedLock
 
 import com.langlez.config.JacksonConfiguration
-import com.langlez.config.RedisConfiguration
+import com.langlez.config.LettuceConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
@@ -19,24 +23,29 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
-import java.time.Duration
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 
 @Configuration
-@EnableAutoConfiguration(exclude = [DataSourceAutoConfiguration::class, HibernateJpaAutoConfiguration::class, JpaRepositoriesAutoConfiguration::class])
-@Import(JacksonConfiguration::class, RedisConfiguration::class)
+@EnableAutoConfiguration(
+        exclude =
+                [
+                        DataSourceAutoConfiguration::class,
+                        HibernateJpaAutoConfiguration::class,
+                        JpaRepositoriesAutoConfiguration::class]
+)
+@Import(JacksonConfiguration::class, LettuceConfiguration::class)
 class DistributedLockTestConfig
 
 @ActiveProfiles("test")
-@SpringBootTest(classes = [DistributedLockTestConfig::class], properties = ["spring.data.redis.timeout=2s"])
+@SpringBootTest(
+        classes = [DistributedLockTestConfig::class],
+        properties = ["spring.data.redis.timeout=2s"]
+)
 class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
     override fun extensions() = listOf(SpringExtension)
 
     companion object {
-        val container = GenericContainer(DockerImageName.parse("redis:7.2"))
-            .withExposedPorts(6379)!!
+        val container =
+                GenericContainer(DockerImageName.parse("redis:7.2")).withExposedPorts(6379)!!
 
         init {
             container.start()
@@ -56,8 +65,7 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
         // ==================== 기본 락 동작 테스트 ====================
         test("`분산락 기본` - 락 획득 및 해제가 정상 동작한다") {
             val key = "lock:basic"
-            val acquired =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
 
             acquired shouldBe true
             redis.hasKey(key) shouldBe true
@@ -69,10 +77,8 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
         test("`분산락 기본` - 이미 락이 걸린 키에는 재획득이 불가능하다") {
             val key = "lock:duplicate"
 
-            val first =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
-            val second =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val first = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val second = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
 
             first shouldBe true
             second shouldBe false
@@ -111,7 +117,10 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
                         var acquired = false
                         val start = System.currentTimeMillis()
                         while (System.currentTimeMillis() - start < 10000) {
-                            acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
+                            acquired =
+                                    redis.opsForValue()
+                                            .setIfAbsent(key, "locked", Duration.ofSeconds(5)) ==
+                                            true
 
                             if (acquired) break
 
@@ -177,7 +186,9 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
                 executor.submit {
                     try {
                         val key = "lock:parallel:$i"
-                        val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
+                        val acquired =
+                                redis.opsForValue()
+                                        .setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true
                         synchronized(lock) { results.add(acquired) }
                     } finally {
                         latch.countDown()
@@ -194,22 +205,19 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
         // ==================== 엣지 케이스 테스트 ====================
         test("`엣지케이스` - 빈 문자열 키에도 락을 걸 수 있다") {
             val key = ""
-            val acquired =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
             acquired shouldBe true
         }
 
         test("`엣지케이스` - 특수문자가 포함된 키에도 락을 걸 수 있다") {
             val key = "lock:user:123:order:456!@#\$%^&*()"
-            val acquired =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
             acquired shouldBe true
         }
 
         test("`엣지케이스` - 매우 긴 키에도 락을 걸 수 있다") {
             val key = "lock:" + "a".repeat(1000)
-            val acquired =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val acquired = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
             acquired shouldBe true
         }
 
@@ -222,14 +230,12 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
         test("`엣지케이스` - 락 해제 후 즉시 재획득이 가능하다") {
             val key = "lock:reacquire"
 
-            val first =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val first = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
             first shouldBe true
 
             redis.delete(key)
 
-            val second =
-                redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
+            val second = redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5))
             second shouldBe true
         }
 
@@ -251,9 +257,7 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
             val start = System.currentTimeMillis()
             var acquired = false
             while (System.currentTimeMillis() - start < 1000) {
-                if (redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) ==
-                    true
-                ) {
+                if (redis.opsForValue().setIfAbsent(key, "locked", Duration.ofSeconds(5)) == true) {
                     acquired = true
                     acquiredByMain.incrementAndGet()
                     break
@@ -285,10 +289,9 @@ class DistributedLockTest(private val redis: StringRedisTemplate) : FunSpec() {
                         val start = System.currentTimeMillis()
                         while (System.currentTimeMillis() - start < 5000) {
                             acquired =
-                                redis
-                                    .opsForValue()
-                                    .setIfAbsent(key, "locked", Duration.ofMillis(50)) ==
-                                        true
+                                    redis.opsForValue()
+                                            .setIfAbsent(key, "locked", Duration.ofMillis(50)) ==
+                                            true
                             if (acquired) break
                             Thread.sleep(10)
                         }

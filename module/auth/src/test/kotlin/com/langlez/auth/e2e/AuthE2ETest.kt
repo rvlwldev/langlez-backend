@@ -1,8 +1,10 @@
 package com.langlez.auth.e2e
 
 import com.langlez.auth.api.TokenResponse
+import com.langlez.auth.config.TestSecurityConfig
 import com.langlez.member.domain.Member
-import com.langlez.member.infrastructure.persistence.JpaMemberRepository
+import com.langlez.member.infrastructure.persistence.jpa.MemberJpaRepository
+import com.langlez.security.token.JwtTokenProvider
 import io.kotest.core.spec.DisplayName
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -13,6 +15,8 @@ import io.restassured.http.ContentType
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.Import
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -22,9 +26,11 @@ import org.testcontainers.containers.MySQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+
 @Testcontainers
+@ActiveProfiles("test")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestSecurityConfig::class)
 @DisplayName("E2E: 토큰 갱신 통합 테스트")
 class AuthE2ETest : BehaviorSpec() {
     override fun extensions() = listOf(SpringExtension)
@@ -33,13 +39,13 @@ class AuthE2ETest : BehaviorSpec() {
     var port: Int = 0
 
     @Autowired
-    lateinit var memberRepository: JpaMemberRepository
+    lateinit var repo: MemberJpaRepository
 
     @Autowired
-    lateinit var redisTemplate: StringRedisTemplate
+    lateinit var redis: StringRedisTemplate
 
     @Autowired
-    lateinit var jwtTokenProvider: com.langlez.security.token.JwtTokenProvider
+    lateinit var tokenProvider: JwtTokenProvider
 
     companion object {
         @Container
@@ -72,8 +78,8 @@ class AuthE2ETest : BehaviorSpec() {
     init {
         beforeSpec {
             RestAssured.port = port
-            memberRepository.deleteAll()
-            redisTemplate.keys("*")?.forEach { redisTemplate.delete(it) }
+            repo.deleteAll()
+            redis.keys("*")?.forEach { redis.delete(it) }
         }
 
         Given("로그인한 회원이 있고 Refresh Token이 발급된 상태에서") {
@@ -85,10 +91,10 @@ class AuthE2ETest : BehaviorSpec() {
                 providerType = "GOOGLE",
                 providerUserName = "Refresh User"
             )
-            memberRepository.save(member)
+            repo.save(member)
 
-            val initialRefreshToken = jwtTokenProvider.createRefreshToken(email)
-            redisTemplate.opsForValue().set("refresh_token:$email", initialRefreshToken)
+            val initialRefreshToken = tokenProvider.createRefreshToken(email)
+            redis.opsForValue().set("refresh_token:$email", initialRefreshToken)
 
             Thread.sleep(1100) // JWT iat(초 단위) 차이를 위해 대기
 
