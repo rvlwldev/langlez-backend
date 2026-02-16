@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.observability.config
 
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer

@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.jackson.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature

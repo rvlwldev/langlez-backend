@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.redis.config
 
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.langlez.redis.cache.ResilientCacheManager

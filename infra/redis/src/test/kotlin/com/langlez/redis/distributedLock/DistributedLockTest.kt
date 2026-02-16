@@ -1,7 +1,7 @@
 package com.langlez.redis.distributedLock
 
-import com.langlez.config.JacksonConfiguration
-import com.langlez.config.LettuceConfiguration
+import com.langlez.jackson.config.JacksonConfiguration
+import com.langlez.redis.config.LettuceConfiguration
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe

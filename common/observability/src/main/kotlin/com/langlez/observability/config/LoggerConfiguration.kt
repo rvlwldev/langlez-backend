@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.observability.config
 
 import com.langlez.observability.PerformanceLogger
 import com.p6spy.engine.common.PreparedStatementInformation

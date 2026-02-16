@@ -1,4 +1,5 @@
-package com.langlez.config
+package com.langlez.redis.config
+import com.langlez.observability.config.LoggerProperties
 
 import com.langlez.observability.PerformanceLogger
 import io.lettuce.core.event.command.CommandFailedEvent

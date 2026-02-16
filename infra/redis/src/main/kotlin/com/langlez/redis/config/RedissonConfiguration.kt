@@ -1,4 +1,4 @@
-package com.langlez.config
+package com.langlez.redis.config
 
 import org.redisson.Redisson
 import org.redisson.api.RedissonClient
