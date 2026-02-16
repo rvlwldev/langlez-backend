@@ -4,6 +4,7 @@ import com.langlez.member.application.MemberService
 import com.langlez.member.application.command.CreateMemberCommand
 import com.langlez.member.domain.embedded.MemberProvider
 import java.util.*
+import kotlinx.coroutines.runBlocking
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
@@ -29,7 +30,7 @@ class CustomOAuth2UserService(
         val userNameAttributeName = userRequest.clientRegistration.providerDetails.userInfoEndpoint.userNameAttributeName
         val attributes = OAuthAttributes.of(registrationId, userNameAttributeName, user.attributes)
 
-        createOrUpdateMember(attributes)
+        runBlocking { createOrUpdateMember(attributes) }
 
         return DefaultOAuth2User(
             Collections.singleton(SimpleGrantedAuthority("ROLE_MEMBER")),
@@ -38,7 +39,7 @@ class CustomOAuth2UserService(
         )
     }
 
-    private fun createOrUpdateMember(attributes: OAuthAttributes) {
+    private suspend fun createOrUpdateMember(attributes: OAuthAttributes) {
         val providerId = attributes.attributes[attributes.nameAttributeKey]?.toString()
             ?: throw IllegalArgumentException("Provider ID not found in attributes")
 
@@ -53,4 +54,5 @@ class CustomOAuth2UserService(
             )
         )
     }
+}
 }

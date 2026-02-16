@@ -34,8 +34,8 @@ class MemberInitServiceTest :
                 )
                     .apply { init = false }
 
-            every { repo.findByEmail("test@example.com") } returns member
-            every { repo.existsByHandle("langlez_user") } returns false
+            coEvery { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.existsByHandle("langlez_user") } returns false
 
             When("유효한 handle을 설정하면") {
                 val result = service.initHandle("test@example.com", "langlez_user", "랭글레즈")
@@ -57,8 +57,8 @@ class MemberInitServiceTest :
                     providerUserName = "Test"
                 )
 
-            every { repo.findByEmail("test@example.com") } returns member
-            every { repo.existsByHandle("duplicated") } returns true
+            coEvery { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.existsByHandle("duplicated") } returns true
 
             When("이미 존재하는 handle을 사용하면") {
                 Then("LanglezException을 던져야 한다") {
@@ -79,10 +79,10 @@ class MemberInitServiceTest :
                     providerUserName = "Test"
                 )
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("대문자가 포함된 handle을 사용하면") {
-                every { repo.existsByHandle("InvalidHandle") } returns false
+                coEvery { repo.existsByHandle("InvalidHandle") } returns false
 
                 Then("유효한 handle로 설정되어야 한다") {
                     val result = service.initHandle("test@example.com", "InvalidHandle", "닉네임")
@@ -118,7 +118,7 @@ class MemberInitServiceTest :
                 )
                     .apply { init = true }
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("handle을 재설정하려고 하면") {
                 Then("LanglezException을 던져야 한다") {
@@ -147,7 +147,7 @@ class MemberInitServiceTest :
                     mbti = MemberPersonality.MBTI.INTJ
                 )
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("성격 정보를 설정하면") {
                 val result = service.initPersonality("test@example.com", personality)
@@ -174,7 +174,7 @@ class MemberInitServiceTest :
 
             val location = MemberLocation("서울특별시 강남구", 37.4979, 127.0276)
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("위치 정보를 설정하면") {
                 val result = service.initLocation("test@example.com", location)
@@ -200,7 +200,7 @@ class MemberInitServiceTest :
 
             val introduction = MemberIntroduction("안녕하세요", "영어 회화 마스터", "적극적인 파트너")
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("소개 정보를 설정하면") {
                 val result = service.initIntroduction("test@example.com", introduction)
@@ -236,7 +236,7 @@ class MemberInitServiceTest :
                     )
                 )
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("언어 정보를 설정하면") {
                 val result = service.initLanguages("test@example.com", languages)
@@ -258,9 +258,9 @@ class MemberInitServiceTest :
             val image1 = MockMultipartFile("profileImage", "data".toByteArray())
             val image2 = MockMultipartFile("otherImage", "data".toByteArray())
 
-            every { repo.findByEmail("test@example.com") } returns member
-            every { fileStorage.upload(any(), any()) } returns "https://uploaded.url"
-            every { fileStorage.delete(any()) } returns Unit
+            coEvery { repo.findByEmail("test@example.com") } returns member
+            coEvery { fileStorage.upload(any(), any()) } returns "https://uploaded.url"
+            coJustRun { fileStorage.delete(any()) }
 
             When("이미지를 업로드하면") {
                 val result =
@@ -305,7 +305,7 @@ class MemberInitServiceTest :
                         images.add(MemberImage(0, "url", 0, true))
                     }
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("필수 정보가 모두 입력된 상태에서 완료를 요청하면") {
                 val result = service.finishInit("test@example.com")
@@ -325,7 +325,7 @@ class MemberInitServiceTest :
                 )
                     .apply { handle = "langlez_user" }
 
-            every { repo.findByEmail("test@example.com") } returns member
+            coEvery { repo.findByEmail("test@example.com") } returns member
 
             When("필수 정보가 없는 상태에서 완료를 요청하면") {
                 Then("LanglezException을 던져야 한다") {

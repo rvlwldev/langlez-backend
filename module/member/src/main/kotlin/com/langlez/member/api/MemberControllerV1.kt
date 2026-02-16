@@ -14,17 +14,17 @@ class MemberControllerV1(private val service: MemberService) {
 
     /** 현재 로그인한 사용자 정보 조회 */
     @GetMapping("/me")
-    fun getMe(@AuthenticationPrincipal email: String): MemberResponseV1 =
+    suspend fun getMe(@AuthenticationPrincipal email: String): MemberResponseV1 =
             MemberResponseV1.from(service.getMember(email))
 
     /** Handle로 사용자 정보 조회 */
     @GetMapping("/@{handle}")
-    fun getMemberByHandle(@PathVariable handle: String): MemberResponseV1 =
+    suspend fun getMemberByHandle(@PathVariable handle: String): MemberResponseV1 =
             MemberResponseV1.from(service.getMemberByHandle(handle))
 
     /** ID로 사용자 정보 조회 */
     @GetMapping("/{id}")
-    fun getMemberById(@PathVariable id: Long): MemberResponseV1 =
+    suspend fun getMemberById(@PathVariable id: Long): MemberResponseV1 =
             MemberResponseV1.from(service.getMemberById(id))
 
 }
