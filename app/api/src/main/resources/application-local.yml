@@ -10,6 +10,7 @@ server:
     keep-alive-timeout: 60s # 60s
   max-http-request-header-size: 8KB
 
+management:
   endpoints:
     web:
       exposure:
@@ -19,6 +20,9 @@ server:
       show-details: always
     prometheus:
       enabled: true
+  metrics:
+    tags:
+      application: langlez-backend
 
 spring:
   config:
