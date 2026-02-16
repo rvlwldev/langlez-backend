@@ -14,47 +14,28 @@ import org.springframework.transaction.annotation.Transactional
  * - Member 조회
  */
 @Service
-@Transactional
 class MemberService(private val repo: MemberRepository) {
 
     /** OAuth 로그인 시 Member 조회 또는 생성 */
-    fun findOrCreateMember(command: CreateMemberCommand): Member {
-        val member =
-                repo.findByProvider(command.providerId, command.providerType)
-                        ?: repo.findByEmail(command.email)
-
-        if (member != null) {
-            member.login()
-            return member
-        }
+    @Transactional
+    fun findOrCreateMember(command: CreateMemberCommand): Member = with(command) {
+        val member = repo.findByProvider(providerId, providerType) ?: repo.findByEmail(email)
+        if (member != null) return member.apply { login() }
 
         // 신규 회원 생성
-        return with(command) {
-            Member.create(
-                            nickname = nickname,
-                            email = email,
-                            providerId = providerId,
-                            providerType = providerType.name,
-                            providerUserName = providerUserName
-                    )
-                    .apply {
-                        login()
-                        repo.save(this)
-                    }
-        }
+        Member.create(nickname, email, providerId, providerType.name, providerUserName)
+            .apply { login(); repo.save(this) }
     }
 
     @Transactional(readOnly = true)
     fun getMember(email: String): Member =
-            repo.findByEmail(email)
-                    ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+        repo.findByEmail(email) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 
     @Transactional(readOnly = true)
     fun getMemberById(id: Long): Member =
-            repo.findById(id) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+        repo.findById(id) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 
     @Transactional(readOnly = true)
     fun getMemberByHandle(handle: String): Member =
-            repo.findByHandle(handle)
-                    ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+        repo.findByHandle(handle) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 }

@@ -1,5 +1,8 @@
 plugins {
+    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.springboot)
+    alias(libs.plugins.spring.dependency.management)
 }
 
 dependencies {
@@ -10,6 +13,7 @@ dependencies {
     runtimeOnly(libs.dependency.aspectj.runtime)
     implementation(project(":common:jackson"))
     implementation(project(":common:observability"))
+    implementation(libs.dependency.redisson)
 
     testImplementation(libs.test.springboot) {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")

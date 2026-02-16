@@ -1,6 +1,8 @@
 plugins {
-    alias(libs.plugins.springboot)
+    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.springboot)
+    alias(libs.plugins.spring.dependency.management)
 }
 
 dependencies {
@@ -18,11 +20,5 @@ dependencies {
     testImplementation(libs.test.restassured)
     testImplementation(libs.bundles.testcontainers)
     testImplementation(libs.test.testcontainers.redis)
-}
-
-tasks.withType<Test> {
-    testLogging {
-        events("passed", "skipped", "failed", "standardOut", "standardError")
-        showStandardStreams = true
-    }
+    testImplementation(project(":infra:files"))
 }

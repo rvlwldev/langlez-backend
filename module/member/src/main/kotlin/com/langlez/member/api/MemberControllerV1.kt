@@ -26,4 +26,5 @@ class MemberControllerV1(private val service: MemberService) {
     @GetMapping("/{id}")
     fun getMemberById(@PathVariable id: Long): MemberResponseV1 =
             MemberResponseV1.from(service.getMemberById(id))
+
 }
