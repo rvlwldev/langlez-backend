@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController
 class AuthController(private val service: AuthService) {
 
     @PostMapping("/refresh")
-    fun refresh(@RequestBody @Valid request: RefreshTokenRequest): TokenResponse? =
+    suspend fun refresh(@RequestBody @Valid request: RefreshTokenRequest): TokenResponse? =
             service.refresh(request.refreshToken)
 
 }

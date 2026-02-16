@@ -22,10 +22,10 @@ class TestSecurityConfig {
     @Primary
     fun testFileStorage(): FileStorage {
         return object : FileStorage {
-            override fun upload(file: MultipartFile, folder: String?): String =
+            override suspend fun upload(file: MultipartFile, folder: String?): String =
                     "https://mock-s3.com/test.jpg"
 
-            override fun delete(fileUrl: String) {}
+            override suspend fun delete(fileUrl: String) {}
         }
     }
 }

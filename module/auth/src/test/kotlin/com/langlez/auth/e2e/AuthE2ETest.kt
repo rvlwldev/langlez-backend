@@ -96,7 +96,7 @@ class AuthE2ETest : BehaviorSpec() {
             val initialRefreshToken = tokenProvider.createRefreshToken(email)
             redis.opsForValue().set("refresh_token:$email", initialRefreshToken)
 
-            Thread.sleep(1100) // JWT iat(초 단위) 차이를 위해 대기
+            Thread.sleep(2000) // JWT iat 차이를 위해 넉넉히 대기
 
             When("Refresh Token으로 토큰 갱신을 요청하면") {
                 val refreshRequest = mapOf("refreshToken" to initialRefreshToken)
