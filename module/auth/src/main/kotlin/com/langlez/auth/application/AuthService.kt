@@ -6,6 +6,8 @@ import com.langlez.common.GlobalCommonError
 import com.langlez.member.application.MemberService
 import com.langlez.security.token.JwtTokenProvider
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
 
@@ -15,7 +17,7 @@ class AuthService(
     private val memberService: MemberService,
     private val redisTemplate: StringRedisTemplate,
 ) {
-    fun refresh(refreshToken: String): TokenResponse {
+    suspend fun refresh(refreshToken: String): TokenResponse {
         // JWT 파싱하여 email 추출 (Redis key 생성을 위해 필수)
         val email = try {
             tokenProvider.getEmail(refreshToken)
@@ -26,11 +28,7 @@ class AuthService(
         // Redis에서 저장된 토큰 조회 및 비교
         val savedToken = redisTemplate.opsForValue().get("refresh_token:$email")
         if (savedToken != refreshToken) {
-            throw CommonException(
-                GlobalCommonError.UNAUTHORIZED,
-                "Refresh token mismatch or expired",
-                null
-            )
+            throw CommonException(GlobalCommonError.UNAUTHORIZED, "Refresh token mismatch or expired", null)
         }
 
         // JWT 서명 검증
