@@ -1,8 +1,5 @@
-package com.langlez.auth.application
-
 import com.langlez.auth.api.TokenResponse
-import com.langlez.common.CommonException
-import com.langlez.common.GlobalCommonError
+import com.langlez.common.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.security.token.JwtTokenProvider
@@ -60,8 +57,8 @@ class AuthServiceTest :
                 every { tokenProvider.getEmail(invalidToken) } throws RuntimeException("Invalid JWT")
 
                 When("토큰 갱신을 요청하면") {
-                    Then("CommonException을 던져야 한다") {
-                        shouldThrow<CommonException> { authService.refresh(invalidToken) }
+                    Then("LanglezException을 던져야 한다") {
+                        shouldThrow<LanglezException> { authService.refresh(invalidToken) }
                     }
                 }
             }
@@ -74,8 +71,8 @@ class AuthServiceTest :
                 every { valueOperations.get("refresh_token:$email") } returns "stored_token"
 
                 When("토큰 갱신을 요청하면") {
-                    Then("CommonException을 던져야 한다") {
-                        shouldThrow<CommonException> { authService.refresh(refreshToken) }
+                    Then("LanglezException을 던져야 한다") {
+                        shouldThrow<LanglezException> { authService.refresh(refreshToken) }
                     }
                 }
             }
@@ -90,8 +87,8 @@ class AuthServiceTest :
                 every { redisTemplate.delete("refresh_token:$email") } returns true
 
                 When("토큰 갱신을 요청하면") {
-                    Then("Redis에서 토큰을 삭제하고 CommonException을 던져야 한다") {
-                        shouldThrow<CommonException> { authService.refresh(refreshToken) }
+                    Then("Redis에서 토큰을 삭제하고 LanglezException을 던져야 한다") {
+                        shouldThrow<LanglezException> { authService.refresh(refreshToken) }
                         verify(exactly = 1) { redisTemplate.delete("refresh_token:$email") }
                     }
                 }
