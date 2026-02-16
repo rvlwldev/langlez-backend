@@ -1,6 +1,8 @@
 package com.langlez.file.application
 
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
@@ -18,7 +20,7 @@ internal class S3FileStorage(
     @param:Value("\${cloud.aws.s3.region}") private val region: String,
 ) : FileStorage {
 
-    override fun upload(file: MultipartFile, folder: String?): String {
+    override suspend fun upload(file: MultipartFile, folder: String?): String = withContext(Dispatchers.IO) {
         val uuidName = "${UUID.randomUUID()}_${file.originalFilename}"
         val key = if (folder.isNullOrBlank()) uuidName else "$folder/$uuidName"
 
@@ -30,13 +32,15 @@ internal class S3FileStorage(
 
         s3Client.putObject(request, RequestBody.fromInputStream(file.inputStream, file.size))
 
-        return "https://$bucket.s3.$region.amazonaws.com/$key"
+        "https://$bucket.s3.$region.amazonaws.com/$key"
     }
 
-    override fun delete(fileUrl: String) {
-        val key = fileUrl.substringAfter(".com/")
-        val deleteRequest = DeleteObjectRequest.builder().bucket(bucket).key(key).build()
+    override suspend fun delete(fileUrl: String) {
+        withContext(Dispatchers.IO) {
+            val key = fileUrl.substringAfter(".com/")
+            val deleteRequest = DeleteObjectRequest.builder().bucket(bucket).key(key).build()
 
-        s3Client.deleteObject(deleteRequest)
+            s3Client.deleteObject(deleteRequest)
+        }
     }
 }

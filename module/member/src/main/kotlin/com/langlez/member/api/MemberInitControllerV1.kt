@@ -28,44 +28,44 @@ import org.springframework.web.multipart.MultipartFile
 class MemberInitControllerV1(private val service: MemberInitService) {
 
     @PostMapping("/handle")
-    fun initHandle(
+    suspend fun initHandle(
         @AuthenticationPrincipal email: String,
         @RequestBody @Valid request: InitHandleNicknameRequestV1
     ): MemberResponseV1 =
         MemberResponseV1.from(service.initHandle(email, request.handle, request.nickname))
 
     @PostMapping("/personality")
-    fun initPersonality(
+    suspend fun initPersonality(
         @AuthenticationPrincipal email: String,
         @RequestBody personality: MemberPersonality
     ): MemberResponseV1 = MemberResponseV1.from(service.initPersonality(email, personality))
 
     @PostMapping("/location")
-    fun initLocation(
+    suspend fun initLocation(
         @AuthenticationPrincipal email: String,
         @RequestBody location: MemberLocation
     ): MemberResponseV1 = MemberResponseV1.from(service.initLocation(email, location))
 
     @PostMapping("/introduction")
-    fun initIntroduction(
+    suspend fun initIntroduction(
         @AuthenticationPrincipal email: String,
         @RequestBody introduction: MemberIntroduction
     ): MemberResponseV1 = MemberResponseV1.from(service.initIntroduction(email, introduction))
 
     @PostMapping("/languages")
-    fun initLanguages(
+    suspend fun initLanguages(
         @AuthenticationPrincipal email: String,
         @RequestBody languages: List<MemberLanguage>
     ): MemberResponseV1 = MemberResponseV1.from(service.initLanguages(email, languages))
 
     @PostMapping("/images", consumes = ["multipart/form-data"])
-    fun initImages(
+    suspend fun initImages(
         @AuthenticationPrincipal email: String,
         @RequestPart("profileImage") profileImage: MultipartFile,
         @RequestPart("otherImages", required = false) otherImages: List<MultipartFile>?,
     ): MemberResponseV1 = MemberResponseV1.from(service.initProfileImages(email, profileImage, otherImages))
 
     @PostMapping("/finish")
-    fun finishInit(@AuthenticationPrincipal email: String): MemberResponseV1 =
+    suspend fun finishInit(@AuthenticationPrincipal email: String): MemberResponseV1 =
         MemberResponseV1.from(service.finishInit(email))
 }
