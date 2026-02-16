@@ -1,12 +1,14 @@
 package com.langlez.auth.application
 
 import com.langlez.auth.api.TokenResponse
-import com.langlez.common.CommonException
-import com.langlez.common.GlobalCommonError
+import com.langlez.common.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.security.token.JwtTokenProvider
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 
 @Service
@@ -15,29 +17,25 @@ class AuthService(
     private val memberService: MemberService,
     private val redisTemplate: StringRedisTemplate,
 ) {
-    fun refresh(refreshToken: String): TokenResponse {
+    suspend fun refresh(refreshToken: String): TokenResponse {
         // JWT 파싱하여 email 추출 (Redis key 생성을 위해 필수)
         val email = try {
             tokenProvider.getEmail(refreshToken)
         } catch (e: Exception) {
-            throw CommonException(GlobalCommonError.UNAUTHORIZED, "Invalid refresh token", e)
+            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token", e)
         }
 
         // Redis에서 저장된 토큰 조회 및 비교
         val savedToken = redisTemplate.opsForValue().get("refresh_token:$email")
         if (savedToken != refreshToken) {
-            throw CommonException(
-                GlobalCommonError.UNAUTHORIZED,
-                "Refresh token mismatch or expired",
-                null
-            )
+            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.token-mismatch", null)
         }
 
         // JWT 서명 검증
         if (!tokenProvider.validateToken(refreshToken)) {
             // 유효하지 않은 토큰 발견 시 Redis에서도 삭제
             redisTemplate.delete("refresh_token:$email")
-            throw CommonException(GlobalCommonError.UNAUTHORIZED, "Invalid refresh token", null)
+            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token", null)
         }
 
         val member = memberService.getMember(email)
