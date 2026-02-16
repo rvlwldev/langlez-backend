@@ -121,11 +121,11 @@ These rules are crucial for AI agents working on this project.
 - **Logging**: Use `com.langlez.logger.PerformanceLogger` or `slf4j`.
 - **Error Handling**:
   - Use `common:exception` for global error handling.
-  - **Single Exception Strategy**: Use **ONLY** `CommonException` for all business logic errors.
-  - Do NOT create specific exception classes like `MemberNotFoundException`. Instead, use `CommonException(GlobalCommonError.RESOURCE_NOT_FOUND, "Member not found")`.
-  - **Exception Translation**: Catch infrastructure exceptions (e.g., `OptimisticLockingFailureException`) in the Service layer and rethrow as `CommonException`.
+  - **Single Exception Strategy**: Use **ONLY** `LanglezException` for all business logic errors.
+  - Do NOT create specific exception classes like `MemberNotFoundException`. Instead, use `LanglezException(HttpStatus.NOT_FOUND, "member.not-found")`.
+  - **Exception Translation**: Catch infrastructure exceptions (e.g., `OptimisticLockingFailureException`) in the Service layer and rethrow as `LanglezException`.
   - **Domain Exceptions**: Use standard Java exceptions (`IllegalArgumentException`, `IllegalStateException`) for pure domain logic validation (inside Entities).
-  - Any exception other than `CommonException` is treated as an unexpected/unhandled error (`500 INTERNAL_SERVER_ERROR`).
+  - Any exception other than `LanglezException` is treated as an unexpected/unhandled error (`500 INTERNAL_SERVER_ERROR`).
 - **Concurrency**: Always consider race conditions. Use Optimistic/Pessimistic Locking where appropriate.
 - **Coroutines**: Use `suspend` functions and Coroutines ONLY when there is a clear performance benefit (e.g., non-blocking I/O with R2DBC, parallel external API calls). Do not force it on JDBC.
 - **JPA Entity**:
