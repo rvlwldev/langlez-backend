@@ -1,11 +1,26 @@
 name: langlez-app
 
 services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: langlez-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - langlez-net
+    depends_on:
+      - app-blue
+      - app-green
+
   app-blue:
     build:
       context: ../
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     image: langlez-server:latest
+    container_name: langlez-app-blue
     environment:
       - SPRING_PROFILES_ACTIVE=prod
     env_file:
@@ -18,7 +33,7 @@ services:
   app-green:
     build:
       context: ../
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     image: langlez-server:latest
     container_name: langlez-app-green
     environment:
@@ -33,4 +48,4 @@ services:
 networks:
   langlez-net:
     name: langlez-net
-    external: true
+    driver: bridge

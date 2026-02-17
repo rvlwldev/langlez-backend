@@ -48,3 +48,9 @@ GEMINI.md
 .sisyphus/
 .opencode/
 *.heapsnapshot
+
+# Project specific
+docker/volume/
+logs/
+app/log/
+infra/files/attachments/

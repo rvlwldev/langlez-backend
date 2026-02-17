@@ -12,5 +12,6 @@ services:
       - "27017:27017"
     volumes:
       - ./volume/mongodb/data:/data/db
+      - ./config/mongo/mongod.conf:/etc/mongod.conf
     networks:
       - langlez-net
