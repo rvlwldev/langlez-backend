@@ -12,12 +12,14 @@ import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.core.annotation.Order
 
 @Configuration
 @EnableWebSecurity
 class SecurityConfig {
 
     @Bean
+    @Order(2)
     fun filterChain(
         http: HttpSecurity,
         service: OAuth2UserService<OAuth2UserRequest, OAuth2User>,
@@ -27,8 +29,7 @@ class SecurityConfig {
         http.csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(STATELESS) }
             .authorizeHttpRequests {
-                // TODO : Endpoint 정리 후 수정 필요
-                it.requestMatchers("/api/auth/**", "/login/**", "/oauth2/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                it.requestMatchers("/api/auth/**", "/login/**", "/oauth2/**").permitAll()
                 it.anyRequest().authenticated()
             }
             .oauth2Login {

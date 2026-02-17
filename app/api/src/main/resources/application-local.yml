@@ -27,10 +27,10 @@ management:
 spring:
   config:
     import:
-      - classpath:mysql-local.yml
-      - classpath:mongo-local.yml
-      - classpath:redis-local.yml
-      - classpath:kafka-local.yml
+      - optional:classpath:mysql-local.yml
+      - optional:classpath:mongo-local.yml
+      - optional:classpath:redis-local.yml
+      - optional:classpath:kafka-local.yml
   servlet:
     encoding:
       charset: UTF-8
