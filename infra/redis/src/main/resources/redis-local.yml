@@ -1,6 +1,9 @@
 spring:
   data:
     redis:
-      host: localhost
-      port: 6379
-      database: 0
+      sentinel:
+        master: mymaster
+        nodes:
+          - localhost:26380
+          - localhost:26381
+          - localhost:26382

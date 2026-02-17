@@ -1,0 +1,5 @@
+# spring:
+#   kafka:
+#     bootstrap-servers: prod-kafka-1:9092,prod-kafka-2:9092
+#     consumer:
+#       group-id: langlez-prod-group

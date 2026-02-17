@@ -1,4 +1,4 @@
-name: langlez-kafka
+name: langlez-kafka-cluster
 
 networks:
   langlez-net:
@@ -31,7 +31,7 @@ services:
     volumes:
       - ./volume/kafka/1:/var/lib/kafka/data
     env_file:
-      - ./config/kafka.env
+      - ./config/kafka/kafka.env
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:9092,CONTROLLER://kafka-1:29093,EXTERNAL://localhost:9001
@@ -48,7 +48,7 @@ services:
     volumes:
       - ./volume/kafka/2:/var/lib/kafka/data
     env_file:
-      - ./config/kafka.env
+      - ./config/kafka/kafka.env
     environment:
       KAFKA_NODE_ID: 2
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:9092,CONTROLLER://kafka-2:29093,EXTERNAL://localhost:9002
@@ -65,7 +65,7 @@ services:
     volumes:
       - ./volume/kafka/3:/var/lib/kafka/data
     env_file:
-      - ./config/kafka.env
+      - ./config/kafka/kafka.env
     environment:
       KAFKA_NODE_ID: 3
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:9092,CONTROLLER://kafka-3:29093,EXTERNAL://localhost:9003

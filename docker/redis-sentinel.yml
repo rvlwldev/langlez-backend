@@ -1,8 +1,4 @@
-name: langlez-redis
-
-networks:
-  langlez-net:
-    driver: bridge
+name: langlez-redis-sentinel
 
 services:
   redis-master:
@@ -11,11 +7,11 @@ services:
     ports:
       - "6379:6379"
     volumes:
+      - ./config/redis/redis.conf:/etc/redis/redis.conf
       - ./volume/redis/data:/data
-      - ./config/redis.conf:/etc/redis.conf
     networks:
       - langlez-net
-    command: [ "redis-server", "/etc/redis.conf" ]
+    command: ["redis-server", "/etc/redis/redis.conf"]
 
   redis-replica1:
     image: redis:7.2
@@ -23,12 +19,12 @@ services:
     ports:
       - "16379:6379"
     volumes:
-      - ./config/redis.conf:/etc/redis.conf
+      - ./config/redis/redis.conf:/etc/redis/redis.conf
     depends_on:
       - redis-master
     networks:
       - langlez-net
-    command: [ "redis-server", "/etc/redis.conf", "--replicaof", "redis-master", "6379" ]
+    command: ["redis-server", "/etc/redis/redis.conf", "--replicaof", "redis-master", "6379"]
 
   redis-replica2:
     image: redis:7.2
@@ -36,12 +32,12 @@ services:
     ports:
       - "26379:6379"
     volumes:
-      - ./config/redis.conf:/etc/redis.conf
+      - ./config/redis/redis.conf:/etc/redis/redis.conf
     depends_on:
       - redis-master
     networks:
       - langlez-net
-    command: [ "redis-server", "/etc/redis.conf", "--replicaof", "redis-master", "6379" ]
+    command: ["redis-server", "/etc/redis/redis.conf", "--replicaof", "redis-master", "6379"]
 
   redis-sentinel1:
     image: redis:7.2
@@ -49,14 +45,13 @@ services:
     ports:
       - "26380:26379"
     volumes:
-      - ./config/redis-sentinel.conf:/etc/redis-sentinel.conf
+      - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
       - redis-master
-      - redis-replica1
-      - redis-replica2
     networks:
       - langlez-net
-    command: [ "redis-sentinel", "/etc/redis-sentinel.conf" ]
+    command: >
+      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
 
   redis-sentinel2:
     image: redis:7.2
@@ -64,12 +59,13 @@ services:
     ports:
       - "26381:26379"
     volumes:
-      - ./config/redis-sentinel.conf:/etc/redis-sentinel.conf
+      - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
       - redis-master
     networks:
       - langlez-net
-    command: [ "redis-sentinel", "/etc/redis-sentinel.conf" ]
+    command: >
+      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
 
   redis-sentinel3:
     image: redis:7.2
@@ -77,9 +73,14 @@ services:
     ports:
       - "26382:26379"
     volumes:
-      - ./config/redis-sentinel.conf:/etc/redis-sentinel.conf
+      - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
       - redis-master
     networks:
       - langlez-net
-    command: [ "redis-sentinel", "/etc/redis-sentinel.conf" ]
+    command: >
+      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
+
+networks:
+  langlez-net:
+    driver: bridge
