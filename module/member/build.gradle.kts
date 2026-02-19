@@ -11,9 +11,11 @@ dependencies {
     implementation(project(":common:security"))
     implementation(project(":common:exception"))
     implementation(project(":common:observability"))
+    implementation(project(":common:swagger"))
     implementation(project(":infra:files"))
 
     implementation(libs.dependency.kotlin.coroutine)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation(libs.dependency.springboot.jpa)
     implementation(libs.dependency.springboot.web)
     implementation(libs.dependency.spring.security.core)

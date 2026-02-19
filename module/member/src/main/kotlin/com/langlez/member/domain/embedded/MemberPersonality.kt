@@ -1,6 +1,7 @@
 package com.langlez.member.domain.embedded
 
 import com.fasterxml.jackson.annotation.JsonFormat
+import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Embeddable
 import java.io.Serializable
@@ -10,12 +11,18 @@ import java.util.Locale
 @Embeddable
 data class MemberPersonality(
     @field:JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
-    val birthDay: LocalDate?,
+    @Column(name = "birth_day")
+    var birthDay: LocalDate? = null,
 
     @Convert(converter = NationalityConverter::class)
-    val nationality: Nationality?,
-    val gender: Gender?,
-    var mbti: MBTI?
+    @Column(name = "nationality", length = 3)
+    var nationality: Nationality? = null,
+
+    @Column(name = "gender", length = 10)
+    var gender: Gender? = null,
+
+    @Column(name = "mbti", length = 4)
+    var mbti: MBTI? = null
 ) {
     enum class Gender { MALE, FEMALE, SECRET }
     enum class MBTI {

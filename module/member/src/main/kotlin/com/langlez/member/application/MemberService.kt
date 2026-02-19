@@ -10,8 +10,14 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+import com.langlez.member.domain.MemberProfile
+import com.langlez.member.domain.MemberProfileRepository
+
 @Service
-class MemberService(private val repo: MemberRepository) {
+class MemberService(
+    private val repo: MemberRepository,
+    private val profileRepo: MemberProfileRepository
+) {
 
     /** OAuth 로그인 시 Member 조회 또는 생성 */
     @Transactional
@@ -21,7 +27,12 @@ class MemberService(private val repo: MemberRepository) {
 
         // 신규 회원 생성
         Member.create(command.nickname, command.email, command.providerId, command.providerType.name, command.providerUserName)
-            .apply { login(); repo.save(this) }
+            .apply { 
+                this.agreeToTerms = command.agreeToTerms
+                login()
+                repo.save(this)
+                profileRepo.save(MemberProfile(memberId = this.id, member = this))
+            }
     }
 
     @Transactional(readOnly = true)
@@ -35,7 +46,7 @@ class MemberService(private val repo: MemberRepository) {
     }
 
     @Transactional(readOnly = true)
-    suspend fun getMemberByHandle(handle: String): Member = withContext(Dispatchers.IO) {
-        repo.findByHandle(handle) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+    suspend fun getMemberByUsername(username: String): Member = withContext(Dispatchers.IO) {
+        repo.findByUsername(username) ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
     }
 }

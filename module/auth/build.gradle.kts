@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     api(libs.dependency.kotlin.coroutine)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation(project(":module:member"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:mysql"))

@@ -5,6 +5,8 @@ import com.langlez.member.application.command.CreateMemberCommand
 import com.langlez.member.domain.embedded.MemberProvider
 import java.util.*
 import kotlinx.coroutines.runBlocking
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.annotation.Lazy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
@@ -19,8 +21,8 @@ class CustomOAuth2UserService(
     private val delegate: OAuth2UserService<OAuth2UserRequest, OAuth2User> = DefaultOAuth2UserService(),
 ) : OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    @org.springframework.context.annotation.Lazy
+    @Autowired
+    @Lazy
     lateinit var memberService: MemberService
 
     @Transactional
@@ -47,7 +49,7 @@ class CustomOAuth2UserService(
             CreateMemberCommand(
                 email = attributes.email,
                 nickname = attributes.name,
-                agreeTerm = false,
+                agreeToTerms = false,
                 providerId = providerId,
                 providerType = MemberProvider.Type.valueOf(attributes.provider.uppercase()),
                 providerUserName = attributes.name
