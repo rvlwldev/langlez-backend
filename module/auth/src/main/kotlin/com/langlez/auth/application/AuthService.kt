@@ -17,8 +17,8 @@ class AuthService(
     private val memberService: MemberService,
     private val redisTemplate: StringRedisTemplate,
 ) {
-    suspend fun refresh(refreshToken: String): TokenResponse {
-        // JWT 파싱하여 email 추출 (Redis key 생성을 위해 필수)
+    suspend fun refresh(refreshToken: String): TokenResponse = withContext(Dispatchers.IO) {
+        // JWT 파싱하여 email 추출
         val email = try {
             tokenProvider.getEmail(refreshToken)
         } catch (e: Exception) {
@@ -28,24 +28,23 @@ class AuthService(
         // Redis에서 저장된 토큰 조회 및 비교
         val savedToken = redisTemplate.opsForValue().get("refresh_token:$email")
         if (savedToken != refreshToken) {
-            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.token-mismatch", null)
+            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.token-mismatch")
         }
 
         // JWT 서명 검증
         if (!tokenProvider.validateToken(refreshToken)) {
-            // 유효하지 않은 토큰 발견 시 Redis에서도 삭제
             redisTemplate.delete("refresh_token:$email")
-            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token", null)
+            throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token")
         }
 
         val member = memberService.getMember(email)
         val newAccessToken = tokenProvider.createAccessToken(email, "ROLE_${member.role.name}")
         val newRefreshToken = tokenProvider.createRefreshToken(email)
 
-        // Token Rotation: 기존 토큰 삭제 후 새 토큰 저장
+        // Token Rotation
         redisTemplate.delete("refresh_token:$email")
         redisTemplate.opsForValue().set("refresh_token:$email", newRefreshToken, 14, TimeUnit.DAYS)
 
-        return TokenResponse(newAccessToken, newRefreshToken)
+        TokenResponse(newAccessToken, newRefreshToken)
     }
 }
