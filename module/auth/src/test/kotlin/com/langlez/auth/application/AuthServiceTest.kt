@@ -1,5 +1,6 @@
 package com.langlez.auth.application
 
+import com.langlez.auth.api.TokenResponse
 import com.langlez.common.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
