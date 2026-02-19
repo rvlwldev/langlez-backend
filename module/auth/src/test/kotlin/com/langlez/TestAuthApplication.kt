@@ -13,13 +13,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 
 @SpringBootApplication
 @ComponentScan(
-        basePackages = ["com.langlez"],
-        excludeFilters =
-                [
-                        ComponentScan.Filter(
-                                type = FilterType.ASSIGNABLE_TYPE,
-                                classes = [SecurityConfig::class]
-                        )]
+    basePackages = ["com.langlez"],
+    excludeFilters = [ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = [SecurityConfig::class])]
 )
 @EntityScan("com.langlez")
 @EnableJpaRepositories("com.langlez")

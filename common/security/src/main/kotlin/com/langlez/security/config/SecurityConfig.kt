@@ -14,6 +14,9 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 import org.springframework.core.annotation.Order
 
+import org.springframework.security.web.authentication.HttpStatusEntryPoint
+import org.springframework.http.HttpStatus
+
 @Configuration
 @EnableWebSecurity
 class SecurityConfig {
@@ -29,12 +32,15 @@ class SecurityConfig {
         http.csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(STATELESS) }
             .authorizeHttpRequests {
-                it.requestMatchers("/api/auth/**", "/login/**", "/oauth2/**").permitAll()
+                it.requestMatchers("/api/auth/**", "/login/**", "/oauth2/**", "/error", "/api/v1/members/@**").permitAll()
                 it.anyRequest().authenticated()
             }
             .oauth2Login {
                 it.userInfoEndpoint { userInfo -> userInfo.userService(service) }
                 it.successHandler(successHandler)
+            }
+            .exceptionHandling {
+                it.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 

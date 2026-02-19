@@ -2,18 +2,21 @@ package com.langlez.member.e2e
 
 import com.langlez.file.application.FileStorage
 import com.langlez.member.api.request.InitHandleNicknameRequestV1
-import com.langlez.member.api.response.MemberResponseV1
+import com.langlez.member.api.response.ProfileResponse
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.embedded.MemberIntroduction
 import com.langlez.member.domain.embedded.MemberLanguage
 import com.langlez.member.domain.embedded.MemberLocation
 import com.langlez.member.domain.embedded.MemberPersonality
+import com.langlez.member.MemberTestApplication
 import com.langlez.member.infrastructure.persistence.jpa.MemberJpaRepository
+import com.langlez.member.infrastructure.persistence.jpa.MemberProfileJpaRepository
 import com.langlez.security.token.JwtTokenProvider
 import io.kotest.core.spec.DisplayName
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.mockk
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
@@ -25,10 +28,16 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
-import org.springframework.mock.web.MockMultipartFile
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserService
+import org.springframework.security.oauth2.core.user.OAuth2User
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MySQLContainer
@@ -38,9 +47,14 @@ import org.testcontainers.utility.DockerImageName
 
 @Testcontainers
 @ActiveProfiles("test")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    classes = [MemberTestApplication::class],
+    properties = ["spring.main.allow-bean-definition-overriding=true"]
+)
 @Import(MemberE2ETest.TestConfig::class)
-@DisplayName("E2E: 회원 초기화 플로우 통합 테스트")
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+@DisplayName("E2E: 회원 프로필 관리 및 초기화 통합 테스트")
 class MemberE2ETest : BehaviorSpec() {
     override fun extensions() = listOf(SpringExtension)
 
@@ -48,15 +62,16 @@ class MemberE2ETest : BehaviorSpec() {
     var port: Int = 0
 
     @Autowired
-    @Suppress("SpringJavaInjectionPointsAutowiringInspection")
     lateinit var repo: MemberJpaRepository
 
     @Autowired
-    lateinit var storage: FileStorage
+    lateinit var profileRepo: MemberProfileJpaRepository
 
     @Autowired
-    @Suppress("SpringJavaInjectionPointsAutowiringInspection")
     lateinit var tokenProvider: JwtTokenProvider
+
+    private val email = "e2e-user@langlez.com"
+    private lateinit var token: String
 
     @TestConfiguration
     class TestConfig {
@@ -65,14 +80,24 @@ class MemberE2ETest : BehaviorSpec() {
         fun testFileStorage(): FileStorage {
             return object : FileStorage {
                 override suspend fun upload(file: MultipartFile, folder: String?): String {
-                    return "https://mock-s3.com/image.jpg"
+                    return "https://cdn.langlez.com/test/${file.originalFilename}"
                 }
 
                 override suspend fun delete(fileUrl: String) {
-                    // Do nothing
                 }
             }
         }
+
+        @Bean
+        @Primary
+        fun oAuth2UserService(): OAuth2UserService<OAuth2UserRequest, OAuth2User> = mockk(relaxed = true)
+
+        @Bean
+        @Primary
+        fun authenticationSuccessHandler(): AuthenticationSuccessHandler = mockk(relaxed = true)
+
+        @Bean
+        fun clientRegistrationRepository(): ClientRegistrationRepository = mockk(relaxed = true)
     }
 
     companion object {
@@ -85,7 +110,7 @@ class MemberE2ETest : BehaviorSpec() {
         }
 
         @Container
-        val redis = GenericContainer<Nothing>(DockerImageName.parse("redis:7.0")).apply {
+        val redis: GenericContainer<*> = GenericContainer(DockerImageName.parse("redis:7.0")).apply {
             withExposedPorts(6379)
             start()
         }
@@ -100,184 +125,205 @@ class MemberE2ETest : BehaviorSpec() {
             
             registry.add("spring.data.redis.host", redis::getHost)
             registry.add("spring.data.redis.port", redis::getFirstMappedPort)
+            
+            registry.add("jwt.secret") { "dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci10ZXN0aW5nLXB1cnBvc2VzLWJhc2U2NA==" }
         }
     }
 
     init {
-        val email = "newuser@test.com"
-
         beforeSpec {
             RestAssured.port = port
-            repo.deleteAll()
+            profileRepo.deleteAllInBatch()
+            repo.deleteAllInBatch()
+            
+            val member = Member.create(
+                nickname = "신규회원",
+                email = email,
+                providerId = "google_12345",
+                providerType = "GOOGLE",
+                providerUserName = "Test User"
+            )
+            repo.saveAndFlush(member)
+            
+            token = tokenProvider.createAccessToken(email, "ROLE_MEMBER")
         }
 
-        Given("신규 회원이 가입되어 있고 로그인 토큰이 발급된 상태에서") {
-            val member =
-                Member.create(
-                    nickname = "임시닉네임",
-                    email = email,
-                    providerId = "google_12345",
-                    providerType = "GOOGLE",
-                    providerUserName = "Test User"
-                )
-            repo.save(member)
-
-            val token = tokenProvider.createAccessToken(email, "ROLE_MEMBER")
-
-            When("핸들과 닉네임 설정을 요청하면") {
-                val handleRequest = InitHandleNicknameRequestV1("langlez_user", "랭글레즈")
+        Given("회원 가입 초기 상태에서") {
+            
+            When("인증 없이 API를 호출하면") {
                 val response = RestAssured.given()
-                    .header("Authorization", "Bearer $token")
                     .contentType(ContentType.JSON)
-                    .body(handleRequest)
-                    .`when`()
-                    .post("/api/v1/members/init/handle")
-
-                Then("핸들과 닉네임이 업데이트되어야 한다") {
-                    response.statusCode shouldBe 200
-
-                    val responseBody = response.`as`(MemberResponseV1::class.java)
-                    responseBody.handle shouldBe "langlez_user"
-                    responseBody.nickname shouldBe "랭글레즈"
-                    responseBody.init shouldBe false
+                    .get("/api/v1/members/me")
+                
+                Then("401 Unauthorized 응답을 받아야 한다") {
+                    response.statusCode shouldBe 401
                 }
             }
 
-            When("성향 정보(Personality) 설정을 요청하면") {
+            When("사용자명(Username)을 설정하면") {
+                val request = InitHandleNicknameRequestV1("langlez_dev", "개발자")
+                val response = RestAssured.given()
+                    .header("Authorization", "Bearer $token")
+                    .contentType(ContentType.JSON)
+                    .body(request)
+                    .`when`()
+                    .put("/api/v1/profiles/me/username")
+
+                Then("성공적으로 업데이트되어야 한다") {
+                    response.statusCode shouldBe 200
+                    val body = response.`as`(ProfileResponse::class.java)
+                    body.username shouldBe "langlez_dev"
+                    body.nickname shouldBe "개발자"
+                    body.isInitDone shouldBe false
+                }
+            }
+
+            When("중복된 사용자명으로 변경을 시도하면") {
+                val otherMember = Member.create("other", "other@test.com", "id2", "GOOGLE", "u").apply { 
+                    username = "duplicate_target"
+                }
+                repo.saveAndFlush(otherMember)
+
+                val request = InitHandleNicknameRequestV1("duplicate_target", "중복체크")
+                val response = RestAssured.given()
+                    .header("Authorization", "Bearer $token")
+                    .contentType(ContentType.JSON)
+                    .body(request)
+                    .`when`()
+                    .put("/api/v1/profiles/me/username")
+
+                Then("409 Conflict 응답을 받아야 한다") {
+                    response.statusCode shouldBe 409
+                }
+            }
+
+            When("잘못된 형식의 사용자명(특수문자 포함)을 입력하면") {
+                val request = InitHandleNicknameRequestV1("invalid@name", "닉네임")
+                val response = RestAssured.given()
+                    .header("Authorization", "Bearer $token")
+                    .contentType(ContentType.JSON)
+                    .body(request)
+                    .`when`()
+                    .put("/api/v1/profiles/me/username")
+
+                Then("400 Bad Request 응답을 받아야 한다") {
+                    response.statusCode shouldBe 400
+                }
+            }
+        }
+
+        Given("프로필 정보 입력 단계에서") {
+            
+            When("성향 정보를 입력하면") {
                 val personality = MemberPersonality(
-                    birthDay = LocalDate.of(1990, 1, 1),
+                    birthDay = LocalDate.of(1995, 5, 5),
                     nationality = MemberPersonality.Nationality.of("KR"),
                     gender = MemberPersonality.Gender.MALE,
-                    mbti = MemberPersonality.MBTI.INTJ
+                    mbti = MemberPersonality.MBTI.ENTP
                 )
-
-                val response = RestAssured.given()
+                
+                RestAssured.given()
                     .header("Authorization", "Bearer $token")
                     .contentType(ContentType.JSON)
                     .body(personality)
                     .`when`()
-                    .post("/api/v1/members/init/personality")
-
-                Then("요청이 성공해야 한다") { response.statusCode shouldBe 200 }
+                    .put("/api/v1/profiles/me/personality")
+                    .then()
+                    .statusCode(200)
             }
 
-            When("위치 정보(Location) 설정을 요청하면") {
-                val location = MemberLocation("서울특별시", 37.0, 127.0)
-                val response = RestAssured.given()
+            When("위치 정보를 입력하면") {
+                val location = MemberLocation("Seoul, Korea", 37.5665, 126.9780)
+                
+                RestAssured.given()
                     .header("Authorization", "Bearer $token")
                     .contentType(ContentType.JSON)
                     .body(location)
                     .`when`()
-                    .post("/api/v1/members/init/location")
-
-                Then("요청이 성공해야 한다") { response.statusCode shouldBe 200 }
+                    .put("/api/v1/profiles/me/location")
+                    .then()
+                    .statusCode(200)
             }
 
-            When("자기소개(Introduction) 설정을 요청하면") {
-                val introduction = MemberIntroduction("안녕하세요", "영어 마스터", "적극적인 파트너")
-                val response =
-                    RestAssured.given()
-                        .header("Authorization", "Bearer $token")
-                        .contentType(ContentType.JSON)
-                        .body(introduction)
-                        .`when`()
-                        .post("/api/v1/members/init/introduction")
-
-                Then("요청이 성공해야 한다") { response.statusCode shouldBe 200 }
+            When("자기소개를 입력하면") {
+                val introduction = MemberIntroduction("안녕하세요", "언어 교환 원해요", "친구해요")
+                
+                RestAssured.given()
+                    .header("Authorization", "Bearer $token")
+                    .contentType(ContentType.JSON)
+                    .body(introduction)
+                    .`when`()
+                    .put("/api/v1/profiles/me/introduction")
+                    .then()
+                    .statusCode(200)
             }
 
-            When("언어 정보(Languages) 설정을 요청하면") {
-                val languages =
-                    listOf(
-                        MemberLanguage(
-                            MemberLanguage.Language.KOREAN,
-                            MemberLanguage.Level.NATIVE
-                        ),
-                        MemberLanguage(
-                            MemberLanguage.Language.ENGLISH,
-                            MemberLanguage.Level.MIDDLE
-                        )
-                    )
-                val response = RestAssured.given()
+            When("언어 정보를 입력하면") {
+                val languages = listOf(
+                    MemberLanguage(MemberLanguage.Language.KOREAN, MemberLanguage.Level.NATIVE),
+                    MemberLanguage(MemberLanguage.Language.ENGLISH, MemberLanguage.Level.MIDDLE)
+                )
+                
+                RestAssured.given()
                     .header("Authorization", "Bearer $token")
                     .contentType(ContentType.JSON)
                     .body(languages)
                     .`when`()
-                    .post("/api/v1/members/init/languages")
-
-                Then("요청이 성공해야 한다") { response.statusCode shouldBe 200 }
+                    .put("/api/v1/profiles/me/languages")
+                    .then()
+                    .statusCode(200)
             }
+        }
 
-            When("프로필 이미지(Images) 설정을 요청하면") {
-                val profileImage = MockMultipartFile(
-                    "profileImage",
-                    "profile.jpg",
-                    "image/jpeg",
-                    "profile-data".toByteArray()
-                )
-
+        Given("마지막으로 프로필 이미지를 업로드하면") {
+            When("이미지 파일을 전송하면") {
                 val response = RestAssured.given()
                     .header("Authorization", "Bearer $token")
                     .contentType(ContentType.MULTIPART)
-                    .multiPart(
-                        profileImage.name,
-                        profileImage.originalFilename,
-                        profileImage.bytes,
-                        profileImage.contentType
-                    )
+                    .multiPart("profileImage", "profile.jpg", "dummy-image-content".toByteArray(), "image/jpeg")
                     .`when`()
-                    .post("/api/v1/members/init/images")
+                    .put("/api/v1/profiles/me/images")
 
-                Then("요청이 성공해야 한다") { response.statusCode shouldBe 200 }
+                Then("업로드가 성공하고 초기화 상태(isInitDone)가 true로 변경되어야 한다") {
+                    response.statusCode shouldBe 200
+                    val body = response.`as`(ProfileResponse::class.java)
+                    body.images shouldNotBe emptyList<String>()
+                    body.images[0] shouldBe "https://cdn.langlez.com/test/profile.jpg"
+                    body.isInitDone shouldBe true
+                }
+            }
+        }
+
+        Given("모든 설정이 완료된 후") {
+            When("내 정보를 조회하면") {
+                val response = RestAssured.given()
+                    .header("Authorization", "Bearer $token")
+                    .contentType(ContentType.JSON)
+                    .`when`()
+                    .get("/api/v1/members/me")
+
+                Then("모든 프로필 정보가 포함되어 있어야 한다") {
+                    response.statusCode shouldBe 200
+                    val body = response.`as`(ProfileResponse::class.java)
+                    body.username shouldBe "langlez_dev"
+                    body.introduction?.bio shouldBe "안녕하세요"
+                    body.location?.address shouldBe "Seoul, Korea"
+                    body.languages?.size shouldBe 2
+                    body.isInitDone shouldBe true
+                }
             }
 
-            When("초기화 완료(Finish)를 요청하면") {
-                val response =
-                    RestAssured.given()
-                        .header("Authorization", "Bearer $token")
-                        .contentType(ContentType.JSON)
-                        .`when`()
-                        .post("/api/v1/members/init/finish")
+            When("공개 프로필(@username)을 조회하면") {
+                val response = RestAssured.given()
+                    .contentType(ContentType.JSON)
+                    .`when`()
+                    .get("/api/v1/members/@langlez_dev")
 
-                Then("초기화 상태가 완료(true)가 되고 모든 정보가 조회되어야 한다") {
+                Then("해당 유저의 정보가 조회되어야 한다") {
                     response.statusCode shouldBe 200
-                    val finalResponse = response.`as`(MemberResponseV1::class.java)
-                    finalResponse.init shouldBe true
-                    finalResponse.handle shouldBe "langlez_user"
-                    finalResponse.nationality shouldBe "KR"
-                    finalResponse.address shouldBe "서울특별시"
-                }
-
-                When("/me 엔드포인트로 내 정보를 조회하면") {
-                    val response =
-                        RestAssured.given()
-                            .header("Authorization", "Bearer $token")
-                            .contentType(ContentType.JSON)
-                            .`when`()
-                            .get("/api/v1/members/me")
-
-                    Then("저장된 정보와 일치해야 한다") {
-                        response.statusCode shouldBe 200
-                        val meResponse = response.`as`(MemberResponseV1::class.java)
-                        meResponse.email shouldBe email
-                        meResponse.handle shouldBe "langlez_user"
-                        meResponse.init shouldBe true
-                    }
-                }
-
-                When("핸들(@langlez_user)로 회원을 조회하면") {
-                    val response =
-                        RestAssured.given()
-                            .contentType(ContentType.JSON)
-                            .`when`()
-                            .get("/api/v1/members/@langlez_user")
-
-                    Then("해당 회원의 정보가 반환되어야 한다") {
-                        response.statusCode shouldBe 200
-                        val handleLookupResponse = response.`as`(MemberResponseV1::class.java)
-                        handleLookupResponse.handle shouldBe "langlez_user"
-                        handleLookupResponse.nickname shouldBe "랭글레즈"
-                    }
+                    val body = response.`as`(ProfileResponse::class.java)
+                    body.email shouldBe email
+                    body.nickname shouldBe "개발자"
                 }
             }
         }

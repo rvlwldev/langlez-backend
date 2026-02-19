@@ -6,7 +6,7 @@ import com.langlez.member.domain.embedded.MemberProvider
 data class CreateMemberCommand(
         val email: String,
         val nickname: String,
-        val agreeTerm: Boolean,
+        val agreeToTerms: Boolean,
 
         // Provider 정보
         val providerId: String,

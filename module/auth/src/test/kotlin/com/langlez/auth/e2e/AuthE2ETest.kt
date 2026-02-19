@@ -39,12 +39,15 @@ class AuthE2ETest : BehaviorSpec() {
     var port: Int = 0
 
     @Autowired
+    @Suppress("SpringJavaInjectionPointsAutowiringInspection")
     lateinit var repo: MemberJpaRepository
 
     @Autowired
+    @Suppress("SpringJavaInjectionPointsAutowiringInspection")
     lateinit var redis: StringRedisTemplate
 
     @Autowired
+    @Suppress("SpringJavaInjectionPointsAutowiringInspection")
     lateinit var tokenProvider: JwtTokenProvider
 
     companion object {
@@ -69,7 +72,6 @@ class AuthE2ETest : BehaviorSpec() {
             registry.add("spring.datasource.username", mysql::getUsername)
             registry.add("spring.datasource.password", mysql::getPassword)
             registry.add("spring.jpa.hibernate.ddl-auto") { "create" }
-
             registry.add("spring.data.redis.host", redis::getHost)
             registry.add("spring.data.redis.port", redis::getFirstMappedPort)
         }
@@ -107,6 +109,9 @@ class AuthE2ETest : BehaviorSpec() {
                     .post("/api/v1/auth/refresh")
 
                 Then("새로운 Access Token과 Refresh Token이 발급되어야 한다") {
+                    if (response.statusCode != 200) {
+                        println("Response Body: ${response.body.asString()}")
+                    }
                     response.statusCode shouldBe 200
 
                     val tokenResponse = response.`as`(TokenResponse::class.java)
