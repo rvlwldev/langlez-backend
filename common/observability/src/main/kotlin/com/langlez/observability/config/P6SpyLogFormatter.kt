@@ -14,7 +14,7 @@ class P6SpyLogFormatter : MessageFormattingStrategy {
         url: String,
     ): String =
         if (StringUtils.hasText(sql)) {
-            "type=MySQL command=\"${sql.replace("\"", "'").replace("\n", " ").trim()}\" duration_ms=$elapsed"
+            "type=MySQL duration_ms=$elapsed command=\"${sql.trim()}\""
         } else {
             ""
         }
