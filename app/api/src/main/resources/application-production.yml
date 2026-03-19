@@ -1,0 +1,65 @@
+server:
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    connection-timeout: 1m
+    max-connections: 10000
+    accept-count: 200
+    keep-alive-timeout: 60s
+
+spring:
+  # Data Sources - TODO: Fill in production values or use environment variables
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/langlez_db}
+    username: ${MYSQL_USERNAME:admin}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/langlez_db}
+    redis:
+      sentinel:
+        master: ${REDIS_MASTER:mymaster}
+        nodes: ${REDIS_SENTINEL_NODES:localhost:26380,localhost:26381,localhost:26382}
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9001,localhost:9002,localhost:9003}
+    consumer:
+      group-id: langlez-group
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # Security & OAuth2
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+          apple:
+            client-id: ${APPLE_CLIENT_ID}
+            client-secret: ${APPLE_CLIENT_SECRET}
+
+jwt:
+  secret: ${JWT_SECRET_KEY}
+  access-token-validity-in-seconds: 3600
+  refresh-token-validity-in-seconds: 1209600
+
+logging:
+  level:
+    root: INFO
+    com.langlez: INFO
+
+swagger:
+  enabled: false # Disabled in production for security

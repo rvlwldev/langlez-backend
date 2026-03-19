@@ -1,8 +1,0 @@
-# spring:
-#   data:
-#     redis:
-#       cluster:
-#         nodes:
-#           - prod-redis-1:6379
-#           - prod-redis-2:6379
-#       database: 0

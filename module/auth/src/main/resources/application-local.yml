@@ -1,9 +1,0 @@
-spring:
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: google-dummy-id.apps.googleusercontent.com
-            client-secret: google-dummy-secret
-            scope: profile, email
