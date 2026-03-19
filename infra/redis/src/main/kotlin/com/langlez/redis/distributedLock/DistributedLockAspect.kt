@@ -48,7 +48,7 @@ class DistributedLockAspect(
 
         logger.debug("Attempting to acquire lock: $lockName (wait: ${waitTime}ms, lease: ${leaseTime}ms)")
 
-        return redisLockService.executeWithLock(lockName, waitTime, leaseTime, TimeUnit.MILLISECONDS) {
+        return redisLockService.executeWithLock(lockName, waitTime, leaseTime, TimeUnit.MILLISECONDS, distributedLock.throwOnFailure) {
             if (distributedLock.transactional) TransactionTemplate(transactionManager).execute { point.proceed() }
             else point.proceed()
         }

@@ -6,8 +6,8 @@ import java.util.concurrent.Callable
 
 class ResilientCache(
     private val name: String,
-    private val redisCache: Cache,
-    private val localCache: Cache,
+    private val redis: Cache,
+    private val local: Cache,
     private val onFailure: () -> Unit,
 ) : Cache {
 
@@ -24,24 +24,24 @@ class ResilientCache(
 
     override fun getName(): String = name
 
-    override fun getNativeCache(): Any = redisCache.nativeCache
+    override fun getNativeCache(): Any = redis.nativeCache
 
     override fun get(key: Any): Cache.ValueWrapper? =
-        runGuarded(op = { redisCache.get(key) }, fallback = { localCache.get(key) })
+        runGuarded(op = { redis.get(key) }, fallback = { local.get(key) })
 
-    override fun <T : Any?> get(key: Any, type: Class<T>?): T? =
-        runGuarded(op = { redisCache.get(key, type) }, fallback = { localCache.get(key, type) })
+    override fun <T> get(key: Any, type: Class<T>?): T? =
+        runGuarded(op = { redis.get(key, type) }, fallback = { local.get(key, type) })
 
-    override fun <T : Any?> get(key: Any, valueLoader: Callable<T>): T? =
-        runGuarded(op = { redisCache.get(key, valueLoader) }, fallback = { localCache.get(key, valueLoader) })
+    override fun <T> get(key: Any, valueLoader: Callable<T>): T? =
+        runGuarded(op = { redis.get(key, valueLoader) }, fallback = { local.get(key, valueLoader) })
 
     override fun put(key: Any, value: Any?) =
-        runGuarded(op = { redisCache.put(key, value) }, fallback = { localCache.put(key, value) })
+        runGuarded(op = { redis.put(key, value) }, fallback = { local.put(key, value) })
 
     override fun evict(key: Any) =
-        runGuarded(op = { redisCache.evict(key) }, fallback = { localCache.evict(key) })
+        runGuarded(op = { redis.evict(key) }, fallback = { local.evict(key) })
 
     override fun clear() =
-        runGuarded(op = { redisCache.clear() }, fallback = { localCache.clear() })
+        runGuarded(op = { redis.clear() }, fallback = { local.clear() })
 
 }

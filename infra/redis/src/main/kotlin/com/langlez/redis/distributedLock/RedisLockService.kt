@@ -21,25 +21,31 @@ class RedisLockService(private val redissonClient: RedissonClient) {
      * @throws IllegalStateException 락 획득 실패 시 발생
      */
     fun <T> executeWithLock(
-            key: String,
-            waitTime: Long,
-            leaseTime: Long,
-            unit: TimeUnit,
-            action: () -> T
-    ): T {
+        key: String,
+        waitTime: Long,
+        leaseTime: Long,
+        unit: TimeUnit,
+        throwOnFailure: Boolean = true,
+        action: () -> T
+    ): T? {
         val rLock = redissonClient.getLock(key)
 
         val acquired =
-                try {
-                    rLock.tryLock(waitTime, leaseTime, unit)
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw IllegalStateException("Interrupted while acquiring lock: $key", e)
-                }
+            try {
+                rLock.tryLock(waitTime, leaseTime, unit)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw IllegalStateException("Interrupted while acquiring lock: $key", e)
+            }
 
         if (!acquired) {
-            logger.error("Lock acquisition failed: $key")
-            throw IllegalStateException("Lock acquisition failed for key: $key")
+            if (throwOnFailure) {
+                logger.error("Lock acquisition failed: $key")
+                throw IllegalStateException("Lock acquisition failed for key: $key")
+            } else {
+                logger.debug("Lock already acquired by another node. Skipping execution: $key")
+                return null
+            }
         }
 
         logger.debug("Lock acquired successfully: $key")

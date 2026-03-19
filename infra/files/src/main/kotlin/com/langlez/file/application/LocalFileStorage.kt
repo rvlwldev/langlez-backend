@@ -13,7 +13,7 @@ import org.springframework.web.multipart.MultipartFile
 internal class LocalFileStorage : FileStorage {
     private val rootPath = "attachments"
 
-    override suspend fun upload(file: MultipartFile, folder: String?): String = withContext(Dispatchers.IO) {
+    override fun upload(file: MultipartFile, folder: String?): String {
         val dir = if (folder.isNullOrBlank()) File(rootPath)
         else File("$rootPath/$folder").apply { if (!exists()) mkdirs() }
 
@@ -22,14 +22,12 @@ internal class LocalFileStorage : FileStorage {
 
         file.transferTo(targetFile)
 
-        if (folder.isNullOrBlank()) "/$rootPath/$fileName"
+        return if (folder.isNullOrBlank()) "/$rootPath/$fileName"
         else "/$rootPath/$folder/$fileName"
     }
 
-    override suspend fun delete(fileUrl: String) {
-        withContext(Dispatchers.IO) {
-            val file = File(fileUrl.removePrefix("/"))
-            if (file.exists()) file.delete()
-        }
+    override fun delete(fileUrl: String) {
+        val file = File(fileUrl.removePrefix("/"))
+        if (file.exists()) file.delete()
     }
 }

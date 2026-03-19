@@ -1,123 +1,71 @@
 package com.langlez.member.domain
 
-import com.langlez.member.domain.embedded.MemberAudit
-import com.langlez.member.domain.embedded.MemberProvider
 import jakarta.persistence.*
-import jakarta.persistence.CascadeType.ALL
+import org.springframework.data.annotation.CreatedDate
+import org.springframework.data.annotation.LastModifiedDate
+import java.time.Instant
 
 @Entity
-
 @Table(
-
     name = "members",
-
+    indexes = [Index("IDX_MEMBER_NICKNAME", "nickname")],
     uniqueConstraints = [
-
-        UniqueConstraint(name = "UNQ_PROVIDER", columnNames = ["provider_id", "provider_type"]),
-
-        UniqueConstraint(name = "UNQ_EMAIL", columnNames = ["email"]),
-
-        UniqueConstraint(name = "UNQ_USERNAME", columnNames = ["username"])
-
-    ],
-
+        UniqueConstraint("UNQ_MEMBER_PROVIDER", ["provider_id", "provider_type"]),
+        UniqueConstraint("UNQ_MEMBER_EMAIL", ["email"]),
+        UniqueConstraint("UNQ_MEMBER_USERNAME", ["username"])
+    ]
 )
-
 class Member(
-
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-
     val id: Long = 0,
-
-
-
     val email: String,
 
-    var password: String? = null,
-
-
-
     @Column(length = 20)
-
-    var username: String? = null,
-
-
-
-        @Version
-        var version: Long = 0,
-
-
-
-    var agreeToTerms: Boolean = false,
-
+    var username: String = generateRandomUsername(),
     var nickname: String,
 
+    @Enumerated(EnumType.STRING) var role: Role = Role.MEMBER,
+    @Embedded val provider: MemberProvider,
 
+    var isVerified: Boolean = false,
 
-    @Enumerated(EnumType.STRING)
+    @CreatedDate var createdAt: Instant = Instant.now(),
+    @LastModifiedDate var updatedAt: Instant = Instant.now(),
+    var deletedAt: Instant? = null,
+    var lastLoggedInAt: Instant? = null,
 
-    var role: Role = Role.MEMBER,
-
-
-
-    var isInitDone: Boolean = false,
-
-
-
-    @Embedded var provider: MemberProvider,
-
-    @Embedded var audit: MemberAudit,
-
-
-
-    @OneToMany(cascade = [ALL], orphanRemoval = true)
-
-    @JoinColumn(name = "member_id")
-
-    val images: MutableList<MemberImage> = mutableListOf(),
-
+    @Version var version: Long = 0
 ) {
+    constructor(email: String, username: String?, nickname: String, provider: MemberProvider) : this(
+        email = email,
+        username = username ?: generateRandomUsername(),
+        nickname = nickname,
+        provider = provider,
+    )
 
-    val isDeleted: Boolean get() = audit.isDeleted
+    fun login() {
+        lastLoggedInAt = Instant.now()
+    }
 
+    fun upgradeToPremium() {
+        role = Role.PREMIUM
+    }
 
-
-    fun login() { audit.login() }
-
-    fun upgradeToPremium() { role = Role.PREMIUM }
-
-    fun delete() { audit.delete() }
-
-
+    fun delete() {
+        deletedAt = Instant.now()
+    }
 
     enum class Role { MEMBER, PREMIUM, ADMIN }
 
     companion object {
-
         private val USERNAME_PATTERN = Regex("^[a-zA-Z0-9_]{3,20}$")
 
+        fun generateRandomUsername(): String = (1..20)
+            .map { "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".random() }
+            .joinToString("")
+
         fun isValidUsername(username: String): Boolean = USERNAME_PATTERN.matches(username)
-
-
-
-        fun create(nickname: String, email: String, providerId: String, providerType: String, providerUserName: String) =
-
-            Member(
-
-                nickname = nickname,
-
-                email = email,
-
-                provider = MemberProvider(providerId, MemberProvider.Type.valueOf(providerType), providerUserName),
-
-                audit = MemberAudit()
-
-            )
-
     }
-
 }
-
-
 
 

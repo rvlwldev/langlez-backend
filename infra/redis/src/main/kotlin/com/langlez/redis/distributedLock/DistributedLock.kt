@@ -14,6 +14,7 @@ annotation class DistributedLock(
     val ttl: Long = 10, // 락 만료 시간 (기본값: 10초)
     val retries: Int = 10, // 락 획득 재시도 횟수 (기본값: 30번)
     val wait: Long = 100, // 락 획득 재시도 간격 (기본값: 100ms)
+    val throwOnFailure: Boolean = true // 락 획득 실패 시 throw
 )
 
 /** 분산 락 키 구성을 위한 파라미터 어노테이션 */
