@@ -1,5 +1,0 @@
-# spring:
-#   data:
-#     mongodb:
-#       uri: mongodb://prod-mongo-1:27017,prod-mongo-2:27017/langlez_db?replicaSet=rs0
-#       auto-index-creation: false

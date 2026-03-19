@@ -1,7 +1,131 @@
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    connection-timeout: 1m
+    max-connections: 8192
+    accept-count: 100
+    keep-alive-timeout: 60s
+  max-http-request-header-size: 8KB
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
+
 spring:
+  profiles:
+    active: local
   threads:
     virtual:
       enabled: true
+  
+  # Data Sources
+  datasource:
+    url: jdbc:mysql://localhost:3306/langlez_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: admin
+    password: admin
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/langlez_db?directConnection=true
+      auto-index-creation: true
+    redis:
+      sentinel:
+        master: mymaster
+        nodes:
+          - localhost:26380
+          - localhost:26381
+          - localhost:26382
+
   jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
     open-in-view: false
-app.storage.profile-path: profile
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9001,localhost:9002,localhost:9003
+    consumer:
+      group-id: langlez-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: true
+
+  # Security & OAuth2
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: google-dummy-id.apps.googleusercontent.com
+            client-secret: google-dummy-secret
+            scope: profile, email
+          apple:
+            client-id: apple-dummy-id
+            client-secret: apple-dummy-secret
+            scope: name, email
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/apple"
+            client-name: Apple
+        provider:
+          apple:
+            authorization-uri: https://appleid.apple.com/auth/authorize
+            token-uri: https://appleid.apple.com/auth/token
+            jwk-set-uri: https://appleid.apple.com/auth/keys
+            user-name-attribute: sub
+
+  # Logging & Decorators
+  decorator:
+    datasource:
+      enabled: true
+      p6spy:
+        enable-logging: true
+        multiline: true
+        logging: none
+
+logging:
+  level:
+    org.hibernate.SQL: INFO
+    org.hibernate.orm.jdbc.bind: INFO
+
+jwt:
+  secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ="
+  access-token-validity-in-seconds: 3600
+  refresh-token-validity-in-seconds: 1209600
+
+app:
+  storage:
+    profile-path: profile
+
+swagger:
+  enabled: true
+  title: "Langlez API Documentation (Local)"
+  description: "Local development API documentation for Langlez Backend"
+  version: "1.0.0"
+  contact:
+    name: "Langlez Development Team"
+    email: "dev@langlez.com"
+    url: "https://langlez.com"
+  servers:
+    - url: "http://localhost:8080"
+      description: "Local Development Server"
+  jwt:
+    enabled: true
+    header-name: "Authorization"
+    token-prefix: "Bearer "

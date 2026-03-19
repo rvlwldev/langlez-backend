@@ -130,6 +130,15 @@ class MemberRequest {
 - 로깅: `kotlin-logging` (io.github.oshai)
 - 매직 넘버 → 상수 추출
 
+## Configuration Management
+
+### Centralized Configuration
+- **설정 통합**: 모든 모듈의 `application.yml`을 제거하고 `app/api/src/main/resources/`에서 통합 관리합니다.
+- **사용 파일**:
+  - `application.yml`: 로컬 개발용 (기본 활성 프로파일: `local`). `docker/` 폴더의 인프라 설정과 동기화됨.
+  - `application-production.yml`: 운영 환경용. 민감한 정보는 환경 변수(`${...}`)를 통해 주입받음.
+- **모듈별 설정 금지**: 하위 모듈(`module/*`, `infra/*`, `common/*`)에 `application.yml`을 생성하지 않습니다. 필요한 기본값은 코드(`@Value`, `@ConfigurationProperties`)에서 정의합니다.
+
 ## Build Commands
 
 ```bash
