@@ -25,6 +25,9 @@ management:
       application: langlez-backend
 
 spring:
+  threads:
+    virtual:
+      enabled: true
   config:
     import:
       - optional:classpath:mysql-local.yml

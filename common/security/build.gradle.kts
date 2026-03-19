@@ -6,12 +6,11 @@ plugins {
 }
 
 dependencies {
-    api(project(":common:exception"))
-    api(project(":common:observability"))
-    api(project(":infra:redis"))
+    implementation(project(":core"))
+    implementation(project(":common:exception"))
+    implementation(libs.dependency.springboot.web)
+    implementation(libs.bundles.jjwt)
 
     api(libs.dependency.springboot.security)
-    api(libs.dependency.springboot.web)
     api(libs.dependency.springboot.oauth2.client)
-    api(libs.bundles.jjwt)
 }

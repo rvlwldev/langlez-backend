@@ -9,72 +9,56 @@ import org.springframework.data.redis.cache.RedisCacheManager
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.scheduling.annotation.Scheduled
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ResilientCacheManager(
     private val redisCacheManager: RedisCacheManager,
     private val caffeineCacheManager: CaffeineCacheManager,
     private val connectionFactory: RedisConnectionFactory,
 ) : CacheManager {
-
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @Volatile
-    var isRedisAvailable = true
-        private set
+    private val caches = ConcurrentHashMap<String, Cache>()
+    private val _isRedisAvailable = AtomicBoolean(true)
+    val isRedisAvailable: Boolean get() = _isRedisAvailable.get()
 
-    private val cacheNames = ConcurrentHashMap.newKeySet<String>()
-
-    override fun getCache(name: String): Cache? {
-        cacheNames.add(name)
-        val redisCache = redisCacheManager.getCache(name)!!
+    override fun getCache(name: String): Cache? = caches.getOrPut(name) {
+        val redisCache = redisCacheManager.getCache(name)
+            ?: return@getOrPut caffeineCacheManager.getCache(name)!!
         val localCache = caffeineCacheManager.getCache(name)!!
 
-        return if (isRedisAvailable) {
-            ResilientCache(name, redisCache, localCache) { markRedisDown() }
-        } else {
-            localCache
-        }
+        return@getOrPut ResilientCache(name, redisCache, localCache) { markRedisDown() }
     }
 
-    fun markRedisDown() {
-        if (isRedisAvailable) {
-            logger.error("Redis connection failed. Falling back to local cache.")
-            isRedisAvailable = false
-        }
-    }
-
-    override fun getCacheNames(): Collection<String> = cacheNames
+    override fun getCacheNames(): Collection<String> = caches.keys
 
     @Scheduled(fixedDelay = 5000)
     fun checkRedisAndMigrate() {
         try {
             connectionFactory.connection.use { it.ping() }
-
-            if (!isRedisAvailable) {
+            if (_isRedisAvailable.compareAndSet(false, true)) {
                 logger.info("Redis is back online! Starting migration from local to Redis...")
                 migrateLocalToRedis()
-                isRedisAvailable = true
             }
         } catch (e: Exception) {
             markRedisDown()
         }
     }
 
+    private fun markRedisDown() {
+        if (_isRedisAvailable.compareAndSet(true, false))
+            logger.error("Redis connection failed. Falling back to local cache.")
+    }
+
     private fun migrateLocalToRedis() {
-        cacheNames.forEach { name ->
-            val localCache = caffeineCacheManager.getCache(name) as? CaffeineCache
-            val redisCache = redisCacheManager.getCache(name)
+        caches.keys.forEach { name ->
+            val localCache = caffeineCacheManager.getCache(name) as? CaffeineCache ?: return@forEach
+            val redisCache = redisCacheManager.getCache(name) ?: return@forEach
 
-            localCache?.nativeCache?.asMap()?.forEach { (key, value) ->
-                try {
-                    redisCache?.put(key, value)
-                } catch (e: Exception) {
-                    logger.error("Failed to migrate key $key to Redis", e)
-                }
-            }
+            localCache.nativeCache.asMap()
+                .forEach { (key, value) -> runCatching { redisCache.put(key, value) } }
 
-            localCache?.clear()
-            logger.info("Migrated and cleared local cache for name: $name")
+            localCache.clear()
         }
     }
 }

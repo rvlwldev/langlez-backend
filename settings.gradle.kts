@@ -1,4 +1,4 @@
-rootProject.name = "langlez-backend-server"
+rootProject.name = "langlez-backend"
 
 pluginManagement {
     repositories {
@@ -18,6 +18,7 @@ fun includeModules(parentDir: String) {
 }
 
 include("app:api")
+include("core")
 includeModules("common")
 includeModules("infra")
 includeModules("module")

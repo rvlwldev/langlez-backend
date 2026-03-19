@@ -6,21 +6,15 @@ plugins {
 }
 
 dependencies {
-    api(libs.dependency.kotlin.coroutine)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    implementation(project(":module:member"))
+    implementation(project(":common:security"))
+    implementation(project(":common:observability"))
+    implementation(project(":common:web"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:mysql"))
-    implementation(project(":common:security"))
-    implementation(project(":common:exception"))
-    implementation(project(":common:observability"))
 
-    implementation(libs.dependency.springboot.validation)
+    implementation(project(":module:member"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
-    testImplementation(libs.test.restassured)
     testImplementation(libs.bundles.testcontainers)
-    testImplementation(libs.test.testcontainers.redis)
-    testImplementation(project(":infra:files"))
 }
