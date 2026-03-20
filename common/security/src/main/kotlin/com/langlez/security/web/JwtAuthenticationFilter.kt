@@ -18,7 +18,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 @Component
 class JwtAuthenticationFilter(
     private val jwt: JwtParser,
-    @Lazy @Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
+    @param:Lazy @param:Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
