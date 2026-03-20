@@ -8,7 +8,7 @@
         <appender-ref ref="CONSOLE"/>
         <queueSize>512</queueSize>
         <discardingThreshold>0</discardingThreshold>
-        <neverBlock>true</balancing>
+        <neverBlock>true</neverBlock>
     </appender>
 
     <root level="INFO">

@@ -14,6 +14,7 @@ dependencies {
 
     implementation(project(":infra:files"))
     implementation(project(":infra:mysql"))
+    implementation(project(":infra:redis"))
 
     implementation(project(":module:member"))
 

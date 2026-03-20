@@ -105,21 +105,76 @@ sealed interface MemberEvent {
 }
 ```
 
+### API 식별자 규칙
+- **엔티티 ID (Long) 절대 노출 금지**: 클라이언트에게 요청으로 받지도, 응답으로 반환하지도 않는다.
+- **사용자 식별**: `username` (String)을 사용. URL 경로에서는 `@{username}` 형식 사용.
+  - 예: `GET /api/v1/members/@john_doe`, `POST /api/v1/relationship/follow/@jane123`
+- **인증된 사용자 (주체)**: `@MemberID` 어노테이션으로 JWT 토큰에서 추출한 Long ID를 서버 내부에서만 사용. 클라이언트는 자신의 ID를 알 수 없다.
+- **대상 사용자 (타겟)**: URL 경로의 `@{username}`으로 받아서, Controller에서 `MemberRepository.findByUsername()`으로 내부 ID를 resolve.
+- **서비스 레이어**: 내부적으로 Long ID로 동작. Controller가 username → ID 변환을 담당.
+- **응답 DTO**: `id` 필드 포함 금지. `username`, `nickname` 등 공개 가능한 정보만 반환.
+- **커서 기반 페이지네이션**: 커서 값은 관계 엔티티(Follow/Block)의 ID를 사용 (member ID가 아님). 이는 순서를 보장하는 불투명한 값으로, 회원 식별에 사용 불가.
+
+### 파라미터 네이밍 규칙 (Relationship)
+| 역할 | Controller 파라미터 | Service 파라미터 |
+|------|---------------------|-----------------|
+| 팔로우 주체 (토큰) | `followerId: Long` (@MemberID) | `followerId: Long` |
+| 팔로우 대상 (경로) | `followingUsername: String` | `followingId: Long` |
+| 차단 주체 (토큰) | `blockerId: Long` (@MemberID) | `blockerId: Long` |
+| 차단 대상 (경로) | `blockedUsername: String` | `blockedId: Long` |
+
+### Controller / Service 책임 분리
+- **Controller (얇게)**: 요청을 DTO로 받고, 알맞는 Service 또는 Repository를 호출하고, 결과를 응답 DTO로 변환하여 반환. 비즈니스 로직을 포함하지 않는다.
+  - Controller가 Repository를 직접 사용하는 경우는 **단순 데이터 조회**로 제한 (예: `findById` → NOT_FOUND 체크 → 반환).
+  - 검증, 상태 변경, 복합 조회 등의 비즈니스 로직은 반드시 Service에 위치한다.
+  - 메서드명은 HTTP 메서드를 반영한다: `getMe()`, `patchUsername()`, `patchNickname()`, `deleteMe()` 등.
+- **Service (두껍게)**: 비즈니스 흐름을 제어한다. 도메인 객체의 메서드를 호출하여 검증/상태 변경을 수행하고, Repository를 통해 영속화한다.
+  - Service는 흐름만 제어하고, 검증 로직은 도메인 객체(Entity) 내부에 구현한다 (객체지향적 설계).
+  - 예: `Member.canChangeUsername()` → Service에서 호출 → 실패 시 예외 발생.
+
+### 도메인 메서드 패턴 (Entity 내부 비즈니스 로직)
+```kotlin
+// Entity에서 변경 가능 여부를 판단하는 메서드 제공
+fun canChangeUsername(now: Instant = Instant.now()): Boolean = ...
+fun changeUsername(newUsername: String, now: Instant = Instant.now()) { ... }
+
+// Service에서 도메인 메서드를 호출하여 흐름 제어
+fun updateUsername(memberId: Long, newUsername: String): Member {
+    val member = repo.findById(memberId) ?: throw ...
+    if (!member.canChangeUsername()) throw ...
+    member.changeUsername(newUsername)
+    return repo.save(member)
+}
+```
+
+### Username/Nickname 변경 쿨다운
+- 각각 15일 간격으로만 변경 가능.
+- `Member` 엔티티의 `lastUsernameUpdatedAt`, `lastNicknameUpdatedAt` 필드로 추적.
+- Username, Nickname 변경은 별도 엔드포인트로 분리: `PATCH /me/username`, `PATCH /me/nickname`.
+- Username 변경 시 Service에서 유효성 검증 + 중복 확인 + 쿨다운 확인을 수행.
+
 ### Controller + DTO
 ```kotlin
 @RestController
 @RequestMapping("/api/v1/members")
 @Tag(name = "Member")
-class MemberController(private val service: MemberService) {
-    @PostMapping
-    @Operation(summary = "회원 생성")
-    fun create(@RequestBody @Valid request: MemberRequest.Create): MemberResponse { ... }
+class MemberController(
+    private val service: MemberService,
+    private val repo: MemberRepository   // 단순 조회 전용
+) {
+    @GetMapping("/me")
+    fun getMe(@MemberID memberId: Long): MemberResponse.Me { ... }
+
+    @PatchMapping("/me/username")
+    fun patchUsername(@MemberID memberId: Long, @RequestBody @Valid request: MemberRequest.UpdateUsername): MemberResponse.Me { ... }
 }
 
 class MemberRequest {
-    data class Create(
-        @field:NotBlank val email: String,
-        @field:NotBlank val nickname: String,
+    data class UpdateUsername(
+        @field:NotBlank @field:Size(min = 3, max = 20) val username: String,
+    )
+    data class UpdateNickname(
+        @field:NotBlank @field:Size(min = 1, max = 20) val nickname: String,
     )
 }
 ```

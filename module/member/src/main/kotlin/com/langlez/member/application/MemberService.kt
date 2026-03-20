@@ -1,11 +1,13 @@
 package com.langlez.member.application
 
 import com.langlez.core.OutBoxEventPublisher
+import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
+import org.springframework.http.HttpStatus.*
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -27,6 +29,36 @@ class MemberService(private val repo: MemberRepository, private val publisher: O
         publisher.publish("MEMBER", saved.id.toString(), "member-created", event)
 
         return saved
+    }
+
+    @Transactional
+    fun updateUsername(id: Long, newUsername: String): Member {
+        val member = repo.findById(id)
+            ?: throw LanglezException(NOT_FOUND, "member.not-found")
+
+        if (!Member.isValidUsername(newUsername))
+            throw LanglezException(BAD_REQUEST, "member.username.invalid")
+
+        if (!member.canChangeUsername())
+            throw LanglezException(BAD_REQUEST, "member.username.cooldown")
+
+        if (newUsername != member.username && repo.findByUsername(newUsername) != null)
+            throw LanglezException(CONFLICT, "member.username.duplicated")
+
+        member.changeUsername(newUsername)
+        return repo.save(member)
+    }
+
+    @Transactional
+    fun updateNickname(id: Long, newNickname: String): Member {
+        val member = repo.findById(id)
+            ?: throw LanglezException(NOT_FOUND, "member.not-found")
+
+        if (!member.canChangeNickname())
+            throw LanglezException(BAD_REQUEST, "member.nickname.cooldown")
+
+        member.changeNickname(newNickname)
+        return repo.save(member)
     }
 
 }

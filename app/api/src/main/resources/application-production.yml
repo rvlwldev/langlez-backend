@@ -53,8 +53,14 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET_KEY}
-  access-token-validity-in-seconds: 3600
-  refresh-token-validity-in-seconds: 1209600
+  access-token-ttl-secs: 3600
+  refresh-token-ttl-secs: 1209600
+
+app:
+  oauth2:
+    # TODO: 프론트엔드 운영 URL로 변경
+    # redirect-uri: "https://app.langlez.com/oauth2/callback"
+    redirect-uri: ${OAUTH2_REDIRECT_URI}
 
 logging:
   level:

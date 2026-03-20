@@ -13,7 +13,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 
 @Component
-@Profile("prod")
+@Profile("production")
 internal class S3FileStorage(
     private val s3Client: S3Client,
     @param:Value("\${cloud.aws.s3.bucket}") private val bucket: String,

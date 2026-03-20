@@ -8,7 +8,6 @@ import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
@@ -16,13 +15,14 @@ import org.springframework.stereotype.Repository
 class MemberRepositoryImpl(
     private val jpa: MemberJpaRepository,
     private val cacheManager: CacheManager,
-    private val redis: RedisTemplate<String, Any>
 ) : MemberRepository {
 
     @Caching(
         evict = [
             CacheEvict(cacheNames = ["member"], key = "#member.id", condition = "#member.id != null"),
-            CacheEvict(cacheNames = ["member_email"], key = "#member.email")
+            CacheEvict(cacheNames = ["member_email"], key = "#member.email"),
+            CacheEvict(cacheNames = ["member_username"], key = "#member.username"),
+            CacheEvict(cacheNames = ["member_provider"], key = "#member.provider.id + ':' + #member.provider.type"),
         ]
     )
     override fun save(member: Member): Member = jpa.save(member)
@@ -43,35 +43,21 @@ class MemberRepositoryImpl(
     override fun findByIds(ids: List<Long>): List<Member> {
         if (ids.isEmpty()) return emptyList()
 
-        val prefix = "member::"
+        val cache = cacheManager.getCache("member")
         val results = mutableListOf<Member>()
+        val missedIds = mutableListOf<Long>()
 
-        for (chunk in ids.chunked(500)) {
-            val keys = chunk.map { "$prefix$it" }
-            val vals = redis.opsForValue().multiGet(keys) ?: emptyList()
+        for (id in ids) {
+            val cached = cache?.get(id, Member::class.java)
+            if (cached != null) results.add(cached)
+            else missedIds.add(id)
+        }
 
-            val missedIds = mutableListOf<Long>()
-            val membersToCache = mutableMapOf<String, Member>()
-
-            // 캐시 조회
-            chunk.forEachIndexed { i, id ->
-                val cached = vals[i] as? Member
-
-                if (cached == null) missedIds.add(id)// cache miss
-                else results.add(cached)// cache hit
-            }
-
-            // DB 조회
-            if (missedIds.isNotEmpty()) {
-                val members = jpa.findAllById(missedIds)
-
-                members.forEach { member ->
-                    results.add(member)
-                    membersToCache["$prefix${member.id}"] = member
-                }
-
-                if (membersToCache.isNotEmpty())
-                    redis.opsForValue().multiSet(membersToCache)
+        if (missedIds.isNotEmpty()) {
+            val members = jpa.findAllById(missedIds)
+            members.forEach { member ->
+                results.add(member)
+                cache?.put(member.id, member)
             }
         }
 

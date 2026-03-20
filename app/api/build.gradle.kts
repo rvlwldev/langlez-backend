@@ -14,6 +14,9 @@ dependencies {
     implementation(project(":module:member"))
     implementation(project(":module:profile"))
     implementation(project(":module:auth"))
+    implementation(project(":module:relationship"))
+    implementation(project(":module:outbox"))
+    implementation(project(":infra:kafka"))
 
     developmentOnly(libs.development.springboot.devtools)
 }
