@@ -10,7 +10,7 @@ import java.time.Instant
 @EntityListeners(AuditingEntityListener::class)
 @Table(
     name = "member_blocks",
-    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_BLOCK", columnNames = ["follower_id", "followed_id"])]
+    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_BLOCK", columnNames = ["blocker_id", "blocked_id"])]
 )
 class Block(
     @Id @GeneratedValue(strategy = IDENTITY)

@@ -2,6 +2,8 @@ package com.langlez.relationship.application
 
 import com.langlez.core.OutBoxEventPublisher
 import com.langlez.exception.LanglezException
+import com.langlez.member.domain.MemberRepository
+import com.langlez.relationship.api.RelationshipResponse
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class RelationshipService(
     private val repo: RelationshipRepository,
+    private val memberRepo: MemberRepository,
     private val publisher: OutBoxEventPublisher
 ) {
 
@@ -58,5 +61,37 @@ class RelationshipService(
         publisher.publish("RELATIONSHIP", block.id.toString(), "MEMBER_UNBLOCK", event)
     }
 
-}
+    @Transactional(readOnly = true)
+    fun getFollowings(followerId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+        val follows = repo.findFollowings(followerId, cursor, size)
+        val memberIds = follows.map { it.followedId }
+        return buildCursorList(memberIds, follows.size == size, follows.lastOrNull()?.id)
+    }
 
+    @Transactional(readOnly = true)
+    fun getFollowers(followedId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+        val follows = repo.findFollowers(followedId, cursor, size)
+        val memberIds = follows.map { it.followerId }
+        return buildCursorList(memberIds, follows.size == size, follows.lastOrNull()?.id)
+    }
+
+    @Transactional(readOnly = true)
+    fun getBlocks(blockerId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+        val blocks = repo.findBlocks(blockerId, cursor, size)
+        val memberIds = blocks.map { it.blockedId }
+        return buildCursorList(memberIds, blocks.size == size, blocks.lastOrNull()?.id)
+    }
+
+    private fun buildCursorList(
+        memberIds: List<Long>,
+        hasMore: Boolean,
+        lastEntityId: Long?
+    ): RelationshipResponse.CursorList {
+        val members = memberRepo.findByIds(memberIds)
+        val summaries = memberIds.mapNotNull { id -> members.find { it.id == id } }
+            .map { RelationshipResponse.MemberSummary(it.username, it.nickname) }
+        val nextCursor = if (hasMore) lastEntityId else null
+        return RelationshipResponse.CursorList(nextCursor, summaries)
+    }
+
+}

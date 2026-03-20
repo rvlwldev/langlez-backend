@@ -71,71 +71,58 @@
 
 ## 1. 현재 코드 분석 결과
 
-### 🚨 즉시 수정 필요 (Critical)
+### 수정 완료된 항목
 
-#### JWT 설정 키 불일치 — 앱 시작 불가
-`JwtParser.kt`에서 읽는 프로퍼티 키와 `application.yml`에 정의된 키 이름이 다릅니다.
-런타임 시 `IllegalArgumentException: Could not resolve placeholder` 오류로 앱이 시작되지 않습니다.
+#### ~~JWT 설정 키 불일치~~ ✅
+`application.yml` 키 이름을 코드(`jwt.access-token-ttl-secs`, `jwt.refresh-token-ttl-secs`)에 맞게 통일.
 
-- **코드에서 읽는 키**: `jwt.access-token-ttl-secs`, `jwt.refresh-token-ttl-secs`
-- **yml에 정의된 키**: `jwt.access-token-validity-in-seconds`, `jwt.refresh-token-validity-in-seconds`
-- **수정 방법**: application.yml의 키 이름을 코드에 맞게 통일
+#### ~~`app.oauth2.redirect-uri` 미설정~~ ✅
+`application.yml`에 로컬 개발용, `application-production.yml`에 환경 변수 기반 설정 추가.
 
-#### `app.oauth2.redirect-uri` 미설정
-`OAuth2SuccessHandler`가 `@Value("${app.oauth2.redirect-uri}")` 값을 요구하지만, 어떤 yml에도 정의되어 있지 않습니다.
-OAuth2 로그인 시 Bean 생성 실패로 앱이 시작되지 않습니다.
-위의 설정 항목 4번 참조.
+#### ~~JWT Refresh Token 타입 검증 없음~~ ✅
+`AuthService.refresh()`에서 `jwt.extractTokenType(token)`으로 "refresh" 타입 검증 추가.
 
----
+#### ~~OAuth2 계정 식별 로직 취약점~~ ✅
+`AuthService.loadUser()`에서 `findByProvider(providerId, providerType)` 우선 조회 후, 이메일 충돌 시 `auth.email-conflict` 에러 반환.
 
-### ⚠️ 보안 취약점 (Security)
+#### ~~LocalFileStorage Path Traversal 위험~~ ✅
+`canonicalPath` 검증 및 `..` 제거 로직 추가.
 
-#### JWT Refresh Token 타입 검증 없음
-`AuthService.refresh()`에서 `jwt.extractID(token)`만 호출할 뿐, 토큰의 `type` 클레임("refresh" 여부)을 검증하지 않습니다.
-`JwtParser.extractTokenType()`이 이미 구현되어 있으므로, `refresh()` 진입 시점에 타입 검증 로직 추가가 필요합니다.
+#### ~~OutBox `publish()` 트랜잭션 미보장~~ ✅
+`@Transactional(propagation = Propagation.MANDATORY)` 추가. 트랜잭션 외부 호출 시 예외 발생.
 
-#### OAuth2 계정 식별 로직 취약점
-`AuthService.loadUser()`에서 이메일만으로 회원을 조회합니다 (`repo.findByEmail(email)`).
-Google과 Apple이 동일한 이메일을 반환할 경우, 다른 Provider로 가입한 계정에 로그인될 수 있습니다.
-`(email + provider)` 복합 조건으로 조회하도록 수정이 필요합니다.
+#### ~~OutBox 대량 이벤트 OOM 위험~~ ✅
+`findTargetToDispatch(500)`으로 배치 크기 제한.
 
-#### LocalFileStorage Path Traversal 위험
-`LocalFileStorage`에서 `folder` 파라미터에 대한 경로 검증이 없어 `../` 등의 입력으로 상위 디렉토리 파일에 접근할 수 있습니다.
+#### ~~HandlerExceptionResolver 순환 참조~~ ✅
+`JwtAuthenticationFilter`, `WebSecurityConfiguration`에 `@Lazy @Qualifier("handlerExceptionResolver")` 추가.
 
----
+#### ~~Logback XML 파싱 오류~~ ✅
+`logback-spring.xml`의 잘못된 닫는 태그 수정 (`</balancing>` → `</neverBlock>`).
 
-### 📉 운영 및 성능 위험 (Operational)
-
-#### OutBox `publish()` 트랜잭션 미보장
-`OutBoxService.publish()`에 `@Transactional`이 없습니다.
-호출하는 Service(예: `MemberService`)가 `@Transactional`을 선언하고 있으므로 현재는 같은 트랜잭션에 참여하지만,
-`publish()`가 트랜잭션 외부에서 호출될 경우 메인 로직은 성공하고 이벤트 저장만 실패하는 데이터 불일치가 발생할 수 있습니다.
-
-#### OutBox 대량 이벤트 OOM 위험
-`OutBoxService.dispatchEvents()`에서 `repo.findAllTargetToDispatch()`로 모든 이벤트를 한 번에 메모리에 적재합니다.
-이벤트가 대량으로 쌓일 경우 OOM(Out Of Memory) 위험이 있습니다. 페이지네이션 처리가 필요합니다.
+#### ~~S3FileStorage 프로필 불일치~~ ✅
+`@Profile("prod")` → `@Profile("production")` 수정.
 
 ---
 
 ## 2. 백엔드 로드맵
 
-### Phase 1: 핵심 기반 구축 (완료)
+### Phase 1: 핵심 기반 구축 ✅
 - [x] **프로젝트 구조**: Modular Monolith 설정 (app, module, common, infra, core)
 - [x] **인프라 설정**: Docker Compose 기반 로컬 환경 구성 (MySQL, MongoDB, Redis Sentinel, Kafka, Monitoring)
 - [x] **공통 모듈**: Security, i18n (12개 언어), 예외 처리, 관찰가능성 (P6Spy, Prometheus)
 - [x] **OutBox 패턴**: 분산 이벤트 발행 (5초 폴링, Redisson 분산락, Kafka 발행, 아카이빙)
 - [x] **캐시 계층**: Redis(Redisson) + Caffeine 로컬 폴백 (ResilientCache)
 
-### Phase 2: 인증 및 회원 (⚠️ Critical 수정 후 완료 가능)
-- [x] **인증 모듈**: Spring Security + OAuth2 연동, `OAuth2SuccessHandler` 구현 완료
-- [x] **토큰 갱신**: JWT + Redis 기반 Refresh Token 저장 및 갱신 로직 구현
-- [x] **관계 모듈**: Follow / Block 도메인 구현
-- [ ] **Critical 수정**: JWT 설정 키 불일치 수정 (앱 시작 불가 버그)
-- [ ] **Critical 수정**: `app.oauth2.redirect-uri` 설정 추가
-- [ ] **보안 수정**: JWT Refresh Token 타입 검증 추가
-- [ ] **보안 수정**: OAuth2 계정 식별 로직 (email + provider) 복합 조건으로 변경
-- [ ] **신규 구현**: Member API 엔드포인트 (`MemberController`) — 현재 API 레이어 없음
-- [ ] **신규 구현**: Social API 엔드포인트 (Follow/Block) — 도메인만 존재, API 레이어 없음
+### Phase 2: 인증 및 회원 ✅
+- [x] **인증 모듈**: Spring Security + OAuth2 연동, `OAuth2SuccessHandler` 구현
+- [x] **토큰 갱신**: JWT + Redis 기반 Refresh Token 저장 및 갱신 로직
+- [x] **보안 수정**: JWT Refresh Token 타입 검증, OAuth2 계정 식별 (provider 기반), Path Traversal 방어
+- [x] **OutBox 안정성**: 트랜잭션 필수화(`MANDATORY`), 배치 크기 제한
+- [x] **Member API**: 내 정보 조회/수정, 다른 회원 조회
+- [x] **Relationship API**: Follow/Unfollow/Block/Unblock + 커서 기반 페이지네이션 (무한 스크롤)
+- [x] **설정 수정**: JWT 키 통일, OAuth2 redirect-uri 추가, logback XML 수정, 순환 참조 해결
+- [x] **테스트 코드**: AuthService, MemberController, RelationshipService, RelationshipController 단위 테스트
 
 ### Phase 3: 매칭 및 채팅 (계획됨)
 - [ ] **매칭 모듈**: Redis 기반 큐 및 일별 추천 알고리즘

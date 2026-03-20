@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import org.springframework.web.servlet.HandlerExceptionResolver
@@ -16,7 +18,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 @Component
 class JwtAuthenticationFilter(
     private val jwt: JwtParser,
-    private val resolver: HandlerExceptionResolver
+    @Lazy @Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {

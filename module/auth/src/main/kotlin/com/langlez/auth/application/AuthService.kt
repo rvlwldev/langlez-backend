@@ -11,7 +11,7 @@ import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.auth.oauth2.OAuth2LanglezUser
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.HttpStatus.BAD_REQUEST
-import org.springframework.http.HttpStatus.NOT_FOUND
+import org.springframework.http.HttpStatus.CONFLICT
 import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
@@ -31,23 +31,26 @@ class AuthService(
 
     private val delegate = DefaultOAuth2UserService()
 
+    @Transactional
     override fun loadUser(userRequest: OAuth2UserRequest): OAuth2User {
         val user = delegate.loadUser(userRequest)
         val registrationId = userRequest.clientRegistration.registrationId
         val nameAttributeKey = userRequest.clientRegistration.providerDetails.userInfoEndpoint.userNameAttributeName
         val profile = OAuth2UserProfile.by(registrationId, nameAttributeKey, user.attributes)
 
-        val member: Member = runCatching { loginMember(profile.email) }.getOrElse { e ->
-            if (e !is LanglezException || e.status != NOT_FOUND) throw e
+        val providerId = profile.rawAttributes[profile.providerKey]?.toString()
+            ?: throw LanglezException(BAD_REQUEST, "auth.invalid-request")
+        val providerType = MemberProvider.Type.valueOf(profile.provider.uppercase())
 
-            val providerId = profile.rawAttributes[profile.providerKey]?.toString()
-                ?: throw LanglezException(BAD_REQUEST, "auth.invalid-request")
-            val providerType = MemberProvider.Type.valueOf(profile.provider.uppercase())
-            val providerCmd = MemberCommand.Provider(providerId, providerType, profile.displayName)
-            val createCmd = MemberCommand.Create(profile.email, null, profile.displayName)
-
-            memberService.createMember(providerCmd, createCmd)
-        }
+        val member: Member = repo.findByProvider(providerId, providerType)?.also { it.login(); repo.save(it) }
+            ?: run {
+                repo.findByEmail(profile.email)?.let {
+                    throw LanglezException(CONFLICT, "auth.email-conflict")
+                }
+                val providerCmd = MemberCommand.Provider(providerId, providerType, profile.displayName)
+                val createCmd = MemberCommand.Create(profile.email, null, profile.displayName)
+                memberService.createMember(providerCmd, createCmd)
+            }
 
         return OAuth2LanglezUser(
             member.id,
@@ -57,17 +60,11 @@ class AuthService(
         )
     }
 
-    @Transactional
-    fun loginMember(email: String): Member {
-        val member = repo.findByEmail(email)
-            ?: throw LanglezException(NOT_FOUND, "member.not-found")
-
-        member.login()
-
-        return repo.save(member)
-    }
-
     fun refresh(refreshToken: String): Pair<String, String> {
+        val tokenType = jwt.extractTokenType(refreshToken)
+        if (tokenType != "refresh")
+            throw LanglezException(UNAUTHORIZED, "auth.invalid-token")
+
         val id = jwt.extractID(refreshToken)
 
         val member = repo.findById(id)

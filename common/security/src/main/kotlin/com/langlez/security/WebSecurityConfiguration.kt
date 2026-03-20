@@ -3,8 +3,10 @@ package com.langlez.security
 import com.langlez.security.web.JwtAuthenticationFilter
 import com.langlez.security.web.MemberIdArgumentResolver
 import com.langlez.security.web.MemberRoleArgumentResolver
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Lazy
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -17,7 +19,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 @Configuration
 @EnableWebSecurity
 class WebSecurityConfiguration(
-    private val resolver: HandlerExceptionResolver,
+    @param:Lazy private val resolver: HandlerExceptionResolver,
     private val memberIdArgumentResolver: MemberIdArgumentResolver,
     private val memberRoleArgumentResolver: MemberRoleArgumentResolver
 ) : WebMvcConfigurer {
@@ -29,8 +31,9 @@ class WebSecurityConfiguration(
             .authorizeHttpRequests { customizer ->
                 val swagger = arrayOf("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api-docs/**")
                 val oauth2 = arrayOf("/oauth2/**", "/login/oauth2/**")
+                val auth = arrayOf("/api/v1/auth/**")
 
-                customizer.requestMatchers(*oauth2, *swagger).permitAll()
+                customizer.requestMatchers(*oauth2, *swagger, *auth).permitAll()
                     .anyRequest().authenticated()
             }
             .exceptionHandling { handler ->

@@ -18,6 +18,9 @@ internal class OutBoxRepository(
     fun findAllTargetToDispatch(): List<OutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(listOf(OutBox.Status.READY, OutBox.Status.PROCESSING))
 
+    fun findTargetToDispatch(limit: Int): List<OutBox> =
+        jpa.findAllByStatusInOrderByCreatedAtAsc(listOf(OutBox.Status.READY, OutBox.Status.PROCESSING), org.springframework.data.domain.PageRequest.of(0, limit))
+
     fun findAllCompleted(): List<OutBox> =
         jpa.findAllByStatus(OutBox.Status.COMPLETE)
 
@@ -32,6 +35,7 @@ internal class OutBoxRepository(
 
 internal interface OutBoxJpaRepository : JpaRepository<OutBox, Long> {
     fun findAllByStatusInOrderByCreatedAtAsc(statuses: List<OutBox.Status>): List<OutBox>
+    fun findAllByStatusInOrderByCreatedAtAsc(statuses: List<OutBox.Status>, pageable: org.springframework.data.domain.Pageable): List<OutBox>
     fun findAllByStatus(status: OutBox.Status): List<OutBox>
 }
 

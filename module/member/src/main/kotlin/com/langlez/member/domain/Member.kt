@@ -3,6 +3,7 @@ package com.langlez.member.domain
 import jakarta.persistence.*
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedDate
+import java.time.Duration
 import java.time.Instant
 
 @Entity
@@ -23,6 +24,9 @@ class Member(
     @Column(length = 20)
     var username: String = generateRandomUsername(),
     var nickname: String,
+
+    var lastUsernameUpdatedAt: Instant? = null,
+    var lastNicknameUpdatedAt: Instant? = null,
 
     @Enumerated(EnumType.STRING) var role: Role = Role.MEMBER,
     @Embedded val provider: MemberProvider,
@@ -47,6 +51,22 @@ class Member(
         lastLoggedInAt = Instant.now()
     }
 
+    fun canChangeUsername(now: Instant = Instant.now()): Boolean =
+        lastUsernameUpdatedAt == null || Duration.between(lastUsernameUpdatedAt, now) >= CHANGE_COOLDOWN
+
+    fun canChangeNickname(now: Instant = Instant.now()): Boolean =
+        lastNicknameUpdatedAt == null || Duration.between(lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
+
+    fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
+        username = newUsername
+        lastUsernameUpdatedAt = now
+    }
+
+    fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
+        nickname = newNickname
+        lastNicknameUpdatedAt = now
+    }
+
     fun upgradeToPremium() {
         role = Role.PREMIUM
     }
@@ -59,6 +79,7 @@ class Member(
 
     companion object {
         private val USERNAME_PATTERN = Regex("^[a-zA-Z0-9_]{3,20}$")
+        private val CHANGE_COOLDOWN: Duration = Duration.ofDays(15)
 
         fun generateRandomUsername(): String = (1..20)
             .map { "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".random() }

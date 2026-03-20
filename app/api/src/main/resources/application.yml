@@ -13,6 +13,7 @@ server:
       charset: UTF-8
       force: true
       enabled: true
+  port: 8080
 
 spring:
   profiles:
@@ -106,12 +107,14 @@ logging:
 
 jwt:
   secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ="
-  access-token-validity-in-seconds: 3600
-  refresh-token-validity-in-seconds: 1209600
+  access-token-ttl-secs: 3600
+  refresh-token-ttl-secs: 1209600
 
 app:
   storage:
     profile-path: profile
+  oauth2:
+    redirect-uri: "http://localhost:3000/oauth2/callback"
 
 swagger:
   enabled: true

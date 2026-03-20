@@ -6,6 +6,8 @@ import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import java.util.concurrent.CompletableFuture
 
@@ -17,6 +19,7 @@ internal class OutBoxService(
     private val transaction: TransactionTemplate
 ) : OutBoxEventPublisher {
 
+    @Transactional(propagation = Propagation.MANDATORY)
     override fun publish(type: String, id: String, name: String, payload: Any?) {
         repo.save(OutBox(type, id, name, mapper.writeValueAsString(payload)))
     }
@@ -24,7 +27,7 @@ internal class OutBoxService(
     @Scheduled(fixedDelay = 5000)
     @DistributedLock(ttl = 3, wait = 0, retries = 0, throwOnFailure = false)
     internal fun dispatchEvents() {
-        val events = repo.findAllTargetToDispatch()
+        val events = repo.findTargetToDispatch(500)
         if (events.isEmpty()) return
 
         val futures = events.map { event ->
@@ -54,4 +57,3 @@ internal class OutBoxService(
     }
 
 }
-
