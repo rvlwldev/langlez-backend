@@ -56,32 +56,11 @@ api → application → domain ← infrastructure
 ./gradlew :module:<name>:test            # 모듈별 테스트
 ```
 
-## TODO
+## 설정 및 실행
 
-### 공통
-- [ ] 코루틴 제거 (Virtual Threads로 통일)
-- [ ] 다국어 에러 메시지 정리
-- [ ] 컨트롤러 DTO 표준화
+```bash
+./infra-start.sh                          # 인프라 컨테이너 실행
+./gradlew :app:api:bootRun               # API 서버 실행
+```
 
-### Auth
-- [x] 컨트롤러용 어노테이션 (@MemberID, @MemberRole)
-- [ ] 토큰 TTL 구체화 (액세스 15분, 리프레시 7일)
-- [ ] 로그아웃 (토큰 블랙리스트)
-- [ ] RTR (Refresh Token Rotation)
-
-### Member
-- [ ] 온라인 상태 조회 (Redis 30분 TTL)
-
-### Profile
-- [ ] 캐시 설정
-- [ ] 방문자 수 비동기 적재
-- [ ] 이미지 정렬 및 썸네일 생성
-
-### Relationship
-- [ ] 타겟을 username으로 변경
-- [ ] Repository 구현 완성
-
-### 미착수 모듈
-- chat, language, report, feed, location, match
-- interest, call (WebRTC), space (보이스룸)
-- notification, subscription (IAP), dashboard
+자세한 로드맵과 TODO는 프로젝트 루트의 `PLAN.md`를 참고하세요.
