@@ -50,33 +50,59 @@ class LocalFileStorageTest : BehaviorSpec({
 
     Given("store 호출 시") {
 
-        When("정상적인 InputStream과 경로를 전달하면") {
-            val content = "test file content".toByteArray()
-            val inputStream = ByteArrayInputStream(content)
-            val result = storage.store(inputStream, "test.txt", "uploads")
+        When("허용된 contentType(image/jpeg)으로 요청하면") {
+            val result = storage.store(ByteArrayInputStream("data".toByteArray()), "test.jpg", "image/jpeg", "uploads")
 
             Then("파일이 저장되고 경로를 반환한다") {
                 result shouldStartWith "/attachments/uploads/"
-                result shouldContain "test.txt"
+                result shouldContain "test.jpg"
                 File(result.removePrefix("/")).exists() shouldBe true
             }
         }
 
+        When("허용된 contentType(video/mp4)으로 요청하면") {
+            val result = storage.store(ByteArrayInputStream("data".toByteArray()), "test.mp4", "video/mp4", "uploads")
+
+            Then("파일이 저장된다") {
+                result shouldContain "test.mp4"
+            }
+        }
+
+        When("허용된 contentType(audio/mpeg)으로 요청하면") {
+            val result = storage.store(ByteArrayInputStream("data".toByteArray()), "test.mp3", "audio/mpeg", "uploads")
+
+            Then("파일이 저장된다") {
+                result shouldContain "test.mp3"
+            }
+        }
+
+        When("허용되지 않은 contentType(application/pdf)으로 요청하면") {
+            Then("IllegalArgumentException이 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    storage.store(ByteArrayInputStream("data".toByteArray()), "test.pdf", "application/pdf", "uploads")
+                }
+            }
+        }
+
+        When("허용되지 않은 contentType(text/plain)으로 요청하면") {
+            Then("IllegalArgumentException이 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    storage.store(ByteArrayInputStream("data".toByteArray()), "test.txt", "text/plain", "uploads")
+                }
+            }
+        }
+
         When("빈 directory를 전달하면") {
-            val content = "test".toByteArray()
-            val inputStream = ByteArrayInputStream(content)
-            val result = storage.store(inputStream, "root-file.txt", "")
+            val result = storage.store(ByteArrayInputStream("test".toByteArray()), "root-file.jpg", "image/jpeg", "")
 
             Then("루트 attachments 폴더에 저장된다") {
                 result shouldStartWith "/attachments/"
-                result shouldContain "root-file.txt"
+                result shouldContain "root-file.jpg"
             }
         }
 
         When("directory에 path traversal 공격 문자(..)가 포함되면") {
-            val content = "malicious".toByteArray()
-            val inputStream = ByteArrayInputStream(content)
-            val result = storage.store(inputStream, "hack.txt", "../../etc")
+            val result = storage.store(ByteArrayInputStream("malicious".toByteArray()), "hack.jpg", "image/jpeg", "../../etc")
 
             Then("..이 제거되고 안전한 경로에 저장된다") {
                 result shouldStartWith "/attachments/"
@@ -86,9 +112,7 @@ class LocalFileStorageTest : BehaviorSpec({
 
         When("파일명에 path traversal 문자(..)가 포함되면") {
             Then("..이 제거된 파일명으로 저장된다") {
-                val content = "malicious".toByteArray()
-                val inputStream = ByteArrayInputStream(content)
-                val result = storage.store(inputStream, "../../../etc/passwd", "uploads")
+                val result = storage.store(ByteArrayInputStream("malicious".toByteArray()), "../../../etc/passwd", "image/jpeg", "uploads")
                 result shouldNotContain ".."
             }
         }
@@ -97,8 +121,7 @@ class LocalFileStorageTest : BehaviorSpec({
     Given("delete 호출 시") {
 
         When("존재하는 파일 URL을 전달하면") {
-            val content = "to-delete".toByteArray()
-            val url = storage.store(ByteArrayInputStream(content), "delete-me.txt", "uploads")
+            val url = storage.store(ByteArrayInputStream("to-delete".toByteArray()), "delete-me.jpg", "image/jpeg", "uploads")
             storage.delete(url)
 
             Then("파일이 삭제된다") {

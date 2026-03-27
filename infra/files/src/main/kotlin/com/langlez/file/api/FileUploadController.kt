@@ -21,7 +21,7 @@ class FileUploadController(private val storage: LocalFileStorage) {
         @RequestParam directory: String,
         body: InputStream,
     ): Map<String, String> {
-        val url = storage.store(body, filename, directory)
+        val url = storage.store(body, filename, contentType, directory)
         return mapOf("url" to url)
     }
 }

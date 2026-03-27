@@ -13,9 +13,13 @@ import org.springframework.stereotype.Component
 @Component
 @Profile("!production")
 class LocalFileStorage(
-    @Value("\${server.port:8080}") private val port: Int,
+    @param:Value("\${server.port:8080}") private val port: Int,
 ) : FileStorage {
     private val rootPath = "attachments"
+
+    companion object {
+        private val ALLOWED_MIME_PREFIXES = listOf("image/", "video/", "audio/")
+    }
 
     override fun generateUploadUrl(filename: String, contentType: String, directory: String): String {
         val encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
@@ -23,7 +27,10 @@ class LocalFileStorage(
         return "http://localhost:$port/api/files/upload?filename=$encodedFilename&contentType=$contentType&directory=$encodedDirectory"
     }
 
-    fun store(inputStream: InputStream, filename: String, directory: String): String {
+    fun store(inputStream: InputStream, filename: String, contentType: String, directory: String): String {
+        if (ALLOWED_MIME_PREFIXES.none { contentType.startsWith(it) })
+            throw IllegalArgumentException("지원하지 않는 파일 타입입니다: $contentType")
+
         val sanitizedDir = directory.replace("..", "").replace("\\", "/").trim('/')
 
         val dir = if (sanitizedDir.isBlank()) File(rootPath)
