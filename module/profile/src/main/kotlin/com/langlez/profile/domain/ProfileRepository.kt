@@ -4,6 +4,7 @@ interface ProfileRepository {
 
     fun saveImage(image: ProfileImage): ProfileImage
     fun findRepresentImage(id: Long): ProfileImage?
+    fun findImageByUrl(memberId: Long, url: String): ProfileImage?
     fun countImages(id: Long): Long
 
     fun findProfile(id: Long): Profile?

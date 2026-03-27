@@ -12,7 +12,7 @@ dependencies {
     implementation(project(":common:security"))
     implementation(project(":common:observability"))
 
-    implementation(project(":infra:files"))
+    implementation(project(":core"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
 
