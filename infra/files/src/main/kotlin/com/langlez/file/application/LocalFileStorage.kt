@@ -1,31 +1,44 @@
 package com.langlez.file.application
 
+import com.langlez.core.FileStorage
 import java.io.File
+import java.io.InputStream
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.UUID
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
-import org.springframework.web.multipart.MultipartFile
 
 @Component
-@Profile("local")
-internal class LocalFileStorage : FileStorage {
+@Profile("!production")
+class LocalFileStorage(
+    @Value("\${server.port:8080}") private val port: Int,
+) : FileStorage {
     private val rootPath = "attachments"
 
-    override fun upload(file: MultipartFile, folder: String?): String {
-        val sanitizedFolder = folder?.replace("..", "")?.replace("\\", "/")?.trim('/')
+    override fun generateUploadUrl(filename: String, contentType: String, directory: String): String {
+        val encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+        val encodedDirectory = URLEncoder.encode(directory.trim('/'), StandardCharsets.UTF_8)
+        return "http://localhost:$port/api/files/upload?filename=$encodedFilename&contentType=$contentType&directory=$encodedDirectory"
+    }
 
-        val dir = if (sanitizedFolder.isNullOrBlank()) File(rootPath)
-        else File("$rootPath/$sanitizedFolder").also {
+    fun store(inputStream: InputStream, filename: String, directory: String): String {
+        val sanitizedDir = directory.replace("..", "").replace("\\", "/").trim('/')
+
+        val dir = if (sanitizedDir.isBlank()) File(rootPath)
+        else File("$rootPath/$sanitizedDir").also {
             require(it.canonicalPath.startsWith(File(rootPath).canonicalPath)) { "잘못된 경로" }
             if (!it.exists()) it.mkdirs()
         }
 
-        val fileName = "${UUID.randomUUID()}_${file.originalFilename?.replace("..", "")}"
-        val targetFile = File(dir, fileName)
-        file.transferTo(targetFile)
+        val sanitizedFilename = filename.replace("..", "").replace("/", "").replace("\\", "")
+        val storedName = "${UUID.randomUUID()}_$sanitizedFilename"
+        val targetFile = File(dir, storedName)
+        inputStream.use { it.copyTo(targetFile.outputStream()) }
 
-        return if (sanitizedFolder.isNullOrBlank()) "/$rootPath/$fileName"
-        else "/$rootPath/$sanitizedFolder/$fileName"
+        return if (sanitizedDir.isBlank()) "/$rootPath/$storedName"
+        else "/$rootPath/$sanitizedDir/$storedName"
     }
 
     override fun delete(fileUrl: String) {

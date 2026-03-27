@@ -30,5 +30,5 @@ class File(
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
-    enum class FileType { IMAGE, VIDEO }
+    enum class FileType { IMAGE, VIDEO, AUDIO }
 }
