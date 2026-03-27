@@ -7,10 +7,12 @@ plugins {
 }
 
 dependencies {
-    api(libs.dependency.kotlin.coroutine)
+    implementation(project(":core"))
     implementation(libs.dependency.springboot.web)
     implementation(libs.dependency.springboot.jpa)
     implementation(libs.dependency.aws.s3)
 
     testImplementation(libs.test.springboot)
+    testImplementation(libs.test.mockk)
+    testImplementation(libs.bundles.test.kotest)
 }
