@@ -54,3 +54,4 @@ docker/volume/
 logs/
 app/log/
 infra/files/attachments/
+attachments/

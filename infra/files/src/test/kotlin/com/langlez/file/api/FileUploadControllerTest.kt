@@ -2,7 +2,6 @@ package com.langlez.file.api
 
 import com.langlez.file.application.LocalFileStorage
 import io.kotest.core.spec.style.BehaviorSpec
-import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -21,7 +20,7 @@ class FileUploadControllerTest : BehaviorSpec({
     Given("POST /api/files/upload") {
 
         When("정상적인 파일 업로드 요청이 들어오면") {
-            every { storage.store(any<InputStream>(), eq("photo.jpg"), eq("profiles")) } returns "/attachments/profiles/uuid_photo.jpg"
+            every { storage.store(any<InputStream>(), eq("photo.jpg"), eq("image/jpeg"), eq("profiles")) } returns "/attachments/profiles/uuid_photo.jpg"
 
             val result = mockMvc.post("/api/files/upload") {
                 param("filename", "photo.jpg")
@@ -36,7 +35,7 @@ class FileUploadControllerTest : BehaviorSpec({
                     status { isOk() }
                     jsonPath("$.url") { value("/attachments/profiles/uuid_photo.jpg") }
                 }
-                verify(exactly = 1) { storage.store(any(), "photo.jpg", "profiles") }
+                verify(exactly = 1) { storage.store(any(), "photo.jpg", "image/jpeg", "profiles") }
             }
         }
 
@@ -49,9 +48,7 @@ class FileUploadControllerTest : BehaviorSpec({
             }
 
             Then("400 Bad Request를 반환한다") {
-                result.andExpect {
-                    status { isBadRequest() }
-                }
+                result.andExpect { status { isBadRequest() } }
             }
         }
 
@@ -64,27 +61,23 @@ class FileUploadControllerTest : BehaviorSpec({
             }
 
             Then("400 Bad Request를 반환한다") {
-                result.andExpect {
-                    status { isBadRequest() }
-                }
+                result.andExpect { status { isBadRequest() } }
             }
         }
 
         When("빈 바디로 요청하면") {
-            every { storage.store(any<InputStream>(), eq("empty.txt"), eq("uploads")) } returns "/attachments/uploads/uuid_empty.txt"
+            every { storage.store(any<InputStream>(), eq("empty.jpg"), eq("image/jpeg"), eq("uploads")) } returns "/attachments/uploads/uuid_empty.jpg"
 
             val result = mockMvc.post("/api/files/upload") {
-                param("filename", "empty.txt")
-                param("contentType", "text/plain")
+                param("filename", "empty.jpg")
+                param("contentType", "image/jpeg")
                 param("directory", "uploads")
                 contentType = MediaType.APPLICATION_OCTET_STREAM
                 content = ByteArray(0)
             }
 
-            Then("요청 자체는 성공한다 (빈 파일 저장은 store의 책임)") {
-                result.andExpect {
-                    status { isOk() }
-                }
+            Then("요청 자체는 성공한다 (0바이트 검증은 클라이언트 책임)") {
+                result.andExpect { status { isOk() } }
             }
         }
     }
