@@ -1,9 +1,8 @@
 package com.langlez.profile.application
 
+import com.langlez.core.FileStorage
 import com.langlez.exception.LanglezException
-import com.langlez.file.application.FileStorage
 import com.langlez.member.domain.MemberRepository
-import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import org.springframework.http.HttpStatus.BAD_REQUEST
@@ -11,9 +10,7 @@ import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import org.springframework.web.multipart.MultipartFile
 import java.util.concurrent.CompletableFuture
-import javax.imageio.ImageIO.read
 
 @Service
 class ProfileService(
@@ -37,30 +34,46 @@ class ProfileService(
         return ProfileResponse(profile, member, profile.visitCount + delta)
     }
 
-    fun uploadNewRepresentImage(id: Long, image: MultipartFile): ProfileImage {
-        validateImage(image)
+    fun generateImageUploadUrl(filename: String, contentType: String): String {
+        if (!contentType.startsWith("image/"))
+            throw LanglezException(BAD_REQUEST, "file.unsupported-content-type")
+        return storage.generateUploadUrl(filename, contentType, IMAGE_DIRECTORY)
+    }
 
-        val url = storage.upload(image, IMAGE_DIRECTORY)
-
-        return transaction.execute { replaceRepresentImageURL(id, url, image.size) }
+    fun confirmRepresentImage(memberId: Long, fileUrl: String): ProfileImage {
+        return transaction.execute { replaceRepresentImage(memberId, fileUrl) }
             ?: throw LanglezException()
     }
 
-    private fun replaceRepresentImageURL(id: Long, url: String, size: Long): ProfileImage {
-        val currentImage = repo.findRepresentImage(id)?.apply { this.represent = false }
-        val sequence = repo.countImages(id) + 1
+    fun confirmAdditionalImage(memberId: Long, fileUrl: String): ProfileImage {
+        if (repo.countImages(memberId) >= MAX_IMAGES)
+            throw LanglezException(BAD_REQUEST, "profile.image.limit-exceeded")
 
-        if (currentImage != null) repo.saveImage(currentImage)
-
-        return repo.saveImage(ProfileImage(id, url, sequence, size, true))
+        return transaction.execute {
+            val sequence = repo.countImages(memberId) + 1
+            repo.saveImage(ProfileImage(memberId, fileUrl, sequence, 0L, false))
+        } ?: throw LanglezException()
     }
 
-    private fun validateImage(image: MultipartFile) {
-        if (image.isEmpty || image.inputStream.use { stream -> read(stream) == null })
-            throw LanglezException(BAD_REQUEST)
+    fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage {
+        repo.findImageByUrl(memberId, fileUrl)
+            ?: throw LanglezException(NOT_FOUND, "profile.image.not-found")
+
+        return transaction.execute { replaceRepresentImage(memberId, fileUrl) }
+            ?: throw LanglezException()
+    }
+
+    private fun replaceRepresentImage(memberId: Long, newUrl: String): ProfileImage {
+        repo.findRepresentImage(memberId)?.apply {
+            this.represent = false
+            repo.saveImage(this)
+        }
+        val sequence = repo.countImages(memberId) + 1
+        return repo.saveImage(ProfileImage(memberId, newUrl, sequence, 0L, true))
     }
 
     companion object {
-        private const val IMAGE_DIRECTORY = "/profiles"
+        private const val IMAGE_DIRECTORY = "profiles"
+        private const val MAX_IMAGES = 6L
     }
 }

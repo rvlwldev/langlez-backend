@@ -21,6 +21,7 @@ interface ProfileJpaRepository : JpaRepository<Profile, Long> {
 
 interface ProfileImageJpaRepository : JpaRepository<ProfileImage, ProfileImage.Key> {
     fun findByIdAndRepresentTrue(id: Long): ProfileImage?
+    fun findByIdAndUrl(id: Long, url: String): ProfileImage?
     fun countById(id: Long): Long
 }
 
@@ -34,6 +35,8 @@ class ProfileRepositoryImpl(
     override fun saveImage(image: ProfileImage): ProfileImage = imageJpa.save(image)
 
     override fun findRepresentImage(id: Long): ProfileImage? = imageJpa.findByIdAndRepresentTrue(id)
+
+    override fun findImageByUrl(memberId: Long, url: String): ProfileImage? = imageJpa.findByIdAndUrl(memberId, url)
 
     override fun countImages(id: Long): Long = imageJpa.countById(id)
 
