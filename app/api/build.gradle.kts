@@ -20,4 +20,15 @@ dependencies {
     implementation(project(":infra:kafka"))
 
     developmentOnly(libs.development.springboot.devtools)
+
+    testImplementation(project(":common:web"))
+    testImplementation(project(":common:security"))
+    testImplementation(project(":infra:redis"))
+    testImplementation(libs.dependency.redisson)
+    testImplementation(libs.test.springboot)
+    testImplementation(libs.test.springboot.testcontainers)
+    testImplementation(libs.test.kotest.spring)
+    testImplementation(libs.test.mockk)
+    testImplementation(libs.bundles.test.kotest)
+    testImplementation(libs.bundles.testcontainers)
 }

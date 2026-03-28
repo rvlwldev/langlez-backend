@@ -22,5 +22,7 @@ dependencies {
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
+    testImplementation(libs.test.mockk)
+    testImplementation(libs.bundles.test.kotest)
     testImplementation(libs.bundles.testcontainers)
 }
