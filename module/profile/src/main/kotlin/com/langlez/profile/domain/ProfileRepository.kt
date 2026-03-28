@@ -8,10 +8,12 @@ interface ProfileRepository {
     fun countImages(id: Long): Long
 
     fun findProfile(id: Long): Profile?
+    fun findProfileByUsername(username: String): Profile?
     fun saveProfile(profile: Profile): Profile
 
     fun increaseVisitCount(visitorId: Long, username: String)
     fun getVisitCountDelta(username: String): Long
     fun flushVisitCounts(): Map<String, Long>
+    fun incrementVisitCountInDb(username: String, delta: Long)
 
 }
