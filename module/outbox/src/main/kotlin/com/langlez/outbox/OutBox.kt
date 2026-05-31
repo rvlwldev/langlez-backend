@@ -57,7 +57,7 @@ internal class OutBox(
     }
 
     fun fail() {
-        if (attempts > MAX_ATTEMPTS) {
+        if (attempts >= MAX_ATTEMPTS) {
             status = Status.FAILED
             failedAt = Instant.now()
         } else {

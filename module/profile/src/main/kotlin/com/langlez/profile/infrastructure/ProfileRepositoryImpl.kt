@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 
 interface ProfileJpaRepository : JpaRepository<Profile, Long> {
 
@@ -46,6 +47,11 @@ class ProfileRepositoryImpl(
     override fun increaseVisitCount(visitorId: Long, username: String) {
         val hllKey = "$HLL_PREFIX$username"
         redis.opsForHyperLogLog().add(hllKey, visitorId)
+    }
+
+    @Transactional
+    override fun incrementVisitCount(username: String, delta: Long) {
+        profileJpa.incrementVisitCount(username, delta)
     }
 
     override fun getVisitCountDelta(username: String): Long {

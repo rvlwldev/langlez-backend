@@ -10,6 +10,7 @@ interface ProfileRepository {
     fun saveProfile(profile: Profile): Profile
 
     fun increaseVisitCount(visitorId: Long, username: String)
+    fun incrementVisitCount(username: String, delta: Long)
     fun getVisitCountDelta(username: String): Long
     fun flushVisitCounts(): Map<String, Long>
 
