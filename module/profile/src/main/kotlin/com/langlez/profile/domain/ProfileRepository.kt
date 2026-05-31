@@ -4,14 +4,16 @@ interface ProfileRepository {
 
     fun saveImage(image: ProfileImage): ProfileImage
     fun findRepresentImage(id: Long): ProfileImage?
+    fun findImageByUrl(memberId: Long, url: String): ProfileImage?
     fun countImages(id: Long): Long
 
     fun findProfile(id: Long): Profile?
+    fun findProfileByUsername(username: String): Profile?
     fun saveProfile(profile: Profile): Profile
 
     fun increaseVisitCount(visitorId: Long, username: String)
-    fun incrementVisitCount(username: String, delta: Long)
     fun getVisitCountDelta(username: String): Long
     fun flushVisitCounts(): Map<String, Long>
+    fun incrementVisitCountInDb(username: String, delta: Long)
 
 }

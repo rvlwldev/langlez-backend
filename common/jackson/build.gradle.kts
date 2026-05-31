@@ -8,4 +8,5 @@ plugins {
 dependencies {
     api(libs.dependency.springboot.starter)
     api(libs.dependency.kotlin.jackson)
+    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 }

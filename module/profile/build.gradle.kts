@@ -12,8 +12,6 @@ dependencies {
     implementation(project(":common:web"))
     implementation(project(":common:security"))
     implementation(project(":common:observability"))
-
-    implementation(project(":infra:files"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
 
@@ -23,5 +21,7 @@ dependencies {
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
+    testImplementation(libs.test.mockk)
+    testImplementation(libs.bundles.test.kotest)
     testImplementation(libs.bundles.testcontainers)
 }

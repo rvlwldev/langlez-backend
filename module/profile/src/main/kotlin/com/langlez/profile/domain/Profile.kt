@@ -25,7 +25,7 @@ class Profile(
     var birthDay: LocalDate? = null,
     var visitCount: Long = 0,
 
-    @Version var version: Long = 0
+    @Version var version: Long? = null
 ) {
     enum class Gender { MALE, FEMALE, SECRET }
     enum class MBTI {
