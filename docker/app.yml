@@ -22,7 +22,7 @@ services:
     image: langlez-server:latest
     container_name: langlez-app-blue
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_PROFILES_ACTIVE=production
     env_file:
       - ../.env
     ports:
@@ -37,7 +37,7 @@ services:
     image: langlez-server:latest
     container_name: langlez-app-green
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_PROFILES_ACTIVE=production
     env_file:
       - ../.env
     ports:

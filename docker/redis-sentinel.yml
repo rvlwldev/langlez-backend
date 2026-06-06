@@ -44,6 +44,8 @@ services:
     container_name: langlez-redis-sentinel1
     ports:
       - "26380:26379"
+    environment:
+      - SENTINEL_PORT=26380
     volumes:
       - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
@@ -51,13 +53,15 @@ services:
     networks:
       - langlez-net
     command: >
-      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
+      sh -c "until redis-cli -h redis-master -p 6379 ping; do sleep 1; done; MASTER_IP=$$(getent hosts redis-master | awk '{print $$1}'); HOST_IP=$$(getent hosts host.docker.internal | awk '{print $$1}'); sed \"s/redis-master/$$MASTER_IP/g\" /etc/redis/sentinel.conf > /tmp/sentinel.conf; echo \"sentinel announce-ip $$HOST_IP\" >> /tmp/sentinel.conf; echo \"sentinel announce-port $$SENTINEL_PORT\" >> /tmp/sentinel.conf; redis-sentinel /tmp/sentinel.conf"
 
   redis-sentinel2:
     image: redis:7.2
     container_name: langlez-redis-sentinel2
     ports:
       - "26381:26379"
+    environment:
+      - SENTINEL_PORT=26381
     volumes:
       - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
@@ -65,13 +69,15 @@ services:
     networks:
       - langlez-net
     command: >
-      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
+      sh -c "until redis-cli -h redis-master -p 6379 ping; do sleep 1; done; MASTER_IP=$$(getent hosts redis-master | awk '{print $$1}'); HOST_IP=$$(getent hosts host.docker.internal | awk '{print $$1}'); sed \"s/redis-master/$$MASTER_IP/g\" /etc/redis/sentinel.conf > /tmp/sentinel.conf; echo \"sentinel announce-ip $$HOST_IP\" >> /tmp/sentinel.conf; echo \"sentinel announce-port $$SENTINEL_PORT\" >> /tmp/sentinel.conf; redis-sentinel /tmp/sentinel.conf"
 
   redis-sentinel3:
     image: redis:7.2
     container_name: langlez-redis-sentinel3
     ports:
       - "26382:26379"
+    environment:
+      - SENTINEL_PORT=26382
     volumes:
       - ./config/redis/redis-sentinel.conf:/etc/redis/sentinel.conf
     depends_on:
@@ -79,7 +85,7 @@ services:
     networks:
       - langlez-net
     command: >
-      sh -c "while ! nc -z redis-master 6379; do sleep 1; done; redis-sentinel /etc/redis/sentinel.conf"
+      sh -c "until redis-cli -h redis-master -p 6379 ping; do sleep 1; done; MASTER_IP=$$(getent hosts redis-master | awk '{print $$1}'); HOST_IP=$$(getent hosts host.docker.internal | awk '{print $$1}'); sed \"s/redis-master/$$MASTER_IP/g\" /etc/redis/sentinel.conf > /tmp/sentinel.conf; echo \"sentinel announce-ip $$HOST_IP\" >> /tmp/sentinel.conf; echo \"sentinel announce-port $$SENTINEL_PORT\" >> /tmp/sentinel.conf; redis-sentinel /tmp/sentinel.conf"
 
 networks:
   langlez-net:
