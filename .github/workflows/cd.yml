@@ -1,0 +1,45 @@
+name: CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /home/${{ secrets.SERVER_USER }}/langlez/backend
+
+            # GitHub Secrets로 .env 파일 생성
+            cat > .env << 'EOF'
+            MYSQL_URL=${{ secrets.MYSQL_URL }}
+            MYSQL_USERNAME=${{ secrets.MYSQL_USERNAME }}
+            MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            REDIS_MASTER=${{ secrets.REDIS_MASTER }}
+            REDIS_SENTINEL_NODES=${{ secrets.REDIS_SENTINEL_NODES }}
+            KAFKA_SERVERS=${{ secrets.KAFKA_SERVERS }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            APPLE_CLIENT_ID=${{ secrets.APPLE_CLIENT_ID }}
+            APPLE_CLIENT_SECRET=${{ secrets.APPLE_CLIENT_SECRET }}
+            OAUTH2_REDIRECT_URI=${{ secrets.OAUTH2_REDIRECT_URI }}
+            ZIPKIN_ENDPOINT=${{ secrets.ZIPKIN_ENDPOINT }}
+            TRACING_SAMPLING=${{ secrets.TRACING_SAMPLING }}
+            EOF
+
+            # 최신 코드 pull
+            git pull origin main
+
+            # Blue/Green 배포 실행
+            chmod +x deploy.sh
+            ./deploy.sh
