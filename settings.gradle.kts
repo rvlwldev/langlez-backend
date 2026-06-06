@@ -19,6 +19,6 @@ fun includeModules(parentDir: String) {
 
 include("app:api")
 include("core")
-includeModules("common")
+include("common")
 includeModules("infra")
 includeModules("module")

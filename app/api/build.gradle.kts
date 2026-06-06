@@ -7,7 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":common:observability"))
+    implementation(project(":common"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:mongo"))
     implementation(project(":infra:redis"))
@@ -16,13 +16,12 @@ dependencies {
     implementation(project(":module:profile"))
     implementation(project(":module:auth"))
     implementation(project(":module:relationship"))
-    implementation(project(":module:outbox"))
+
     implementation(project(":infra:kafka"))
 
     developmentOnly(libs.development.springboot.devtools)
 
-    testImplementation(project(":common:web"))
-    testImplementation(project(":common:security"))
+    testImplementation(project(":common"))
     testImplementation(project(":infra:redis"))
     testImplementation(libs.dependency.redisson)
     testImplementation(libs.test.springboot)

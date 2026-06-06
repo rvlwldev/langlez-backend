@@ -54,6 +54,7 @@ dependency-querydsl-ksp = { module = "io.github.openfeign.querydsl:querydsl-ksp-
 # Observability
 dependency-micrometer-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.14.2" }
 dependency-micrometer-tracing-brave = { module = "io.micrometer:micrometer-tracing-bridge-brave", version = "1.4.1" }
+dependency-zipkin-reporter-brave = { module = "io.zipkin.reporter2:zipkin-reporter-brave" }
 dependency-logstash-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version = "7.4" }
 dependency-p6spy-starter = { module = "com.github.gavlyukovskiy:p6spy-spring-boot-starter", version = "1.10.0" }
 

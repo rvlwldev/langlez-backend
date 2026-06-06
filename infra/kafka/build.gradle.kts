@@ -9,7 +9,7 @@ dependencies {
     api(libs.dependency.springboot.starter)
     api(libs.dependency.spring.kafka)
 
-    implementation(project(":common:observability"))
+    implementation(project(":common"))
 
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.testcontainers)
