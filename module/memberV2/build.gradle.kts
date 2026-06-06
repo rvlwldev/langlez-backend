@@ -9,13 +9,10 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":common:web"))
-    implementation(project(":common:observability"))
-    implementation(project(":common:security"))
+    implementation(project(":common"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
-
-    implementation(project(":module:outbox"))
+    implementation(project(":infra:kafka"))
 
     implementation(libs.dependency.spring.retry)
 

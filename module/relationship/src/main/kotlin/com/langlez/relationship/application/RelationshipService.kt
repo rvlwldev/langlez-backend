@@ -1,12 +1,12 @@
 package com.langlez.relationship.application
 
-import com.langlez.core.OutBoxEventPublisher
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.api.RelationshipResponse
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
+import com.langlez.relationship.outbox.RelationshipOutBoxRepository
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.stereotype.Service
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 class RelationshipService(
     private val repo: RelationshipRepository,
     private val memberRepo: MemberRepository,
-    private val publisher: OutBoxEventPublisher
+    private val outbox: RelationshipOutBoxRepository,
 ) {
 
     fun follow(followerId: Long, followingId: Long) {
@@ -30,7 +30,7 @@ class RelationshipService(
 
         val follow = repo.saveFollow(Follow(followerId, followingId))
         val event = RelationshipEvent.Follow(followerId, followingId)
-        publisher.publish("RELATIONSHIP", follow.id.toString(), "MEMBER_FOLLOW", event)
+        outbox.save("RELATIONSHIP", follow.id.toString(), "MEMBER_FOLLOW", event)
     }
 
     fun unfollow(followerId: Long, followingId: Long) {
@@ -39,7 +39,7 @@ class RelationshipService(
         repo.deleteFollow(followerId, followingId)
 
         val event = RelationshipEvent.Unfollow(followerId, followingId)
-        publisher.publish("RELATIONSHIP", follow.id.toString(), "MEMBER_UNFOLLOW", event)
+        outbox.save("RELATIONSHIP", follow.id.toString(), "MEMBER_UNFOLLOW", event)
     }
 
     fun block(blockerId: Long, blockedId: Long) {
@@ -49,7 +49,7 @@ class RelationshipService(
         repo.deleteFollow(blockedId, blockerId)
 
         val event = RelationshipEvent.Block(blockerId, blockedId)
-        publisher.publish("RELATIONSHIP", block.id.toString(), "MEMBER_BLOCK", event)
+        outbox.save("RELATIONSHIP", block.id.toString(), "MEMBER_BLOCK", event)
     }
 
     fun unblock(blockerId: Long, blockedId: Long) {
@@ -58,7 +58,7 @@ class RelationshipService(
         repo.deleteBlock(blockerId, blockedId)
 
         val event = RelationshipEvent.Unblock(blockerId, blockedId)
-        publisher.publish("RELATIONSHIP", block.id.toString(), "MEMBER_UNBLOCK", event)
+        outbox.save("RELATIONSHIP", block.id.toString(), "MEMBER_UNBLOCK", event)
     }
 
     @Transactional(readOnly = true)
@@ -85,7 +85,7 @@ class RelationshipService(
     private fun buildCursorList(
         memberIds: List<Long>,
         hasMore: Boolean,
-        lastEntityId: Long?
+        lastEntityId: Long?,
     ): RelationshipResponse.CursorList {
         val members = memberRepo.findByIds(memberIds)
         val summaries = memberIds.mapNotNull { id -> members.find { it.id == id } }
@@ -93,5 +93,4 @@ class RelationshipService(
         val nextCursor = if (hasMore) lastEntityId else null
         return RelationshipResponse.CursorList(nextCursor, summaries)
     }
-
 }

@@ -8,12 +8,10 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":common:exception"))
-    implementation(project(":common:security"))
-    implementation(project(":common:observability"))
-    implementation(project(":common:web"))
+    implementation(project(":common"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:mysql"))
+    implementation(project(":infra:kafka"))
 
     implementation(project(":module:member"))
 }
