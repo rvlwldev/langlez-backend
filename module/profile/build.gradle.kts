@@ -9,9 +9,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":common:web"))
-    implementation(project(":common:security"))
-    implementation(project(":common:observability"))
+    implementation(project(":common"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
 

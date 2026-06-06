@@ -5,10 +5,10 @@ import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.profile.domain.QProfile.Companion.profile
 import com.querydsl.jpa.impl.JPAQueryFactory
+import org.redisson.api.RedissonClient
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
@@ -24,7 +24,7 @@ interface ProfileImageJpaRepository : JpaRepository<ProfileImage, ProfileImage.K
 class ProfileRepositoryImpl(
     private val profileJpa: ProfileJpaRepository,
     private val imageJpa: ProfileImageJpaRepository,
-    private val redis: RedisTemplate<String, Any>,
+    private val redisson: RedissonClient,
     private val dsl: JPAQueryFactory,
 ) : ProfileRepository {
 
@@ -48,28 +48,25 @@ class ProfileRepositoryImpl(
     override fun saveProfile(profile: Profile): Profile = profileJpa.save(profile)
 
     override fun increaseVisitCount(visitorId: Long, username: String) {
-        val hllKey = "$HLL_PREFIX$username"
-        redis.opsForHyperLogLog().add(hllKey, visitorId)
+        redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").add(visitorId)
     }
 
-    override fun getVisitCountDelta(username: String): Long {
-        val hllKey = "$HLL_PREFIX$username"
-        return redis.opsForHyperLogLog().size(hllKey)
-    }
+    override fun getVisitCountDelta(username: String): Long =
+        redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").count()
 
     override fun flushVisitCounts(): Map<String, Long> {
-        val keys = redis.keys("$HLL_PREFIX*") ?: return emptyMap()
-        val result = mutableMapOf<String, Long>()
+        val keys = redisson.keys.getKeysByPattern("$HLL_PREFIX*").toList()
+        if (keys.isEmpty()) return emptyMap()
 
+        val result = mutableMapOf<String, Long>()
         for (key in keys) {
-            val username = key.removePrefix(HLL_PREFIX)
-            val count = redis.opsForHyperLogLog().size(key)
+            val hll = redisson.getHyperLogLog<Long>(key)
+            val count = hll.count()
             if (count > 0) {
-                result[username] = count
-                redis.delete(key)
+                result[key.removePrefix(HLL_PREFIX)] = count
+                hll.delete()
             }
         }
-
         return result
     }
 

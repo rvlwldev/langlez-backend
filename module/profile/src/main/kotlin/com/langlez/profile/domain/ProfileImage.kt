@@ -11,7 +11,7 @@ import java.time.Instant
 @IdClass(ProfileImage.Key::class)
 @Table(
     name = "member_image_urls",
-    uniqueConstraints = [UniqueConstraint(name = "UNQ_PROFILE_IMAGE_URL", columnNames = ["member_id", "represent"])]
+    uniqueConstraints = [UniqueConstraint(name = "UNQ_PROFILE_IMAGE_URL", columnNames = ["id", "url"])]
 )
 class ProfileImage(
     @Id val id: Long,

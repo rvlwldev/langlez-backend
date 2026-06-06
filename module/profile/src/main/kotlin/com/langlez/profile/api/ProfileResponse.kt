@@ -8,6 +8,26 @@ import java.time.LocalDate
 import java.util.*
 
 class ProfileResponse {
+    data class ProfileDetail(
+        val bio: String?,
+        val goal: String?,
+        val want: String?,
+        val gender: String,
+        val mbti: String?,
+        val locale: Locale?,
+        val birthDay: LocalDate?,
+    ) {
+        constructor(profile: Profile) : this(
+            bio = profile.bio,
+            goal = profile.goal,
+            want = profile.want,
+            gender = profile.gender.name,
+            mbti = profile.mbti?.name,
+            locale = profile.locale,
+            birthDay = profile.birthDay,
+        )
+    }
+
     data class Detail(
         val username: String,
         val nickname: String,

@@ -16,7 +16,9 @@ import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import org.redisson.Redisson
 import org.redisson.api.RedissonClient
+import org.redisson.config.Config
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.transaction.support.TransactionTemplate
@@ -27,8 +29,6 @@ import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
-import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -59,9 +59,12 @@ class ProfileE2ETest : BehaviorSpec() {
     @TestConfiguration
     class TestRedisConfig {
         @Bean
-        fun redisConnectionFactory(): LettuceConnectionFactory =
-            LettuceConnectionFactory(redis.host, redis.getMappedPort(6379))
-                .also { it.afterPropertiesSet() }
+        fun redissonClient(): RedissonClient {
+            val config = Config()
+            config.useSingleServer()
+                .setAddress("redis://${redis.host}:${redis.getMappedPort(6379)}")
+            return Redisson.create(config)
+        }
     }
 
     override fun extensions() = listOf(SpringExtension)
@@ -77,8 +80,6 @@ class ProfileE2ETest : BehaviorSpec() {
 
     @MockBean lateinit var kafkaTemplate: KafkaTemplate<String, String>
     @MockBean lateinit var mongoTemplate: MongoTemplate
-    @MockBean lateinit var stringRedisTemplate: StringRedisTemplate
-    @MockBean lateinit var redissonClient: RedissonClient
 
     // 클래스 레벨 상태 — beforeSpec에서 초기화, 각 When은 이미지만 정리
     private lateinit var alice: Member
