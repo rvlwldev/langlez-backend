@@ -24,6 +24,7 @@ spring:
       sentinel:
         master: ${REDIS_MASTER:mymaster}
         nodes: ${REDIS_SENTINEL_NODES:localhost:26380,localhost:26381,localhost:26382}
+      password: ${REDIS_PASSWORD:}
 
   jpa:
     hibernate:
@@ -69,3 +70,35 @@ logging:
 
 swagger:
   enabled: false # Disabled in production for security
+
+# Actuator / Metrics / Tracing (관측)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus   # 운영: 최소 노출
+  endpoint:
+    health:
+      show-details: never
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING:0.1}   # 운영: 10% 샘플링
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+# 슬로우 쿼리 추적 임계값 (운영: 느린 쿼리만)
+logger:
+  mysql:
+    log-threshold-ms: 200
+    warn-threshold-ms: 1000
+  mongo:
+    log-threshold-ms: 200
+    warn-threshold-ms: 1000
+  redis:
+    log-threshold-ms: 100
+    warn-threshold-ms: 500

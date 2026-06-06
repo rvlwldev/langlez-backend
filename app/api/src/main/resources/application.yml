@@ -25,8 +25,9 @@ spring:
   # Data Sources
   datasource:
     url: jdbc:mysql://localhost:3306/langlez_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: admin
-    password: admin
+    # username/password는 application-local.yml 또는 환경 변수(DB_USERNAME, DB_PASSWORD)로 설정
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   data:
@@ -34,17 +35,13 @@ spring:
       uri: mongodb://localhost:27017/langlez_db?directConnection=true
       auto-index-creation: true
     redis:
-      sentinel:
-        master: mymaster
-        nodes:
-          - localhost:26380
-          - localhost:26381
-          - localhost:26382
+      host: localhost
+      port: 6379
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     open-in-view: false
     properties:
       hibernate:
@@ -74,12 +71,14 @@ spring:
       client:
         registration:
           google:
-            client-id: google-dummy-id.apps.googleusercontent.com
-            client-secret: google-dummy-secret
+            # client-id/secret은 application-local.yml 또는 환경 변수(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)로 설정
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: profile, email
           apple:
-            client-id: apple-dummy-id
-            client-secret: apple-dummy-secret
+            # client-id/secret은 application-local.yml 또는 환경 변수(APPLE_CLIENT_ID, APPLE_CLIENT_SECRET)로 설정
+            client-id: ${APPLE_CLIENT_ID}
+            client-secret: ${APPLE_CLIENT_SECRET}
             scope: name, email
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/apple"
@@ -102,11 +101,12 @@ spring:
 
 logging:
   level:
-    org.hibernate.SQL: INFO
-    org.hibernate.orm.jdbc.bind: INFO
+    org.hibernate.SQL: OFF
+    org.hibernate.orm.jdbc.bind: OFF
 
 jwt:
-  secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ="
+  # secret은 application-local.yml 또는 환경 변수(JWT_SECRET_KEY)로 설정
+  secret: ${JWT_SECRET_KEY}
   access-token-ttl-secs: 3600
   refresh-token-ttl-secs: 1209600
 
@@ -132,3 +132,35 @@ swagger:
     enabled: true
     header-name: "Authorization"
     token-prefix: "Bearer "
+
+# Actuator / Metrics / Tracing (관측)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0          # 로컬: 전량 샘플링
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans   # Tempo zipkin receiver
+
+# 슬로우 쿼리 추적 임계값 (P6Spy / PerformanceLogger)
+logger:
+  mysql:
+    log-threshold-ms: 0         # 로컬: 모든 쿼리 INFO 로깅 (가시성)
+    warn-threshold-ms: 200      # 200ms 이상 → 슬로우 쿼리 WARN
+  mongo:
+    log-threshold-ms: 0
+    warn-threshold-ms: 200
+  redis:
+    log-threshold-ms: 0
+    warn-threshold-ms: 100

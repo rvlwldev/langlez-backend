@@ -6,12 +6,11 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":common:jackson"))
-    implementation(project(":common:observability"))
+    implementation(project(":common"))
 
     implementation(libs.dependency.aspectj)
     implementation(libs.dependency.caffeine)
-    implementation(libs.dependency.redisson)
+    api(libs.dependency.redisson)
     runtimeOnly(libs.dependency.aspectj.runtime)
 
     api(libs.dependency.springboot.redis)

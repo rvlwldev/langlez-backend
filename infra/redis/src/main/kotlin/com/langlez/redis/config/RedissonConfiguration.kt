@@ -32,6 +32,7 @@ class RedissonConfiguration(private val properties: RedisProperties) {
                 .setConnectTimeout(timeout)
                 .setPassword(properties.password.takeIf { !it.isNullOrBlank() })
                 .setDatabase(properties.database)
+                .setCheckSentinelsList(false)
         } else {
             config.useSingleServer()
                 .setAddress("$prefix${properties.host}:${properties.port}")

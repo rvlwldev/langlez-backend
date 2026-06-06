@@ -1,22 +1,16 @@
 package com.langlez.redis.config
-import com.langlez.observability.config.LoggerProperties
 
 import com.langlez.observability.PerformanceLogger
+import com.langlez.observability.config.LoggerProperties
 import io.lettuce.core.AbstractRedisClient
 import io.lettuce.core.RedisClient
 import io.lettuce.core.cluster.RedisClusterClient
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationListener
-import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.stereotype.Component
-
-@Configuration
-class RedisObservabilityConfiguration {
-    // Kept empty or for other configs
-}
 
 @Component
 class RedisQueryListenerRegister(
