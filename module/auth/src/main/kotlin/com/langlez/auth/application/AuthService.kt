@@ -1,6 +1,6 @@
 package com.langlez.auth.application
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberCommand
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberProvider
@@ -8,9 +8,6 @@ import com.langlez.security.util.JwtParser
 import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.auth.oauth2.OAuth2LanglezUser
 import org.redisson.api.RedissonClient
-import org.springframework.http.HttpStatus.BAD_REQUEST
-import org.springframework.http.HttpStatus.CONFLICT
-import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService
@@ -39,14 +36,14 @@ class AuthService(
     @Transactional
     fun processLogin(profile: OAuth2UserProfile): OAuth2User {
         val providerId = profile.rawAttributes[profile.providerKey]?.toString()
-            ?: throw LanglezException(BAD_REQUEST, "auth.invalid-request")
+            ?: throw LanglezException(400, "auth.invalid-request")
         val providerType = MemberProvider.Type.valueOf(profile.provider.uppercase())
 
         val member = memberService.findByProvider(providerId, providerType)
             ?.also { memberService.updateLastAccess(it.id) }
             ?: run {
                 memberService.findByEmail(profile.email)?.let {
-                    throw LanglezException(CONFLICT, "auth.email-conflict")
+                    throw LanglezException(409, "auth.email-conflict")
                 }
                 val providerCmd = MemberCommand.Provider(providerId, providerType, profile.displayName)
                 val createCmd = MemberCommand.Create(profile.email, null, profile.displayName)
@@ -64,15 +61,15 @@ class AuthService(
     fun refresh(refreshToken: String): Pair<String, String> {
         val tokenType = jwt.extractTokenType(refreshToken)
         if (tokenType != "refresh")
-            throw LanglezException(UNAUTHORIZED, "auth.invalid-token")
+            throw LanglezException(401, "auth.invalid-token")
 
         val id = jwt.extractID(refreshToken)
         val member = memberService.findById(id)
-            ?: throw LanglezException(UNAUTHORIZED, "auth.invalid-token")
+            ?: throw LanglezException(401, "auth.invalid-token")
 
         val bucket = redisson.getBucket<String>("refresh_token:$id")
         if (refreshToken != bucket.get())
-            throw LanglezException(UNAUTHORIZED, "auth.token-expired")
+            throw LanglezException(401, "auth.token-expired")
 
         return Pair(
             jwt.createRefreshToken(member.id, member.role.name),

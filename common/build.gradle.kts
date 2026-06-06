@@ -6,7 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
+    api(project(":core"))
 
     // web
     api(libs.dependency.springboot.web)

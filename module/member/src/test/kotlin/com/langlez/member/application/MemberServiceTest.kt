@@ -1,7 +1,7 @@
 package com.langlez.member.application
 
 import com.langlez.core.OutBoxEventPublisher
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository

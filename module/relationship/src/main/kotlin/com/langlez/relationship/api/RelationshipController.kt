@@ -1,6 +1,6 @@
 package com.langlez.relationship.api
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
 import com.langlez.security.web.MemberID
@@ -65,5 +65,5 @@ class RelationshipController(
 
     private fun resolveUsername(username: String): Long =
         memberRepo.findByUsername(username)?.id
-            ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+            ?: throw LanglezException(404, "member.not-found")
 }

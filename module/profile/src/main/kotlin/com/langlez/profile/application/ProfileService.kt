@@ -1,14 +1,12 @@
 package com.langlez.profile.application
 
 import com.langlez.core.FileStorage
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
-import org.springframework.http.HttpStatus.BAD_REQUEST
-import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -23,13 +21,13 @@ class ProfileService(
 
     @Transactional(readOnly = true)
     fun getProfile(username: String): Profile =
-        repo.findProfileByUsername(username) ?: throw LanglezException(NOT_FOUND, "profile.not-found")
+        repo.findProfileByUsername(username) ?: throw LanglezException(404, "profile.not-found")
 
     @Transactional(readOnly = true)
     fun getProfileDetail(visitorId: Long, username: String): ProfileResponse.Detail {
         increaseVisitCount(visitorId, username)
         val profile = repo.findProfileByUsername(username)
-            ?: throw LanglezException(NOT_FOUND, "profile.not-found")
+            ?: throw LanglezException(404, "profile.not-found")
         val visitDelta = getVisitCount(username)
         return ProfileResponse.Detail(profile, profile.member, profile.visitCount + visitDelta)
     }
@@ -42,7 +40,7 @@ class ProfileService(
         repo.getVisitCountDelta(username)
 
     fun generateImageUploadUrl(filename: String, contentType: String): String {
-        if (!contentType.startsWith("image/")) throw LanglezException(BAD_REQUEST, "file.unsupported-content-type")
+        if (!contentType.startsWith("image/")) throw LanglezException(400, "file.unsupported-content-type")
         return storage.generateUploadUrl(filename, contentType, IMAGE_DIRECTORY)
     }
 
@@ -53,7 +51,7 @@ class ProfileService(
     fun confirmAdditionalImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute {
             if (repo.countImages(memberId) >= MAX_IMAGES)
-                throw LanglezException(BAD_REQUEST, "profile.image.limit-exceeded")
+                throw LanglezException(400, "profile.image.limit-exceeded")
             val sequence = repo.countImages(memberId) + 1
             repo.saveImage(ProfileImage(memberId, fileUrl, sequence, 0L, false))
         } ?: throw LanglezException()
@@ -61,7 +59,7 @@ class ProfileService(
     fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute {
             val target = repo.findImageByUrl(memberId, fileUrl)
-                ?: throw LanglezException(NOT_FOUND, "profile.image.not-found")
+                ?: throw LanglezException(404, "profile.image.not-found")
             repo.findRepresentImage(memberId)?.apply {
                 represent = false
                 repo.saveImage(this)
@@ -73,7 +71,7 @@ class ProfileService(
     fun deleteImage(memberId: Long, fileUrl: String) {
         transaction.execute {
             val image = repo.findImageByUrl(memberId, fileUrl)
-                ?: throw LanglezException(NOT_FOUND, "profile.image.not-found")
+                ?: throw LanglezException(404, "profile.image.not-found")
             image.deletedAt = Instant.now()
             repo.saveImage(image)
         }
@@ -82,7 +80,7 @@ class ProfileService(
     @Transactional
     fun updateProfile(memberId: Long, request: ProfileRequest.Update): Profile {
         val profile = repo.findProfile(memberId)
-            ?: throw LanglezException(NOT_FOUND, "profile.not-found")
+            ?: throw LanglezException(404, "profile.not-found")
 
         request.bio?.let { profile.bio = it }
         request.goal?.let { profile.goal = it }

@@ -1,6 +1,6 @@
 package com.langlez.security.util
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
@@ -8,7 +8,6 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.io.Decoders
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.stereotype.Component
 import java.util.*
 import javax.crypto.SecretKey
@@ -30,8 +29,8 @@ class JwtParser(
             .payload
     } catch (e: Exception) {
         when (e) {
-            is ExpiredJwtException -> throw LanglezException(UNAUTHORIZED, "auth.token-expired")
-            is JwtException -> throw LanglezException(UNAUTHORIZED, "auth.invalid-token")
+            is ExpiredJwtException -> throw LanglezException(401, "auth.token-expired")
+            is JwtException -> throw LanglezException(401, "auth.invalid-token")
             else -> throw e
         }
     }

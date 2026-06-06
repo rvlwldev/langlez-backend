@@ -1,7 +1,7 @@
 package com.langlez
 
 import com.langlez.exception.ExceptionResponse
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.http.HttpStatus

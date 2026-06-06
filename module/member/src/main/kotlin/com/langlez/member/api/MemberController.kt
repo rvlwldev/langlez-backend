@@ -1,11 +1,10 @@
 package com.langlez.member.api
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberRepository
 import com.langlez.security.web.MemberID
 import jakarta.validation.Valid
-import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -17,7 +16,7 @@ class MemberController(
 
     @GetMapping("/me")
     fun getMe(@MemberID memberId: Long): MemberResponse.Me {
-        val member = repo.findById(memberId) ?: throw LanglezException(NOT_FOUND, "member.not-found")
+        val member = repo.findById(memberId) ?: throw LanglezException(404, "member.not-found")
         return MemberResponse.Me(member)
     }
 
@@ -35,7 +34,7 @@ class MemberController(
 
     @GetMapping("/@{username}")
     fun getMember(@PathVariable username: String): MemberResponse.Public {
-        val member = repo.findByUsername(username) ?: throw LanglezException(NOT_FOUND, "member.not-found")
+        val member = repo.findByUsername(username) ?: throw LanglezException(404, "member.not-found")
         return MemberResponse.Public(member)
     }
 

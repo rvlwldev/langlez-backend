@@ -1,11 +1,10 @@
 package com.langlez.security.web
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.security.util.JwtParser
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
@@ -31,7 +30,7 @@ class JwtAuthenticationFilter(
             val claims = jwt.parseClaims(token)
 
             if (claims.get("type", String::class.java) != "access")
-                throw LanglezException(UNAUTHORIZED, "auth.invalid-token")
+                throw LanglezException(401, "auth.invalid-token")
 
             val id = claims.subject.toLong()
             val role = claims.get("role", String::class.java)

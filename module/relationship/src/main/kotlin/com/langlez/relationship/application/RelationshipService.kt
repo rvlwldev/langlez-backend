@@ -1,14 +1,12 @@
 package com.langlez.relationship.application
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.api.RelationshipResponse
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.outbox.RelationshipOutBoxRepository
-import org.springframework.http.HttpStatus.BAD_REQUEST
-import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -22,11 +20,11 @@ class RelationshipService(
 
     fun follow(followerId: Long, followingId: Long) {
         if (followerId == followingId)
-            throw LanglezException(BAD_REQUEST, "social.follow.self")
+            throw LanglezException(400, "social.follow.self")
         if (repo.findBlock(followingId, followerId) != null)
-            throw LanglezException(FORBIDDEN, "social.follow.blocked")
+            throw LanglezException(403, "social.follow.blocked")
         if (repo.findBlock(followerId, followingId) != null)
-            throw LanglezException(FORBIDDEN, "social.follow.blocked")
+            throw LanglezException(403, "social.follow.blocked")
 
         val follow = repo.saveFollow(Follow(followerId, followingId))
         val event = RelationshipEvent.Follow(followerId, followingId)

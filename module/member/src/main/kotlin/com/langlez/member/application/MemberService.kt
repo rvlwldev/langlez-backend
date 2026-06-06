@@ -1,13 +1,12 @@
 package com.langlez.member.application
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.outbox.MemberOutBoxRepository
-import org.springframework.http.HttpStatus.*
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -37,16 +36,16 @@ class MemberService(
     @Transactional
     fun updateUsername(id: Long, newUsername: String): Member {
         val member = repo.findById(id)
-            ?: throw LanglezException(NOT_FOUND, "member.not-found")
+            ?: throw LanglezException(404, "member.not-found")
 
         if (!Member.isValidUsername(newUsername))
-            throw LanglezException(BAD_REQUEST, "member.username.invalid")
+            throw LanglezException(400, "member.username.invalid")
 
         if (!member.canChangeUsername())
-            throw LanglezException(BAD_REQUEST, "member.username.cooldown")
+            throw LanglezException(400, "member.username.cooldown")
 
         if (newUsername != member.username && repo.findByUsername(newUsername) != null)
-            throw LanglezException(CONFLICT, "member.username.duplicated")
+            throw LanglezException(409, "member.username.duplicated")
 
         member.changeUsername(newUsername)
         return repo.save(member)
@@ -72,10 +71,10 @@ class MemberService(
     @Transactional
     fun updateNickname(id: Long, newNickname: String): Member {
         val member = repo.findById(id)
-            ?: throw LanglezException(NOT_FOUND, "member.not-found")
+            ?: throw LanglezException(404, "member.not-found")
 
         if (!member.canChangeNickname())
-            throw LanglezException(BAD_REQUEST, "member.nickname.cooldown")
+            throw LanglezException(400, "member.nickname.cooldown")
 
         member.changeNickname(newNickname)
         return repo.save(member)

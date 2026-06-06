@@ -1,7 +1,7 @@
 package com.langlez.profile.application
 
 import com.langlez.core.FileStorage
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile

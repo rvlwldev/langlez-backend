@@ -1,6 +1,6 @@
 package com.langlez.auth.application
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider

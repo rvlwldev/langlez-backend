@@ -1,8 +1,7 @@
 package com.langlez.security.web
 
-import com.langlez.exception.LanglezException
+import com.langlez.core.LanglezException
 import org.springframework.core.MethodParameter
-import org.springframework.http.HttpStatus.UNAUTHORIZED
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.support.WebDataBinderFactory
@@ -26,7 +25,7 @@ class MemberIdArgumentResolver : HandlerMethodArgumentResolver {
         val auth = SecurityContextHolder.getContext().authentication
 
         if (auth == null || auth.principal == "anonymousUser")
-            throw LanglezException(UNAUTHORIZED, "auth.unauthorized")
+            throw LanglezException(401, "auth.unauthorized")
 
         return auth.principal.toString().toLong()
     }
