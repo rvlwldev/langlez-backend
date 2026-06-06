@@ -1,12 +1,12 @@
 package com.langlez.member.application
 
-import com.langlez.core.OutBoxEventPublisher
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.outbox.MemberOutBoxRepository
 import org.springframework.http.HttpStatus.*
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
@@ -14,7 +14,10 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class MemberService(private val repo: MemberRepository, private val publisher: OutBoxEventPublisher) {
+class MemberService(
+    private val repo: MemberRepository,
+    private val outbox: MemberOutBoxRepository,
+) {
 
     @Transactional
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [Exception::class])
@@ -26,7 +29,7 @@ class MemberService(private val repo: MemberRepository, private val publisher: O
         val saved = repo.save(member)
 
         val event = MemberEvent.Created(saved.id, saved.email, saved.username, saved.nickname)
-        publisher.publish("MEMBER", saved.id.toString(), "member-created", event)
+        outbox.save("MEMBER", saved.id.toString(), "member-created", event)
 
         return saved
     }
@@ -49,6 +52,23 @@ class MemberService(private val repo: MemberRepository, private val publisher: O
         return repo.save(member)
     }
 
+    @Transactional(readOnly = true)
+    fun findById(id: Long): Member? = repo.findById(id)
+
+    @Transactional(readOnly = true)
+    fun findByEmail(email: String): Member? = repo.findByEmail(email)
+
+    @Transactional(readOnly = true)
+    fun findByProvider(providerId: String, type: com.langlez.member.domain.MemberProvider.Type): Member? =
+        repo.findByProvider(providerId, type)
+
+    @Transactional
+    fun updateLastAccess(id: Long) {
+        val member = repo.findById(id) ?: return
+        member.login()
+        repo.save(member)
+    }
+
     @Transactional
     fun updateNickname(id: Long, newNickname: String): Member {
         val member = repo.findById(id)
@@ -60,5 +80,4 @@ class MemberService(private val repo: MemberRepository, private val publisher: O
         member.changeNickname(newNickname)
         return repo.save(member)
     }
-
 }

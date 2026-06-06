@@ -3,10 +3,12 @@ package com.langlez.member.domain
 import jakarta.persistence.*
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedDate
+import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Duration
 import java.time.Instant
 
 @Entity
+@EntityListeners(AuditingEntityListener::class)
 @Table(
     name = "members",
     indexes = [Index("IDX_MEMBER_NICKNAME", "nickname")],
@@ -32,11 +34,12 @@ class Member(
     @Embedded val provider: MemberProvider,
 
     var isVerified: Boolean = false,
+    var premiumExpiresAt: Instant? = null,
 
     @CreatedDate var createdAt: Instant = Instant.now(),
     @LastModifiedDate var updatedAt: Instant = Instant.now(),
     var deletedAt: Instant? = null,
-    var lastLoggedInAt: Instant? = null,
+    @Column(name = "last_logged_in_at") var lastAccessedAt: Instant? = null,
 
     @Version var version: Long = 0
 ) {
@@ -48,7 +51,7 @@ class Member(
     )
 
     fun login() {
-        lastLoggedInAt = Instant.now()
+        lastAccessedAt = Instant.now()
     }
 
     fun canChangeUsername(now: Instant = Instant.now()): Boolean =

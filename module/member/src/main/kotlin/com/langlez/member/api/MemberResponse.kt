@@ -11,7 +11,7 @@ class MemberResponse {
         val role: String,
         val isVerified: Boolean,
         val createdAt: Instant,
-        val lastLoggedInAt: Instant?,
+        val lastAccessedAt: Instant?,
     ) {
         constructor(member: Member) : this(
             email = member.email,
@@ -20,7 +20,7 @@ class MemberResponse {
             role = member.role.name,
             isVerified = member.isVerified,
             createdAt = member.createdAt,
-            lastLoggedInAt = member.lastLoggedInAt,
+            lastAccessedAt = member.lastAccessedAt,
         )
     }
 
