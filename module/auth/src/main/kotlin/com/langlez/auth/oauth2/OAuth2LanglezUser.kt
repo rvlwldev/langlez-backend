@@ -1,7 +1,5 @@
 package com.langlez.auth.oauth2
 
-import com.langlez.auth.domain.OAuth2UserProfile
-import com.langlez.member.domain.Member
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.core.user.OAuth2User

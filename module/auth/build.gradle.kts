@@ -6,9 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":common:security"))
-    implementation(project(":common:observability"))
-    implementation(project(":common:web"))
+    implementation(project(":common"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:mysql"))
 

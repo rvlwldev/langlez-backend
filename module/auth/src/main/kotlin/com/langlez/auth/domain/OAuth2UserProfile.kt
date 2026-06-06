@@ -27,7 +27,7 @@ data class OAuth2UserProfile(
             provider = "GOOGLE",
             providerKey = key,
             email = attributes["email"] as String,
-            displayName = attributes["name"] as String,
+            displayName = attributes["name"] as? String ?: "GoogleUser",
             rawAttributes = attributes,
         )
     }
