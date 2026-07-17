@@ -1,25 +1,24 @@
 package com.langlez.member.application
 
-import com.langlez.core.OutBoxEventPublisher
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.outbox.MemberOutBoxRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
-import org.springframework.http.HttpStatus
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
-    val publisher = mockk<OutBoxEventPublisher>(relaxed = true)
-    val service = MemberService(repo, publisher)
+    val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
+    val service = MemberService(repo, outbox)
 
-    afterEach { clearMocks(repo, publisher, answers = false) }
+    afterEach { clearMocks(repo, outbox, answers = false) }
 
     fun createMember(
         id: Long = 1L,
@@ -59,7 +58,7 @@ class MemberServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.updateUsername(1L, "ab")
                 }
-                ex.status shouldBe HttpStatus.BAD_REQUEST
+                ex.status shouldBe 400
                 ex.message shouldBe "member.username.invalid"
             }
         }
@@ -74,7 +73,7 @@ class MemberServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.updateUsername(1L, "taken_user")
                 }
-                ex.status shouldBe HttpStatus.CONFLICT
+                ex.status shouldBe 409
                 ex.message shouldBe "member.username.duplicated"
             }
         }
@@ -87,7 +86,7 @@ class MemberServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.updateUsername(1L, "newuser123")
                 }
-                ex.status shouldBe HttpStatus.BAD_REQUEST
+                ex.status shouldBe 400
                 ex.message shouldBe "member.username.cooldown"
             }
         }
@@ -110,7 +109,7 @@ class MemberServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.updateUsername(999L, "newuser123")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe 404
             }
         }
     }
@@ -136,7 +135,7 @@ class MemberServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.updateNickname(1L, "New Name")
                 }
-                ex.status shouldBe HttpStatus.BAD_REQUEST
+                ex.status shouldBe 400
                 ex.message shouldBe "member.nickname.cooldown"
             }
         }

@@ -9,7 +9,6 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
-import org.springframework.http.HttpStatus
 
 class MemberControllerTest : BehaviorSpec({
 
@@ -53,7 +52,7 @@ class MemberControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.getMe(999L)
                 }
-                ex.status shouldBe HttpStatus.NOT_FOUND
+                ex.status shouldBe 404
             }
         }
     }
@@ -104,7 +103,7 @@ class MemberControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.getMember("ghost")
                 }
-                ex.status shouldBe HttpStatus.NOT_FOUND
+                ex.status shouldBe 404
             }
         }
     }
