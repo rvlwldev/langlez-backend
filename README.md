@@ -6,7 +6,7 @@
 
 - **Framework**: Spring Boot 3.x + Kotlin + Java 21 (Virtual Threads)
 - **Database**: MySQL (JPA + QueryDSL), MongoDB, Redis (Redisson)
-- **Messaging**: Apache Kafka (OutBox 패턴)
+- **Messaging**: Redis Streams (OutBox 패턴)
 - **Storage**: AWS S3 (prod) / Local Filesystem (local)
 - **Auth**: JWT + OAuth2 (Google, Apple)
 - **Monitoring**: Prometheus, P6Spy
@@ -25,14 +25,13 @@ langlez-backend/
 │   └── web/                    # Swagger, GlobalRestControllerAdvice, i18n
 ├── infra/
 │   ├── files/                  # FileStorage (S3, Local)
-│   ├── kafka/                  # KafkaConfiguration
 │   ├── mongo/                  # MongoDB 트랜잭션, 감사
 │   ├── mysql/                  # MySQLConfiguration, JPAQueryFactory
-│   └── redis/                  # Redisson, ResilientCache, @DistributedLock
+│   └── redis/                  # Redisson, ResilientCache, @DistributedLock, MessageQueue(Redis Streams)
 └── module/
     ├── auth/                   # OAuth2 인증, 토큰 갱신
     ├── member/                 # 회원 CRUD, 캐싱, 이벤트 발행
-    ├── outbox/                 # OutBox 패턴 (5초 폴링, Kafka 발행)
+    ├── outbox/                 # OutBox 패턴 (5초 폴링, Redis Stream 발행)
     ├── profile/                # 프로필 + 이미지 관리
     └── relationship/           # 팔로우 / 블록
 ```

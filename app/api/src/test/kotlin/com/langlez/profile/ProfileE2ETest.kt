@@ -33,7 +33,6 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
@@ -78,7 +77,6 @@ class ProfileE2ETest : BehaviorSpec() {
     @Autowired lateinit var jwtParser: JwtParser
     @Autowired lateinit var transactionTemplate: TransactionTemplate
 
-    @MockBean lateinit var kafkaTemplate: KafkaTemplate<String, String>
     @MockBean lateinit var mongoTemplate: MongoTemplate
 
     // 클래스 레벨 상태 — beforeSpec에서 초기화, 각 When은 이미지만 정리

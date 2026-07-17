@@ -9,7 +9,6 @@ docker network create langlez-net 2>/dev/null || true
 docker compose -f docker/mysql.yml up -d
 docker compose -f docker/mongodb.yml up -d
 docker compose -f docker/redis-sentinel.yml up -d
-docker compose -f docker/kafka-cluster.yml up -d
 docker compose -f docker/monitoring.yml up -d
 
 echo "Infrastructure is up and running!"

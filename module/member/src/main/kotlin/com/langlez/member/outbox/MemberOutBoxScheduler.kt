@@ -1,16 +1,15 @@
 package com.langlez.member.outbox
 
+import com.langlez.core.MessageQueue
 import com.langlez.redis.distributedLock.DistributedLock
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
-import java.util.concurrent.CompletableFuture
 
 @Component
 internal class MemberOutBoxScheduler(
     private val repo: MemberOutBoxRepository,
-    private val kafka: KafkaTemplate<String, Any>,
+    private val messageQueue: MessageQueue,
     private val transaction: TransactionTemplate,
 ) {
     @Scheduled(fixedDelay = 5000)
@@ -19,17 +18,13 @@ internal class MemberOutBoxScheduler(
         val events = repo.findToDispatch(500)
         if (events.isEmpty()) return
 
-        val futures = events.map { event ->
+        events.forEach { event ->
             event.dispatch()
-            kafka.send("topic-${event.aggregateType.lowercase()}", event.aggregateId, event.payload)
-                .toCompletableFuture()
-                .handle { _, e ->
-                    if (e == null) event.complete() else event.fail()
-                    event
-                }
+            runCatching {
+                messageQueue.publish("topic-${event.aggregateType.lowercase()}", event.aggregateId, event.payload)
+            }.onSuccess { event.complete() }.onFailure { event.fail() }
         }
 
-        CompletableFuture.allOf(*futures.toTypedArray()).join()
         transaction.execute { repo.saveAll(events) }
     }
 

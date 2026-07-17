@@ -11,7 +11,6 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:mysql"))
-    implementation(project(":infra:kafka"))
 
     implementation(project(":module:member"))
 }

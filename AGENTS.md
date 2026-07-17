@@ -19,14 +19,13 @@ langlez-backend/
 │   └── web/                 # Swagger, 글로벌 에러 핸들링, WebConfiguration
 ├── infra/
 │   ├── files/               # FileStorage 인터페이스 (S3FileStorage, LocalFileStorage)
-│   ├── kafka/               # KafkaConfiguration (Producer/Consumer)
 │   ├── mongo/               # MongoDB 트랜잭션, 감사
 │   ├── mysql/               # MySQLConfiguration, JPAQueryFactory
-│   └── redis/               # Redisson, ResilientCache, @DistributedLock, RedisLockService
+│   └── redis/               # Redisson, ResilientCache, @DistributedLock, RedisLockService, MessageQueue(Redis Streams)
 └── module/
     ├── auth/                # OAuth2 (Google, Apple), 토큰 갱신
     ├── member/              # 회원 CRUD, 캐싱, 이벤트 발행
-    ├── outbox/              # OutBox 패턴 (5초 폴링, Kafka 발행, 아카이빙)
+    ├── outbox/              # OutBox 패턴 (5초 폴링, Redis Stream 발행, 아카이빙)
     ├── profile/             # 프로필 + ProfileImage 관리
     ├── profile_backup/      # 프로필 백업
     └── relationship/        # Follow / Block
@@ -45,12 +44,11 @@ api → application → domain ← infrastructure
 
 ### Cross-module Communication
 - 모듈 간 직접 의존은 최소화
-- 이벤트 기반 통신: OutBoxEventPublisher → Kafka
+- 이벤트 기반 통신: OutBox → MessageQueue(Redis Streams)
 - 공유 인터페이스는 core/ 모듈에
 
 ### Dependency Direction (build.gradle.kts)
 - `infra/mysql`이 `api(springboot.jpa)` 노출 → 모듈에서 중복 선언 금지
-- `infra/kafka`가 `api(spring.kafka)` 노출 → 모듈에서 중복 선언 금지
 - `common/web`이 `api(springboot.web, validation, swagger)` 노출
 
 ## Coding Conventions
@@ -209,7 +207,7 @@ class MemberRequest {
 - Kotest 5.9.0 (Runner: kotest-runner-junit5-jvm, Assertions: kotest-assertions-core-jvm)
 - MockK 1.13.10
 - Kotest Spring Extension 1.1.3
-- TestContainers 1.20.4 (MySQL, Redis, MongoDB, Kafka)
+- TestContainers 1.20.4 (MySQL, Redis, MongoDB)
 - TestRestTemplate (spring-boot-starter-test 내장, E2E 실제 HTTP 요청)
 
 ### Test Pyramid

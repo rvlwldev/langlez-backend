@@ -32,14 +32,6 @@ spring:
     show-sql: false
     open-in-view: false
 
-  kafka:
-    bootstrap-servers: ${KAFKA_SERVERS:localhost:9001,localhost:9002,localhost:9003}
-    consumer:
-      group-id: langlez-group
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-
   # Security & OAuth2
   security:
     oauth2:

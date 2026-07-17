@@ -1,5 +1,6 @@
 package com.langlez.redis.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.langlez.redis.cache.ResilientCacheManager
 import org.slf4j.LoggerFactory
@@ -33,9 +34,9 @@ class ResilientCacheConfiguration {
     }
 
     @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
+    fun redisCacheManager(connectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper): RedisCacheManager {
         val serializer = RedisSerializationContext.SerializationPair
-            .fromSerializer(GenericJackson2JsonRedisSerializer())
+            .fromSerializer(GenericJackson2JsonRedisSerializer(objectMapper))
         val ttl = Duration.ofMinutes(10).plusSeconds(Random.nextLong(60))
 
         val config = RedisCacheConfiguration
