@@ -10,7 +10,6 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.*
-import org.springframework.http.HttpStatus
 
 class RelationshipControllerTest : BehaviorSpec({
 
@@ -47,7 +46,7 @@ class RelationshipControllerTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     controller.follow(1L, "ghost")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe 404
             }
         }
     }

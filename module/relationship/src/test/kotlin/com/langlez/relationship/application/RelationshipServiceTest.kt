@@ -1,6 +1,5 @@
 package com.langlez.relationship.application
 
-import com.langlez.core.OutBoxEventPublisher
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
@@ -8,23 +7,23 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
+import com.langlez.relationship.outbox.RelationshipOutBoxRepository
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.*
-import org.springframework.http.HttpStatus
 
 class RelationshipServiceTest : BehaviorSpec({
 
     val repo = mockk<RelationshipRepository>()
     val memberRepo = mockk<MemberRepository>()
-    val publisher = mockk<OutBoxEventPublisher>()
+    val outbox = mockk<RelationshipOutBoxRepository>(relaxed = true)
 
-    val service = RelationshipService(repo, memberRepo, publisher)
+    val service = RelationshipService(repo, memberRepo, outbox)
 
-    afterEach { clearMocks(repo, memberRepo, publisher, answers = false) }
+    afterEach { clearMocks(repo, memberRepo, outbox, answers = false) }
 
     fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
         id = id,
@@ -42,13 +41,13 @@ class RelationshipServiceTest : BehaviorSpec({
             every { repo.findBlock(followingId, followerId) } returns null
             every { repo.findBlock(followerId, followingId) } returns null
             every { repo.saveFollow(any()) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
-            every { publisher.publish(any(), any(), any(), any()) } just runs
+            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("팔로우가 저장되고 이벤트가 발행된다") {
                 service.follow(followerId, followingId)
                 verify { repo.saveFollow(match { it.followerId == followerId && it.followedId == followingId }) }
                 verify {
-                    publisher.publish(
+                    outbox.save(
                         "RELATIONSHIP", "10", "MEMBER_FOLLOW",
                         match<RelationshipEvent.Follow> { it.followerId == followerId && it.followingId == followingId }
                     )
@@ -61,7 +60,7 @@ class RelationshipServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.follow(1L, 1L)
                 }
-                ex.status shouldBe HttpStatus.BAD_REQUEST
+                ex.status shouldBe 400
                 ex.message shouldBe "social.follow.self"
             }
         }
@@ -73,7 +72,7 @@ class RelationshipServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.follow(followerId, followingId)
                 }
-                ex.status shouldBe HttpStatus.FORBIDDEN
+                ex.status shouldBe 403
             }
         }
 
@@ -85,7 +84,7 @@ class RelationshipServiceTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     service.follow(followerId, followingId)
                 }
-                ex.status shouldBe HttpStatus.FORBIDDEN
+                ex.status shouldBe 403
             }
         }
     }
@@ -97,13 +96,13 @@ class RelationshipServiceTest : BehaviorSpec({
         When("팔로우 관계가 존재하면") {
             every { repo.findFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
             every { repo.deleteFollow(followerId, followingId) } just runs
-            every { publisher.publish(any(), any(), any(), any()) } just runs
+            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("팔로우가 삭제되고 이벤트가 발행된다") {
                 service.unfollow(followerId, followingId)
                 verify { repo.deleteFollow(followerId, followingId) }
                 verify {
-                    publisher.publish(
+                    outbox.save(
                         "RELATIONSHIP", "10", "MEMBER_UNFOLLOW",
                         match<RelationshipEvent.Unfollow> { it.followerId == followerId && it.followingId == followingId }
                     )
@@ -129,7 +128,7 @@ class RelationshipServiceTest : BehaviorSpec({
             every { repo.saveBlock(any()) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
             every { repo.deleteFollow(blockerId, blockedId) } just runs
             every { repo.deleteFollow(blockedId, blockerId) } just runs
-            every { publisher.publish(any(), any(), any(), any()) } just runs
+            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("차단 저장, 양방향 팔로우 삭제, 이벤트 발행이 모두 수행된다") {
                 service.block(blockerId, blockedId)
@@ -137,7 +136,7 @@ class RelationshipServiceTest : BehaviorSpec({
                 verify { repo.deleteFollow(blockerId, blockedId) }
                 verify { repo.deleteFollow(blockedId, blockerId) }
                 verify {
-                    publisher.publish(
+                    outbox.save(
                         "RELATIONSHIP", "20", "MEMBER_BLOCK",
                         match<RelationshipEvent.Block> { it.blockerId == blockerId && it.blockedId == blockedId }
                     )
@@ -153,13 +152,13 @@ class RelationshipServiceTest : BehaviorSpec({
         When("차단 관계가 존재하면") {
             every { repo.findBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
             every { repo.deleteBlock(blockerId, blockedId) } just runs
-            every { publisher.publish(any(), any(), any(), any()) } just runs
+            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("차단이 삭제되고 이벤트가 발행된다") {
                 service.unblock(blockerId, blockedId)
                 verify { repo.deleteBlock(blockerId, blockedId) }
                 verify {
-                    publisher.publish(
+                    outbox.save(
                         "RELATIONSHIP", "20", "MEMBER_UNBLOCK",
                         match<RelationshipEvent.Unblock> { it.blockerId == blockerId && it.blockedId == blockedId }
                     )
