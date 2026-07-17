@@ -14,9 +14,9 @@ import javax.crypto.SecretKey
 
 @Component
 class JwtParser(
-    @param:Value("\${jwt.secret}") private val secret: String,
-    @param:Value("\${jwt.access-token-ttl-secs}") private val accessTokenTTL: Long,
-    @param:Value("\${jwt.refresh-token-ttl-secs}") private val refreshTokenTTL: Long,
+    @param:Value($$"${jwt.secret}") private val secret: String,
+    @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTTL: Long,
+    @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTTL: Long,
 ) {
 
     private val key: SecretKey by lazy { Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret)) }
