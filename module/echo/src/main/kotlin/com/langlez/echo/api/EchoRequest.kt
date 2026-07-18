@@ -26,4 +26,10 @@ class EchoRequest {
         @field:Size(max = 500)
         val reason: String
     )
+
+    data class CreateComment(
+        @field:NotBlank
+        @field:Size(max = 500)
+        val content: String
+    )
 }

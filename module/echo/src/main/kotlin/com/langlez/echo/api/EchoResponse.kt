@@ -29,6 +29,19 @@ class EchoResponse {
         val posts: List<PostDto>
     )
 
+    data class CommentDto(
+        val commentId: Long,
+        val username: String,
+        val nickname: String,
+        val content: String,
+        val createdAt: Instant
+    )
+
+    data class CommentCursorList(
+        val nextCursor: Long?,
+        val comments: List<CommentDto>
+    )
+
     data class TrendingHashtag(
         val hashtag: String,
         val count: Long

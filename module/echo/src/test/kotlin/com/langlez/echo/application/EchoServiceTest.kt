@@ -20,13 +20,15 @@ class EchoServiceTest : BehaviorSpec({
     val relationshipRepository = mockk<RelationshipRepository>()
     val hashtagTrendRepository = mockk<HashtagTrendRepository>(relaxed = true)
     val dailyRateLimiter = mockk<DailyRateLimiter>()
+    val commentRepository = mockk<CommentRepository>()
 
     val service = EchoService(
         postRepository,
         memberRepo,
         relationshipRepository,
         hashtagTrendRepository,
-        dailyRateLimiter
+        dailyRateLimiter,
+        commentRepository,
     )
 
     Given("게시물 작성 시") {
@@ -313,6 +315,74 @@ class EchoServiceTest : BehaviorSpec({
 
             Then("hashtagTrendRepository.getTrending이 실제로는 limit=50으로 호출된다") {
                 verify { hashtagTrendRepository.getTrending(7, 50) }
+            }
+        }
+    }
+
+    Given("댓글 작성 및 조회 시") {
+        val authorId = 1L
+        val postId = 100L
+        val post = Post(id = postId, authorId = 2L, content = "게시글")
+
+        every { postRepository.findById(postId) } returns post
+        every { postRepository.findById(999L) } returns null
+
+        every { commentRepository.save(any()) } answers {
+            val comment = firstArg<Comment>()
+            Comment(id = 200L, postId = comment.postId, authorId = comment.authorId, content = comment.content, createdAt = comment.createdAt)
+        }
+
+        When("정상적으로 댓글을 작성하면") {
+            val result = service.addComment(authorId, postId, "댓글 내용")
+
+            Then("댓글이 저장되고 저장된 댓글이 반환된다") {
+                result shouldNotBe null
+                result.id shouldBe 200L
+                result.content shouldBe "댓글 내용"
+                verify(exactly = 1) { commentRepository.save(any()) }
+            }
+        }
+
+        When("존재하지 않는 게시물에 댓글을 작성하면") {
+            Then("404 에러가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.addComment(authorId, 999L, "댓글 내용")
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "echo.post.not-found"
+            }
+        }
+
+        When("500자를 초과하는 댓글을 작성하면") {
+            val longContent = "A".repeat(501)
+
+            Then("400 에러가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.addComment(authorId, postId, longContent)
+                }
+                ex.status shouldBe 400
+                ex.message shouldBe "echo.comment.too-long"
+            }
+        }
+
+        When("댓글 목록을 조회하면") {
+            val comment = Comment(id = 200L, postId = postId, authorId = authorId, content = "댓글 내용")
+            every { commentRepository.findByPost(postId, null, 20) } returns listOf(comment)
+
+            val authorMember = mockk<Member>()
+            every { authorMember.id } returns authorId
+            every { authorMember.username } returns "commenter"
+            every { authorMember.nickname } returns "CommenterNick"
+            every { memberRepo.findByIds(listOf(authorId)) } returns listOf(authorMember)
+
+            val result = service.getComments(postId, null, 20)
+
+            Then("작성자의 username/nickname 매핑을 확인한다") {
+                result.comments.size shouldBe 1
+                result.comments[0].commentId shouldBe 200L
+                result.comments[0].username shouldBe "commenter"
+                result.comments[0].nickname shouldBe "CommenterNick"
+                result.comments[0].content shouldBe "댓글 내용"
             }
         }
     }

@@ -59,4 +59,39 @@ class EchoRequestTest : BehaviorSpec({
             }
         }
     }
+
+    Given("CreateComment 요청 시") {
+        When("정상 내용이면") {
+            val request = EchoRequest.CreateComment(content = "정상 댓글")
+            val violations = validator.validate(request)
+
+            Then("위반 사항이 없어야 한다") {
+                violations.size shouldBe 0
+            }
+        }
+
+        When("댓글이 500자를 초과하면") {
+            val request = EchoRequest.CreateComment(content = "a".repeat(501))
+            val violations = validator.validate(request)
+
+            Then("Size 위반이 발생해야 한다") {
+                violations.size shouldBe 1
+                val violation = violations.first()
+                violation.propertyPath.toString() shouldBe "content"
+                violation.constraintDescriptor.annotation.annotationClass shouldBe Size::class
+            }
+        }
+
+        When("댓글이 빈 값(blank)이면") {
+            val request = EchoRequest.CreateComment(content = "")
+            val violations = validator.validate(request)
+
+            Then("NotBlank 위반이 발생해야 한다") {
+                violations.size shouldBe 1
+                val violation = violations.first()
+                violation.propertyPath.toString() shouldBe "content"
+                violation.constraintDescriptor.annotation.annotationClass shouldBe NotBlank::class
+            }
+        }
+    }
 })
