@@ -1,6 +1,7 @@
 package com.langlez.matching.config
 
 import com.langlez.core.LanglezException
+import com.langlez.core.TokenBlacklist
 import com.langlez.security.util.JwtParser
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -30,6 +31,7 @@ import java.security.Principal
 @EnableWebSocketMessageBroker
 class MatchingWebSocketConfiguration(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
 ) : WebSocketMessageBrokerConfigurer {
 
     @Bean
@@ -53,12 +55,13 @@ class MatchingWebSocketConfiguration(
     }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(MatchingJwtChannelInterceptor(jwtParser))
+        registration.interceptors(MatchingJwtChannelInterceptor(jwtParser, tokenBlacklist))
     }
 }
 
 class MatchingJwtChannelInterceptor(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
 ) : ChannelInterceptor {
 
     private val destinationMemberIdPattern = Regex("^/?(?:app|topic)/matching/([^/]+)(?:/.*)?$")
@@ -79,6 +82,10 @@ class MatchingJwtChannelInterceptor(
         val authHeader = accessor.getFirstNativeHeader("Authorization")
         val token = authHeader?.takeIf { it.startsWith("Bearer ") }?.substring(7)
             ?: throw LanglezException(401, "auth.invalid-token")
+
+        if (tokenBlacklist.isBlacklisted(token)) {
+            throw LanglezException(401, "auth.invalid-token")
+        }
 
         try {
             val memberId = jwtParser.extractID(token)
