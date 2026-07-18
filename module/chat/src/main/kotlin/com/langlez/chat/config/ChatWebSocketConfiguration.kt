@@ -1,5 +1,6 @@
 package com.langlez.chat.config
 
+import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
 import com.langlez.security.util.JwtParser
 import org.springframework.context.annotation.Configuration
@@ -24,7 +25,8 @@ import java.security.Principal
 @Configuration
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
-    private val jwtParser: JwtParser
+    private val jwtParser: JwtParser,
+    private val chatRoomRepository: ChatRoomRepository,
 ) : WebSocketMessageBrokerConfigurer {
 
     @Bean
@@ -48,31 +50,63 @@ class ChatWebSocketConfiguration(
     }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(JwtChannelInterceptor(jwtParser))
+        registration.interceptors(JwtChannelInterceptor(jwtParser, chatRoomRepository))
     }
 }
 
+/**
+ * CONNECT 시 JWT를 검증해 Principal을 세션에 심고,
+ * SUBSCRIBE/SEND가 특정 채팅방(`/topic/chat/room/{roomId}...`, `/app/chat/{roomId}/...`)을
+ * 대상으로 할 때는 그 방의 참여자인지 확인한다 (IDOR 방지 — 룸 ID를 안다고 아무나 구독/발신하지 못하게).
+ */
 class JwtChannelInterceptor(
-    private val jwtParser: JwtParser
+    private val jwtParser: JwtParser,
+    private val chatRoomRepository: ChatRoomRepository,
 ) : ChannelInterceptor {
+
+    private val roomIdPattern = Regex("^/?(?:app|topic)/chat/(?:room/)?([^/]+)(?:/.*)?$")
+
     override fun preSend(message: Message<*>, channel: MessageChannel): Message<*> {
         val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java)
-        if (accessor != null && StompCommand.CONNECT == accessor.command) {
-            val authHeader = accessor.getFirstNativeHeader("Authorization")
-            val token = authHeader?.takeIf { it.startsWith("Bearer ") }?.substring(7)
-                ?: throw LanglezException(401, "auth.invalid-token")
+            ?: return message
 
-            try {
-                val memberId = jwtParser.extractID(token)
-                if (jwtParser.extractTokenType(token) != "access") {
-                    throw LanglezException(401, "auth.invalid-token")
-                }
-                accessor.user = StompPrincipal(memberId)
-            } catch (e: Exception) {
-                throw LanglezException(401, "auth.invalid-token")
-            }
+        when (accessor.command) {
+            StompCommand.CONNECT -> authenticate(accessor)
+            StompCommand.SUBSCRIBE, StompCommand.SEND -> authorizeRoomAccess(accessor)
+            else -> {}
         }
         return message
+    }
+
+    private fun authenticate(accessor: StompHeaderAccessor) {
+        val authHeader = accessor.getFirstNativeHeader("Authorization")
+        val token = authHeader?.takeIf { it.startsWith("Bearer ") }?.substring(7)
+            ?: throw LanglezException(401, "auth.invalid-token")
+
+        try {
+            val memberId = jwtParser.extractID(token)
+            if (jwtParser.extractTokenType(token) != "access") {
+                throw LanglezException(401, "auth.invalid-token")
+            }
+            accessor.user = StompPrincipal(memberId)
+        } catch (e: Exception) {
+            throw LanglezException(401, "auth.invalid-token")
+        }
+    }
+
+    private fun authorizeRoomAccess(accessor: StompHeaderAccessor) {
+        val destination = accessor.destination ?: return
+        val roomId = roomIdPattern.find(destination)?.groupValues?.get(1) ?: return
+
+        val memberId = (accessor.user as? StompPrincipal)?.memberId
+            ?: throw LanglezException(401, "auth.invalid-token")
+
+        val room = chatRoomRepository.findById(roomId)
+            ?: throw LanglezException(404, "chat.room-not-found")
+
+        if (!room.hasParticipant(memberId)) {
+            throw LanglezException(403, "chat.room-forbidden")
+        }
     }
 }
 
