@@ -4,6 +4,7 @@ import com.langlez.core.LanglezException
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
 import io.kotest.assertions.throwables.shouldThrow
@@ -18,18 +19,26 @@ class EchoServiceTest : BehaviorSpec({
     val memberRepo = mockk<MemberRepository>()
     val relationshipRepository = mockk<RelationshipRepository>()
     val hashtagTrendRepository = mockk<HashtagTrendRepository>(relaxed = true)
+    val dailyRateLimiter = mockk<DailyRateLimiter>()
 
     val service = EchoService(
         postRepository,
         memberRepo,
         relationshipRepository,
-        hashtagTrendRepository
+        hashtagTrendRepository,
+        dailyRateLimiter
     )
 
     Given("게시물 작성 시") {
         val authorId = 1L
         val content = "오늘 날씨 정말 좋네요! #날씨 #주말"
         val media = listOf("http://s3.com/image1.png" to PostMedia.Type.IMAGE)
+
+        val authorMember = mockk<Member>()
+        every { authorMember.id } returns authorId
+        every { authorMember.role } returns Member.Role.MEMBER
+        every { memberRepo.findById(authorId) } returns authorMember
+        every { dailyRateLimiter.tryConsume(any(), any()) } returns true
 
         every { postRepository.save(any()) } answers {
             val post = firstArg<Post>()
@@ -84,6 +93,32 @@ class EchoServiceTest : BehaviorSpec({
                 }
                 ex.status shouldBe 400
                 ex.message shouldBe "echo.media.too-many"
+            }
+        }
+
+        When("MEMBER 역할이 하루 제한(1회)을 초과하면") {
+            every { dailyRateLimiter.tryConsume("echo:post:$authorId", 1) } returns false
+
+            Then("429 LanglezException이 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.createPost(authorId, content, media)
+                }
+                ex.status shouldBe 429
+                ex.message shouldBe "echo.post.daily-limit-exceeded"
+            }
+        }
+
+        When("PREMIUM 역할인 유저가 작성하면") {
+            val premiumAuthorId = 2L
+            val premiumMember = mockk<Member>()
+            every { premiumMember.id } returns premiumAuthorId
+            every { premiumMember.role } returns Member.Role.PREMIUM
+            every { memberRepo.findById(premiumAuthorId) } returns premiumMember
+
+            service.createPost(premiumAuthorId, content, media)
+
+            Then("rate limit 체크를 건너뛰고 정상 저장되어야 한다") {
+                verify(exactly = 0) { dailyRateLimiter.tryConsume("echo:post:$premiumAuthorId", any()) }
             }
         }
     }
