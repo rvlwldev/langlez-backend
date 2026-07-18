@@ -89,6 +89,14 @@ class MemberService(
         return saved
     }
 
+    @Transactional
+    fun updateFcmToken(memberId: Long, token: String) {
+        val member = repo.findById(memberId)
+            ?: throw LanglezException(404, "member.not-found")
+        member.fcmToken = token
+        repo.save(member)
+    }
+
     @Transactional(readOnly = true)
     fun isOnline(username: String): Boolean {
         val member = repo.findByUsername(username)

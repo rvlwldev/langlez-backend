@@ -1,4 +1,4 @@
-package com.langlez.wave
+package com.langlez.notification
 
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -10,15 +10,9 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 @SpringBootApplication(scanBasePackages = ["com.langlez"])
 @EnableJpaRepositories(basePackages = ["com.langlez"])
 @EntityScan(basePackages = ["com.langlez"])
-class TestWaveApplication {
-
+class TestNotificationApplication {
     @Bean
     fun clientRegistrationRepository(): ClientRegistrationRepository {
         return Mockito.mock(ClientRegistrationRepository::class.java)
-    }
-
-    @Bean
-    fun notificator(): com.langlez.core.Notificator {
-        return Mockito.mock(com.langlez.core.Notificator::class.java)
     }
 }

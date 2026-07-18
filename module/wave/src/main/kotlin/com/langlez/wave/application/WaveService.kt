@@ -1,6 +1,7 @@
 package com.langlez.wave.application
 
 import com.langlez.core.LanglezException
+import com.langlez.core.Notificator
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.RelationshipRepository
@@ -19,6 +20,7 @@ class WaveService(
     private val memberRepository: MemberRepository,
     private val relationshipRepository: RelationshipRepository,
     private val viewerTracker: WaveViewerTracker,
+    private val notificator: Notificator,
 ) {
 
     fun startLive(memberId: Long): WaveRoom {
@@ -33,8 +35,14 @@ class WaveService(
 
         val followerIds = relationshipRepository.findFollowers(memberId, null, FOLLOWER_NOTIFY_PAGE_SIZE)
             .map { it.followerId }
-        logger.info("Wave room {} started by member {}; followers to notify: {}", room.id, memberId, followerIds)
-        // TODO: Phase 6 Notification 모듈에서 FCM 발송 연동
+        followerIds.forEach { followerId ->
+            notificator.notify(
+                followerId,
+                "wave.live-started",
+                "${broadcaster.nickname}님이 라이브를 시작했어요",
+                "지금 바로 들어와보세요!"
+            )
+        }
 
         return room
     }

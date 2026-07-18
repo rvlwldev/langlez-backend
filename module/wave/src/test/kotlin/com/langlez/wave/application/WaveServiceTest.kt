@@ -20,16 +20,18 @@ class WaveServiceTest : BehaviorSpec({
     val memberRepository = mockk<MemberRepository>()
     val relationshipRepository = mockk<RelationshipRepository>()
     val viewerTracker = mockk<WaveViewerTracker>(relaxed = true)
+    val notificator = mockk<com.langlez.core.Notificator>(relaxed = true)
 
     val service = WaveService(
         waveRoomRepository,
         memberRepository,
         relationshipRepository,
-        viewerTracker
+        viewerTracker,
+        notificator
     )
 
     afterEach {
-        clearMocks(waveRoomRepository, memberRepository, relationshipRepository, viewerTracker, answers = false)
+        clearMocks(waveRoomRepository, memberRepository, relationshipRepository, viewerTracker, notificator, answers = false)
     }
 
     fun createMember(id: Long, role: Member.Role = Member.Role.MEMBER, username: String = "user$id") = Member(
@@ -59,7 +61,8 @@ class WaveServiceTest : BehaviorSpec({
 
         When("요청자가 PREMIUM이면") {
             val savedRoom = WaveRoom(id = 10L, broadcasterId = broadcasterId)
-            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, Member.Role.PREMIUM)
+            val broadcaster = createMember(broadcasterId, Member.Role.PREMIUM)
+            every { memberRepository.findById(broadcasterId) } returns broadcaster
             every { waveRoomRepository.save(any()) } returns savedRoom
             every { relationshipRepository.findFollowers(broadcasterId, null, any()) } returns listOf(
                 Follow(followerId = 2L, followedId = broadcasterId),
@@ -71,6 +74,10 @@ class WaveServiceTest : BehaviorSpec({
                 result shouldBe savedRoom
                 verify(exactly = 1) { waveRoomRepository.save(any()) }
                 verify(exactly = 1) { relationshipRepository.findFollowers(broadcasterId, null, any()) }
+                verify(exactly = 1) {
+                    notificator.notify(2L, "wave.live-started", "${broadcaster.nickname}님이 라이브를 시작했어요", "지금 바로 들어와보세요!")
+                    notificator.notify(3L, "wave.live-started", "${broadcaster.nickname}님이 라이브를 시작했어요", "지금 바로 들어와보세요!")
+                }
             }
         }
 

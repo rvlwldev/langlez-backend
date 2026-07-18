@@ -44,7 +44,8 @@ class Member(
     var deletedAt: Instant? = null,
     @Column(name = "last_logged_in_at") var lastAccessedAt: Instant? = null,
 
-    @Version var version: Long = 0
+    @Version var version: Long = 0,
+    var fcmToken: String? = null
 ) {
     constructor(email: String, username: String?, nickname: String, provider: Provider, providerId: String, providerDisplayName: String?) : this(
         email = email,
