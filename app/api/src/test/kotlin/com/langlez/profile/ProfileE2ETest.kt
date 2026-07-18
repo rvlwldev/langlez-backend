@@ -23,11 +23,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT
 import org.springframework.boot.test.context.TestConfiguration
-import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
-import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -35,15 +33,13 @@ import org.springframework.http.HttpStatus
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.containers.MySQLContainer
 
 @SpringBootTest(
     webEnvironment = RANDOM_PORT,
     properties = [
         "spring.autoconfigure.exclude=" +
-            "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration," +
             "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration," +
             "org.springframework.boot.autoconfigure.data.redis.RedissonAutoConfiguration," +
             "org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration," +
@@ -76,8 +72,6 @@ class ProfileE2ETest : BehaviorSpec() {
     @Autowired lateinit var jwtParser: JwtParser
     @Autowired lateinit var transactionTemplate: TransactionTemplate
 
-    @MockBean lateinit var mongoTemplate: MongoTemplate
-
     // 클래스 레벨 상태 — beforeSpec에서 초기화, 각 When은 이미지만 정리
     private lateinit var alice: Member
     private lateinit var aliceToken: String
@@ -96,6 +90,10 @@ class ProfileE2ETest : BehaviorSpec() {
             .withExposedPorts(6379)
             .also { it.start() }
 
+        @JvmField
+        val mongodb: MongoDBContainer = MongoDBContainer("mongo:6.0")
+            .also { it.start() }
+
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
@@ -104,6 +102,7 @@ class ProfileE2ETest : BehaviorSpec() {
             }
             registry.add("spring.datasource.username") { mysql.username }
             registry.add("spring.datasource.password") { mysql.password }
+            registry.add("spring.data.mongodb.uri") { mongodb.replicaSetUrl }
         }
     }
 
