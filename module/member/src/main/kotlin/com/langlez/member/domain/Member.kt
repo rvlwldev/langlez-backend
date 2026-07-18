@@ -1,6 +1,5 @@
 package com.langlez.member.domain
 
-import com.langlez.member.application.MemberEvent
 import jakarta.persistence.*
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedDate
@@ -56,19 +55,7 @@ class Member(
         providerDisplayName = providerDisplayName,
     )
 
-    @Transient
-    private val domainEvents: MutableList<Any> = mutableListOf()
 
-    @org.springframework.data.domain.DomainEvents
-    fun domainEvents(): List<Any> = domainEvents.toList()
-
-    @org.springframework.data.domain.AfterDomainEventPublication
-    fun clearDomainEvents() { domainEvents.clear() }
-
-    @PostPersist
-    private fun onCreated() {
-        domainEvents.add(MemberEvent.Created(id, email, username, nickname))
-    }
 
     fun login() {
         lastAccessedAt = Instant.now()
@@ -83,13 +70,11 @@ class Member(
     fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
         username = newUsername
         lastUsernameUpdatedAt = now
-        domainEvents.add(MemberEvent.UsernameChanged(id, newUsername))
     }
 
     fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
         nickname = newNickname
         lastNicknameUpdatedAt = now
-        domainEvents.add(MemberEvent.NicknameChanged(id, newNickname))
     }
 
     fun upgradeToPremium() {

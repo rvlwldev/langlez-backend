@@ -3,6 +3,7 @@ package com.langlez.member.application
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.outbox.MemberOutBoxRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -13,9 +14,10 @@ import java.time.temporal.ChronoUnit
 class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
-    val service = MemberService(repo)
+    val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
+    val service = MemberService(repo, outbox)
 
-    afterEach { clearMocks(repo, answers = false) }
+    afterEach { clearMocks(repo, outbox, answers = false) }
 
     fun createMember(
         id: Long = 1L,
@@ -35,6 +37,37 @@ class MemberServiceTest : BehaviorSpec({
         lastNicknameUpdatedAt = lastNicknameUpdatedAt,
     )
 
+    Given("회원 생성 시") {
+        When("정상적으로 회원을 생성하면") {
+            val providerCmd = MemberCommand.Provider("g123", Member.Provider.GOOGLE, "Test User")
+            val command = MemberCommand.Create("test@example.com", "testuser", "Test User")
+
+            every { repo.save(any()) } answers {
+                val m = firstArg<Member>()
+                Member(
+                    id = 1L,
+                    email = m.email,
+                    username = m.username,
+                    nickname = m.nickname,
+                    provider = m.provider,
+                    providerId = m.providerId,
+                    providerDisplayName = m.providerDisplayName
+                )
+            }
+
+            Then("회원이 저장되고 outbox.save가 호출된다") {
+                val result = service.createMember(providerCmd, command)
+                result.id shouldBe 1L
+                verify { repo.save(match { it.email == "test@example.com" }) }
+                verify {
+                    outbox.save("MEMBER", "1", "member-created", match<MemberEvent.Created> {
+                        it.id == 1L && it.email == "test@example.com" && it.username == "testuser" && it.nickname == "Test User"
+                    })
+                }
+            }
+        }
+    }
+
     Given("유저네임 변경 시") {
         When("유효한 유저네임으로 변경하면") {
             val member = createMember()
@@ -46,6 +79,7 @@ class MemberServiceTest : BehaviorSpec({
                 val result = service.updateUsername(1L, "newuser123")
                 result.username shouldBe "newuser123"
                 verify { repo.save(match { it.username == "newuser123" && it.lastUsernameUpdatedAt != null }) }
+                verify { outbox.save("MEMBER", "1", "member-username-changed", match<MemberEvent.UsernameChanged> { it.id == 1L && it.newUsername == "newuser123" }) }
             }
         }
 
@@ -123,6 +157,7 @@ class MemberServiceTest : BehaviorSpec({
                 val result = service.updateNickname(1L, "New Name")
                 result.nickname shouldBe "New Name"
                 verify { repo.save(match { it.nickname == "New Name" && it.lastNicknameUpdatedAt != null }) }
+                verify { outbox.save("MEMBER", "1", "member-nickname-changed", match<MemberEvent.NicknameChanged> { it.id == 1L && it.newNickname == "New Name" }) }
             }
         }
 

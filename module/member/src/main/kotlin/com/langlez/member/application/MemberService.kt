@@ -5,6 +5,7 @@ import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.outbox.MemberOutBoxRepository
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MemberService(
     private val repo: MemberRepository,
+    private val outbox: MemberOutBoxRepository,
 ) {
 
     @Transactional
@@ -28,7 +30,10 @@ class MemberService(
         )
 
         member.login()
-        return repo.save(member)
+        val saved = repo.save(member)
+        val event = MemberEvent.Created(saved.id, saved.email, saved.username, saved.nickname)
+        outbox.save("MEMBER", saved.id.toString(), "member-created", event)
+        return saved
     }
 
     @Transactional
@@ -46,7 +51,9 @@ class MemberService(
             throw LanglezException(409, "member.username.duplicated")
 
         member.changeUsername(newUsername)
-        return repo.save(member)
+        val saved = repo.save(member)
+        outbox.save("MEMBER", saved.id.toString(), "member-username-changed", MemberEvent.UsernameChanged(saved.id, newUsername))
+        return saved
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +82,8 @@ class MemberService(
             throw LanglezException(400, "member.nickname.cooldown")
 
         member.changeNickname(newNickname)
-        return repo.save(member)
+        val saved = repo.save(member)
+        outbox.save("MEMBER", saved.id.toString(), "member-nickname-changed", MemberEvent.NicknameChanged(saved.id, newNickname))
+        return saved
     }
 }
