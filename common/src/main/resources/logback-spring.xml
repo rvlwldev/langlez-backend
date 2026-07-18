@@ -11,11 +11,13 @@
         <property name="LOG_MAX_HISTORY" value="90"/>
     </springProfile>
 
+    <property name="APP_LOG_PATH" value="${APP_LOG_PATH:-logs}"/>
+
     <!-- JSON File Appender -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- daily rollover -->
-            <fileNamePattern>logs/%d{yyyyMMdd}.log</fileNamePattern>
+            <fileNamePattern>${APP_LOG_PATH}/%d{yyyyMMdd}.log</fileNamePattern>
             <!-- keep history based on profile -->
             <maxHistory>${LOG_MAX_HISTORY}</maxHistory>
         </rollingPolicy>

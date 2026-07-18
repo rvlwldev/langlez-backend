@@ -34,3 +34,7 @@ dependencies {
     testImplementation(libs.bundles.test.kotest)
     testImplementation(libs.bundles.testcontainers)
 }
+
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    systemProperty("APP_LOG_PATH", "${rootProject.projectDir}/app/log/langlez-server/logs")
+}

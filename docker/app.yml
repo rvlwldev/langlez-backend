@@ -9,10 +9,13 @@ services:
     container_name: langlez-app
     environment:
       - SPRING_PROFILES_ACTIVE=production
+      - APP_LOG_PATH=/app/logs
     env_file:
       - ../.env
     ports:
       - "8080:8080"
+    volumes:
+      - ../app/log/langlez-server/logs:/app/logs
     networks:
       - langlez-net
 
