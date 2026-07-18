@@ -11,12 +11,12 @@
 * **Pattern**: Modular Monolith + Vertical Slice Architecture (마이크로서비스 전환 염두)
 * **Language / Framework**: Kotlin 2.x, Spring Boot 3.5+, Java 21 (Virtual Threads)
 * **Database (Hybrid)**:
-  * **MySQL 8.0**: 회원, 권한, 커뮤니티(피드/댓글), 구독/결제 (정형 데이터 및 트랜잭션)
+  * **MySQL 8.0**: 회원, 권한, 에코(Echo, 피드/댓글/해쉬태그), 구독/결제 (정형 데이터 및 트랜잭션)
   * **MongoDB**: 채팅 메시지, 보이스룸 메타데이터, 로그 (비정형/대량 데이터)
-  * **Redis**: 실시간 매칭 큐, 유저 접속 상태(Presence), Rate Limiting, 번역 캐시
+  * **Redis**: 실시간 매칭 큐, 유저 접속 상태(Presence), Rate Limiting, 번역 캐시, 에코 인기 해쉬태그 트렌딩
 * **Infrastructure**:
   * **Media**: AWS S3 + CloudFront (CDN) + Lambda@Edge (Real-time Resizing)
-  * **Messaging**: Apache Kafka (모듈 간 비동기 이벤트 전송)
+  * **Messaging**: Redis Streams (`core.MessageQueue` 추상화, OutBox 패턴과 연동)
   * **Communication**: WebRTC (Signaling via WebSocket)
 * **Client**: Flutter (별도 코드베이스)
 
@@ -26,7 +26,7 @@
 | :--- | :--- |
 | `module:member` | 프로필 관리, 회원 탈퇴(30일 보관 정책), 유저 검색 |
 | `module:auth` | 구글 OAuth 2.0, JWT 발급 및 검증 |
-| `module:community` | 피드 업로드(MySQL), 필터링, 신고/블라인드 로직 |
+| `module:echo` | Echo 피드 업로드(MySQL), 해쉬태그/트렌딩(Redis), 필터링, 신고/블라인드 로직 |
 | `module:chat` | 1:1 채팅, MongoDB 메시지 저장, 파일 전송 처리(S3 연동) |
 | `module:matching` | 게임형 실시간 매칭 큐(Redis ZSET), 조건 완화 알고리즘 |
 | `module:voiceroom` | 보이스 스트리밍(WebRTC), 무료/유료 권한별 채팅 제한 |
@@ -88,9 +88,11 @@
 - [ ] Member: 온라인 상태 조회 (Redis Presence, 30분 TTL)
 - [ ] Profile: 캐시 설정 강화, 이미지 썸네일 생성
 
-### Phase 4: 커뮤니티 & 채팅
-- [ ] Community: 피드 CRUD, 좋아요, 신고/블라인드, 타임라인
-- [ ] Chat: WebSocket (STOMP) + MongoDB 메시지 저장, 채팅방 관리, 파일 전송
+### Phase 4: Echo(피드) & 채팅
+- [ ] Echo: 피드 CRUD(최대 1,000자, 미디어 12개), 좋아요, 신고/블라인드, 팔로우 우선 노출+추천 무한스크롤
+- [ ] Echo: 해쉬태그 파싱, Redis 기반 인기 해쉬태그 트렌딩(1일/7일/30일), 시간별 DB 집계, 31일 초과 데이터 정리
+- [ ] Chat: WebSocket (STOMP) + MongoDB 메시지 저장, 채팅방 관리, 파일 전송(사진/동영상/오디오)
+- [ ] Chat: 입력중 표시, 읽음 처리(마지막 읽은 시각 갱신 방식)
 
 ### Phase 5: 매칭 & 실시간
 - [ ] Matching: Redis ZSET 기반 실시간 매칭 큐, 일별 추천 알고리즘
