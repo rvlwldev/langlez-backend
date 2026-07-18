@@ -1,6 +1,7 @@
 package com.langlez.wave.config
 
 import com.langlez.core.LanglezException
+import com.langlez.core.TokenBlacklist
 import com.langlez.security.util.JwtParser
 import com.langlez.wave.domain.WaveRoomRepository
 import com.langlez.wave.infrastructure.WaveViewerTracker
@@ -30,6 +31,7 @@ import java.security.Principal
 @EnableWebSocketMessageBroker
 class WaveWebSocketConfiguration(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
     private val waveRoomRepository: WaveRoomRepository,
     private val viewerTracker: WaveViewerTracker,
 ) : WebSocketMessageBrokerConfigurer {
@@ -55,7 +57,7 @@ class WaveWebSocketConfiguration(
     }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(WaveJwtChannelInterceptor(jwtParser, waveRoomRepository, viewerTracker))
+        registration.interceptors(WaveJwtChannelInterceptor(jwtParser, tokenBlacklist, waveRoomRepository, viewerTracker))
     }
 }
 
@@ -67,6 +69,7 @@ class WaveWebSocketConfiguration(
  */
 class WaveJwtChannelInterceptor(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
     private val waveRoomRepository: WaveRoomRepository,
     private val viewerTracker: WaveViewerTracker,
 ) : ChannelInterceptor {
@@ -94,6 +97,10 @@ class WaveJwtChannelInterceptor(
         val authHeader = accessor.getFirstNativeHeader("Authorization")
         val token = authHeader?.takeIf { it.startsWith("Bearer ") }?.substring(7)
             ?: throw LanglezException(401, "auth.invalid-token")
+
+        if (tokenBlacklist.isBlacklisted(token)) {
+            throw LanglezException(401, "auth.invalid-token")
+        }
 
         try {
             val memberId = jwtParser.extractID(token)

@@ -2,6 +2,7 @@ package com.langlez.chat.config
 
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
+import com.langlez.core.TokenBlacklist
 import com.langlez.security.util.JwtParser
 import org.springframework.context.annotation.Configuration
 import org.springframework.messaging.Message
@@ -26,6 +27,7 @@ import java.security.Principal
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
     private val chatRoomRepository: ChatRoomRepository,
 ) : WebSocketMessageBrokerConfigurer {
 
@@ -50,7 +52,7 @@ class ChatWebSocketConfiguration(
     }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(JwtChannelInterceptor(jwtParser, chatRoomRepository))
+        registration.interceptors(JwtChannelInterceptor(jwtParser, tokenBlacklist, chatRoomRepository))
     }
 }
 
@@ -61,6 +63,7 @@ class ChatWebSocketConfiguration(
  */
 class JwtChannelInterceptor(
     private val jwtParser: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
     private val chatRoomRepository: ChatRoomRepository,
 ) : ChannelInterceptor {
 
@@ -82,6 +85,10 @@ class JwtChannelInterceptor(
         val authHeader = accessor.getFirstNativeHeader("Authorization")
         val token = authHeader?.takeIf { it.startsWith("Bearer ") }?.substring(7)
             ?: throw LanglezException(401, "auth.invalid-token")
+
+        if (tokenBlacklist.isBlacklisted(token)) {
+            throw LanglezException(401, "auth.invalid-token")
+        }
 
         try {
             val memberId = jwtParser.extractID(token)
