@@ -7,9 +7,7 @@ import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.redis.ratelimit.DailyRateLimiter
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -22,7 +20,7 @@ class ChatService(
     private val memberRepository: MemberRepository,
     private val fileStorage: FileStorage,
     private val chatBroadcaster: ChatBroadcaster,
-    private val dailyRateLimiter: DailyRateLimiter,
+    private val chatRoomCreator: ChatRoomCreator,
 ) {
 
     fun getOrCreateRoom(memberId: Long, targetUsername: String): ChatRoom {
@@ -35,24 +33,7 @@ class ChatService(
             return existingRoom
         }
 
-        val member = memberRepository.findById(memberId) ?: throw LanglezException(404, "member.not-found")
-        val limit = when (member.role) {
-            Member.Role.MEMBER -> 5
-            Member.Role.PREMIUM, Member.Role.ADMIN -> 30
-        }
-        if (!dailyRateLimiter.tryConsume("chat:room:$memberId", limit)) {
-            throw LanglezException(429, "chat.room-daily-limit-exceeded")
-        }
-
-        val now = Instant.now()
-        val newRoom = ChatRoom(
-            participantIds = sortedIds,
-            readStatus = mutableMapOf(
-                memberId to now,
-                targetMember.id to Instant.EPOCH
-            )
-        )
-        return chatRoomRepository.save(newRoom)
+        return chatRoomCreator.getOrCreateRoom(memberId, sortedIds[1], sortedIds[0])
     }
 
     fun toRoomSummary(room: ChatRoom, memberId: Long): ChatResponse.RoomSummary {
