@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":module:profile"))
     implementation(project(":module:auth"))
     implementation(project(":module:relationship"))
+    implementation(project(":module:chat"))
 
     developmentOnly(libs.development.springboot.devtools)
 
