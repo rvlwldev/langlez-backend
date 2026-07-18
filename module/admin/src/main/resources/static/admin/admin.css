@@ -554,7 +554,17 @@ body {
     }
     
     .sidebar-footer {
-        display: none;
+        padding-top: 12px;
+        margin-top: 8px;
+    }
+
+    .sidebar-footer form {
+        width: auto !important;
+    }
+
+    .sidebar-footer button {
+        width: auto !important;
+        padding: 8px 12px !important;
     }
 
     .main-content {

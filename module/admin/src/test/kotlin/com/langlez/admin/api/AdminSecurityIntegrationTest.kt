@@ -96,15 +96,15 @@ class AdminSecurityIntegrationTest : DescribeSpec() {
                     )
                         .andExpect(authenticated().withUsername("admin").withRoles("ADMIN"))
                         .andExpect(status().is3xxRedirection)
-                        .andExpect(redirectedUrl("/admin/"))
+                        .andExpect(redirectedUrl("/admin"))
                         .andReturn()
 
                     val session = result.request.getSession(false) as? MockHttpSession
                     session shouldNotBe null
-                    
-                    // 인증 필터를 통과하여 3xx redirect가 아닌 404(뷰를 못찾음)로 들어오는지 확인
-                    mockMvc.perform(get("/admin/").session(session!!))
-                        .andExpect(status().isNotFound)
+
+                    // 리다이렉트된 대시보드가 실제로 200으로 렌더링되는지 확인
+                    mockMvc.perform(get("/admin").session(session!!))
+                        .andExpect(status().isOk)
                 }
             }
         }

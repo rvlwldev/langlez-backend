@@ -51,7 +51,7 @@ class AdminSecurityConfiguration {
                 form
                     .loginPage("/admin/login")
                     .loginProcessingUrl("/admin/login")
-                    .defaultSuccessUrl("/admin/", true)
+                    .defaultSuccessUrl("/admin", true)
                     .permitAll()
             }
             .logout { logout ->
