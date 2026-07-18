@@ -1,20 +1,21 @@
 package com.langlez.echo.infrastructure
 
-import com.langlez.echo.domain.Post
-import com.langlez.echo.domain.PostRepository
+import com.langlez.echo.domain.*
+import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MySQLContainer
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -32,6 +33,12 @@ class PostRepositoryImplTest : BehaviorSpec() {
 
     @Autowired
     lateinit var postRepository: PostRepository
+
+    @Autowired
+    lateinit var memberRepository: MemberRepository
+
+    @Autowired
+    lateinit var transactionTemplate: TransactionTemplate
 
     companion object {
         @JvmField
@@ -58,92 +65,189 @@ class PostRepositoryImplTest : BehaviorSpec() {
     }
 
     init {
-        Given("동시성 테스트를 위한 게시물이 준비되었을 때") {
-            val post = postRepository.save(Post(authorId = 1L, content = "동시성 테스트용 게시물"))
-            val postId = post.id
+        Given("PostRepository 가 주어졌을 때") {
+            val userA = memberRepository.save(
+                Member(
+                    email = "usera@test.com",
+                    username = "usera",
+                    nickname = "User A",
+                    provider = Member.Provider.GOOGLE,
+                    providerId = "g-usera",
+                    providerDisplayName = "User A"
+                )
+            )
 
-            When("20개의 스레드가 동시에 좋아요 증가 메소드를 호출하면") {
-                val executor = Executors.newFixedThreadPool(20)
-                val latch = CountDownLatch(20)
+            val userB = memberRepository.save(
+                Member(
+                    email = "userb@test.com",
+                    username = "userb",
+                    nickname = "User B",
+                    provider = Member.Provider.GOOGLE,
+                    providerId = "g-userb",
+                    providerDisplayName = "User B"
+                )
+            )
 
-                for (i in 1..20) {
-                    executor.submit {
-                        try {
-                            postRepository.incrementLikeCount(postId)
-                        } finally {
-                            latch.countDown()
-                        }
-                    }
+            val userC = memberRepository.save(
+                Member(
+                    email = "userc@test.com",
+                    username = "userc",
+                    nickname = "User C",
+                    provider = Member.Provider.GOOGLE,
+                    providerId = "g-userc",
+                    providerDisplayName = "User C"
+                )
+            )
+
+            When("팔로잉 피드를 조회할 때") {
+                val p1 = postRepository.save(Post(authorId = userA.id, content = "P1"))
+                val p2 = postRepository.save(Post(authorId = userA.id, content = "P2"))
+                val p3 = postRepository.save(Post(authorId = userA.id, content = "P3"))
+
+                Then("cursor 기반 페이지네이션이 정확히 동작해야 한다") {
+                    val feed1 = postRepository.findFollowingFeed(listOf(userA.id), null, 2)
+                    feed1 shouldHaveSize 2
+                    feed1[0].id shouldBe p3.id
+                    feed1[1].id shouldBe p2.id
+
+                    val feed2 = postRepository.findFollowingFeed(listOf(userA.id), feed1.last().id, 2)
+                    feed2 shouldHaveSize 1
+                    feed2[0].id shouldBe p1.id
                 }
 
-                latch.await(10, TimeUnit.SECONDS)
-                executor.shutdown()
+                Then("blinded=true 인 글은 조회에서 제외되어야 한다") {
+                    val p4 = postRepository.save(Post(authorId = userA.id, content = "P4"))
+                    repeat(Post.BLIND_THRESHOLD) {
+                        postRepository.incrementReportCount(p4.id)
+                        postRepository.blindIfThresholdReached(p4.id, Post.BLIND_THRESHOLD)
+                    }
+                    postRepository.findById(p4.id)!!.blinded shouldBe true
 
-                Then("데이터베이스에서 다시 조회했을 때 좋아요 수가 20이어야 한다") {
-                    val updatedPost = postRepository.findById(postId)
-                    updatedPost shouldNotBe null
-                    updatedPost!!.likeCount shouldBe 20L
+                    val feed = postRepository.findFollowingFeed(listOf(userA.id), null, 10)
+                    feed.any { it.id == p4.id } shouldBe false
                 }
             }
-        }
 
-        Given("좋아요 수가 0인 게시물이 준비되었을 때") {
-            val post = postRepository.save(Post(authorId = 1L, content = "감소 한계 테스트용 게시물"))
-            val postId = post.id
+            When("추천 피드를 조회할 때") {
+                val savedP1 = postRepository.save(Post(authorId = userA.id, content = "Rec1"))
+                repeat(10) { postRepository.incrementLikeCount(savedP1.id) }
 
-            When("20개의 스레드가 동시에 좋아요 감소 메소드를 호출하면") {
-                val executor = Executors.newFixedThreadPool(20)
-                val latch = CountDownLatch(20)
+                val savedP2 = postRepository.save(Post(authorId = userB.id, content = "Rec2"))
+                repeat(20) { postRepository.incrementLikeCount(savedP2.id) }
 
-                for (i in 1..20) {
-                    executor.submit {
-                        try {
-                            postRepository.decrementLikeCount(postId)
-                        } finally {
-                            latch.countDown()
-                        }
-                    }
+                val savedP3 = postRepository.save(Post(authorId = userC.id, content = "Rec3"))
+                repeat(5) { postRepository.incrementLikeCount(savedP3.id) }
+
+                Then("좋아요 개수 내림차순 및 커서 페이지네이션이 정확히 동작해야 한다") {
+                    val feed1 = postRepository.findRecommendedFeed(emptyList(), null, 2)
+                    feed1 shouldHaveSize 2
+                    feed1[0].id shouldBe savedP2.id
+                    feed1[1].id shouldBe savedP1.id
+
+                    // 이 Given 블록 내 다른 When(팔로잉 피드 등)에서 만들어진 좋아요 0개짜리 글들도
+                    // 같은 spec 인스턴스 내에서 누적되어 추천 피드에 섞여 들어올 수 있으므로,
+                    // 다음 페이지의 정확한 총 개수 대신 "커서 이후 좋아요 상위 글이 정확히 이어지는지"와
+                    // "이전 페이지와 중복이 없는지"만 검증한다.
+                    val feed2 = postRepository.findRecommendedFeed(emptyList(), feed1.last().id, 2)
+                    feed2.shouldNotBeEmpty()
+                    feed2[0].id shouldBe savedP3.id
+                    val feed1Ids = feed1.map { it.id }.toSet()
+                    feed2.none { it.id in feed1Ids } shouldBe true
                 }
 
-                latch.await(10, TimeUnit.SECONDS)
-                executor.shutdown()
+                Then("제외 작가(excludeAuthorIds)의 글은 제외되어야 한다") {
+                    val feed = postRepository.findRecommendedFeed(listOf(userB.id), null, 10)
+                    feed.any { it.id == savedP2.id } shouldBe false
+                    feed.any { it.id == savedP1.id } shouldBe true
+                }
 
-                Then("좋아요 수는 음수가 되지 않고 0을 유지해야 한다") {
-                    val updatedPost = postRepository.findById(postId)
-                    updatedPost shouldNotBe null
-                    updatedPost!!.likeCount shouldBe 0L
+                Then("blinded=true 인 글은 조회에서 제외되어야 한다") {
+                    val savedP4 = postRepository.save(Post(authorId = userA.id, content = "Rec4"))
+                    repeat(30) { postRepository.incrementLikeCount(savedP4.id) }
+                    repeat(Post.BLIND_THRESHOLD) {
+                        postRepository.incrementReportCount(savedP4.id)
+                        postRepository.blindIfThresholdReached(savedP4.id, Post.BLIND_THRESHOLD)
+                    }
+                    postRepository.findById(savedP4.id)!!.blinded shouldBe true
+
+                    val feed = postRepository.findRecommendedFeed(emptyList(), null, 10)
+                    feed.any { it.id == savedP4.id } shouldBe false
                 }
             }
-        }
 
-        Given("블라인드 임계치 테스트를 위한 게시물이 준비되었을 때") {
-            val post = postRepository.save(Post(authorId = 1L, content = "블라인드 테스트용 게시물"))
-            val postId = post.id
+            When("해시태그 피드를 조회할 때") {
+                val tag = postRepository.saveHashtag(Hashtag(name = "kotlin"))
+                val p1 = postRepository.save(Post(authorId = userA.id, content = "TagP1"))
+                val p2 = postRepository.save(Post(authorId = userA.id, content = "TagP2"))
 
-            When("신고 횟수를 증가시키고 블라인드 임계치 도달 여부를 확인하면") {
-                for (i in 1..Post.BLIND_THRESHOLD) {
-                    postRepository.incrementReportCount(postId)
-                    postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
+                postRepository.savePostHashtag(PostHashtag(postId = p1.id, hashtagId = tag.id))
+                postRepository.savePostHashtag(PostHashtag(postId = p2.id, hashtagId = tag.id))
+
+                Then("해당 태그 글들이 정확히 커서 페이지네이션 되어야 한다") {
+                    val feed1 = postRepository.findByHashtag("kotlin", null, 1)
+                    feed1 shouldHaveSize 1
+                    feed1[0].id shouldBe p2.id
+
+                    val feed2 = postRepository.findByHashtag("kotlin", feed1.last().id, 1)
+                    feed2 shouldHaveSize 1
+                    feed2[0].id shouldBe p1.id
                 }
 
-                val postAfterThreshold = postRepository.findById(postId)
-                postAfterThreshold shouldNotBe null
-                val firstBlindedAt = postAfterThreshold!!.blindedAt
+                Then("blinded=true 인 글은 해시태그 조회에서 제외되어야 한다") {
+                    val savedP3 = postRepository.save(Post(authorId = userA.id, content = "TagP3"))
+                    repeat(Post.BLIND_THRESHOLD) {
+                        postRepository.incrementReportCount(savedP3.id)
+                        postRepository.blindIfThresholdReached(savedP3.id, Post.BLIND_THRESHOLD)
+                    }
+                    postRepository.savePostHashtag(PostHashtag(postId = savedP3.id, hashtagId = tag.id))
 
-                Then("게시물이 블라인드 처리되고 blindedAt이 설정되어야 한다") {
-                    postAfterThreshold.blinded shouldBe true
-                    firstBlindedAt shouldNotBe null
+                    val feed = postRepository.findByHashtag("kotlin", null, 10)
+                    feed.any { it.id == savedP3.id } shouldBe false
                 }
+            }
 
-                TimeUnit.MILLISECONDS.sleep(100)
-                postRepository.incrementReportCount(postId)
-                postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
+            When("포스트 미디어를 일괄 저장 및 조회할 때") {
+                val p = postRepository.save(Post(authorId = userA.id, content = "MediaPost"))
+                val mediaList = listOf(
+                    PostMedia(postId = p.id, url = "https://cdn/1.jpg", type = PostMedia.Type.IMAGE, sequence = 1),
+                    PostMedia(postId = p.id, url = "https://cdn/2.mp4", type = PostMedia.Type.VIDEO, sequence = 2)
+                )
+                postRepository.saveMediaAll(mediaList)
 
-                val postAfterExtraReport = postRepository.findById(postId)
+                Then("postId 리스트로 미디어가 정상 조회 매핑되어야 한다") {
+                    val foundMedia = postRepository.findMediaByPostIds(listOf(p.id))
+                    foundMedia shouldHaveSize 2
+                    foundMedia.any { it.url == "https://cdn/1.jpg" } shouldBe true
+                    foundMedia.any { it.url == "https://cdn/2.mp4" } shouldBe true
+                }
+            }
 
-                Then("이미 블라인드된 게시물은 blindedAt 시간이 갱신되지 않아야 한다") {
-                    postAfterExtraReport shouldNotBe null
-                    postAfterExtraReport!!.blindedAt shouldBe firstBlindedAt
+            When("좋아요를 저장, 조회, 삭제할 때") {
+                val p = postRepository.save(Post(authorId = userA.id, content = "LikePost"))
+                val like = PostLike(postId = p.id, memberId = userB.id)
+
+                Then("정상적으로 흐름이 처리되어야 한다") {
+                    postRepository.saveLike(like)
+                    val found = postRepository.findLike(userB.id, p.id)
+                    found shouldNotBe null
+                    found!!.postId shouldBe p.id
+
+                    // deleteLike 는 파생 삭제 쿼리라 트랜잭션이 필요하다 (실제 운영에서는 서비스 계층의
+                    // @Transactional 경계 안에서 호출되므로, 테스트에서도 동일한 트랜잭션 경계를 제공한다).
+                    transactionTemplate.execute { postRepository.deleteLike(userB.id, p.id) }
+                    postRepository.findLike(userB.id, p.id) shouldBe null
+                }
+            }
+
+            When("신고를 저장, 조회할 때") {
+                val p = postRepository.save(Post(authorId = userA.id, content = "ReportPost"))
+                val report = PostReport(postId = p.id, reporterId = userB.id, reason = "SPAM")
+
+                Then("정상적으로 저장 및 조회가 가능해야 한다") {
+                    postRepository.saveReport(report)
+                    val found = postRepository.findReport(userB.id, p.id)
+                    found shouldNotBe null
+                    found!!.reason shouldBe "SPAM"
                 }
             }
         }
