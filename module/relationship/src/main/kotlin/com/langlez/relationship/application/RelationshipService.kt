@@ -5,8 +5,8 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.api.RelationshipResponse
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
+import com.langlez.relationship.domain.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
-import com.langlez.relationship.outbox.RelationshipOutBoxRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 

@@ -1,7 +1,9 @@
-package com.langlez.relationship.outbox
+package com.langlez.relationship.application
 
 import com.langlez.core.MessageQueue
 import com.langlez.redis.distributedLock.DistributedLock
+import com.langlez.relationship.domain.RelationshipOutBoxHistory
+import com.langlez.relationship.domain.RelationshipOutBoxRepository
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate

@@ -5,8 +5,8 @@ import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
+import com.langlez.relationship.domain.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
-import com.langlez.relationship.outbox.RelationshipOutBoxRepository
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
