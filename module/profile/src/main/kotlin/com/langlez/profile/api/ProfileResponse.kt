@@ -28,7 +28,7 @@ class ProfileResponse {
             locale = profile.locale,
             birthDay = profile.birthDay,
             languageLevel = profile.languageLevel?.name,
-            interests = profile.interests,
+            interests = profile.interests.toSet(),
         )
     }
 
@@ -58,7 +58,7 @@ class ProfileResponse {
             birthDay = profile.birthDay,
             visitCount = visitCount,
             languageLevel = profile.languageLevel?.name,
-            interests = profile.interests,
+            interests = profile.interests.toSet(),
         )
     }
 
