@@ -99,4 +99,34 @@ class EchoController(
             createdAt = post.createdAt
         )
     }
+
+    @PostMapping("/{postId}/comments")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun createComment(
+        @MemberID memberId: Long,
+        @PathVariable postId: Long,
+        @RequestBody @Valid request: EchoRequest.CreateComment
+    ): EchoResponse.CommentDto {
+        val comment = service.addComment(memberId, postId, request.content)
+        return toCommentDto(comment)
+    }
+
+    @GetMapping("/{postId}/comments")
+    fun getComments(
+        @PathVariable postId: Long,
+        @RequestParam(required = false) cursor: Long?,
+        @RequestParam(defaultValue = "20") size: Int
+    ): EchoResponse.CommentCursorList = service.getComments(postId, cursor, size)
+
+    private fun toCommentDto(comment: com.langlez.echo.domain.Comment): EchoResponse.CommentDto {
+        val author = memberRepo.findById(comment.authorId)
+            ?: throw LanglezException(404, "member.not-found")
+        return EchoResponse.CommentDto(
+            commentId = comment.id,
+            username = author.username,
+            nickname = author.nickname,
+            content = comment.content,
+            createdAt = comment.createdAt
+        )
+    }
 }

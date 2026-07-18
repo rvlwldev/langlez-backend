@@ -15,6 +15,7 @@ class EchoService(
     private val memberRepo: MemberRepository,
     private val relationshipRepository: RelationshipRepository,
     private val hashtagTrendRepository: HashtagTrendRepository,
+    private val commentRepository: CommentRepository,
 ) {
 
     fun createPost(
@@ -165,5 +166,38 @@ class EchoService(
 
         val nextCursor = if (hasMore) lastEntityId else null
         return EchoResponse.CursorList(nextCursor, postDtos)
+    }
+
+    fun addComment(authorId: Long, postId: Long, content: String): Comment {
+        postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        if (content.length > Comment.MAX_CONTENT_LENGTH) {
+            throw LanglezException(400, "echo.comment.too-long")
+        }
+        return commentRepository.save(Comment(postId = postId, authorId = authorId, content = content))
+    }
+
+    @Transactional(readOnly = true)
+    fun getComments(postId: Long, cursor: Long?, size: Int): EchoResponse.CommentCursorList {
+        val boundedSize = size.coerceIn(1, 100)
+        val comments = commentRepository.findByPost(postId, cursor, boundedSize)
+        val authorIds = comments.map { it.authorId }.distinct()
+        val members = memberRepo.findByIds(authorIds)
+
+        val commentDtos = comments.map { comment ->
+            val author = members.find { it.id == comment.authorId }
+            val username = author?.username ?: "unknown"
+            val nickname = author?.nickname ?: "Unknown"
+
+            EchoResponse.CommentDto(
+                commentId = comment.id,
+                username = username,
+                nickname = nickname,
+                content = comment.content,
+                createdAt = comment.createdAt
+            )
+        }
+
+        val nextCursor = if (comments.size == boundedSize) comments.lastOrNull()?.id else null
+        return EchoResponse.CommentCursorList(nextCursor, commentDtos)
     }
 }
