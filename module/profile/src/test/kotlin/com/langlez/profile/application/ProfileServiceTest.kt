@@ -3,7 +3,6 @@ package com.langlez.profile.application
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -31,7 +30,9 @@ class ProfileServiceTest : BehaviorSpec({
         email = "user$id@test.com",
         username = "user$id",
         nickname = "User$id",
-        provider = MemberProvider("p$id", MemberProvider.Type.GOOGLE, "User$id")
+        provider = Member.Provider.GOOGLE,
+        providerId = "p$id",
+        providerDisplayName = "User$id"
     )
 
     fun profile(id: Long) = Profile(id = id, member = member(id))
@@ -71,7 +72,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.generateImageUploadUrl("video.mp4", "video/mp4")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe 400
             }
         }
 
@@ -79,7 +80,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.generateImageUploadUrl("doc.pdf", "application/pdf")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe 400
             }
         }
     }
@@ -141,7 +142,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.confirmAdditionalImage(1L, "https://cdn/profiles/over.jpg")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe 400
             }
         }
 
@@ -186,7 +187,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.changeRepresentImage(1L, "https://cdn/profiles/ghost.jpg")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe 404
             }
         }
     }
@@ -210,7 +211,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.getProfile("ghost")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe 404
             }
         }
     }

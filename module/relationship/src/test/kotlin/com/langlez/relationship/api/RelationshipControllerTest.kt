@@ -2,7 +2,6 @@ package com.langlez.relationship.api
 
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
 import io.kotest.assertions.throwables.shouldThrow
@@ -25,7 +24,9 @@ class RelationshipControllerTest : BehaviorSpec({
         email = "$username@example.com",
         username = username,
         nickname = nickname,
-        provider = MemberProvider("p$id", MemberProvider.Type.GOOGLE, nickname)
+        provider = Member.Provider.GOOGLE,
+        providerId = "p$id",
+        providerDisplayName = nickname
     )
 
     Given("팔로우 요청 시") {

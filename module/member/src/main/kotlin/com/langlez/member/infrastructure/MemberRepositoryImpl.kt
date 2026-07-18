@@ -1,7 +1,6 @@
 package com.langlez.member.infrastructure
 
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.CacheEvict
@@ -22,7 +21,7 @@ class MemberRepositoryImpl(
             CacheEvict(cacheNames = ["member"], key = "#member.id", condition = "#member.id != null"),
             CacheEvict(cacheNames = ["member_email"], key = "#member.email"),
             CacheEvict(cacheNames = ["member_username"], key = "#member.username"),
-            CacheEvict(cacheNames = ["member_provider"], key = "#member.provider.id + ':' + #member.provider.type"),
+            CacheEvict(cacheNames = ["member_provider"], key = "#member.providerId + ':' + #member.provider"),
         ]
     )
     override fun save(member: Member): Member = jpa.save(member)
@@ -37,8 +36,8 @@ class MemberRepositoryImpl(
     override fun findByUsername(username: String): Member? = jpa.findByUsername(username)
 
     @Cacheable(cacheNames = ["member_provider"], key = "#id + ':' + #type")
-    override fun findByProvider(id: String, type: MemberProvider.Type): Member? =
-        jpa.findByProviderIdAndProviderType(id, type)
+    override fun findByProvider(id: String, type: Member.Provider): Member? =
+        jpa.findByProviderIdAndProvider(id, type)
 
     override fun findByIds(ids: List<Long>): List<Member> {
         if (ids.isEmpty()) return emptyList()
@@ -72,5 +71,5 @@ class MemberRepositoryImpl(
 interface MemberJpaRepository : JpaRepository<Member, Long> {
     fun findByEmail(email: String): Member?
     fun findByUsername(username: String): Member?
-    fun findByProviderIdAndProviderType(providerId: String, providerType: MemberProvider.Type): Member?
+    fun findByProviderIdAndProvider(providerId: String, provider: Member.Provider): Member?
 }

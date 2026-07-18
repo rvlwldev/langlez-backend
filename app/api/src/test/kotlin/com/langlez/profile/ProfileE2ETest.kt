@@ -1,7 +1,6 @@
 package com.langlez.profile
 
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.infrastructure.MemberJpaRepository
 import com.langlez.profile.api.ProfileRequest
@@ -115,7 +114,9 @@ class ProfileE2ETest : BehaviorSpec() {
                     email = "alice@test.com",
                     username = "alice",
                     nickname = "Alice",
-                    provider = MemberProvider("g-alice", MemberProvider.Type.GOOGLE, "Alice"),
+                    provider = Member.Provider.GOOGLE,
+                    providerId = "g-alice",
+                    providerDisplayName = "Alice"
                 )
             )
             val bob = memberRepo.save(
@@ -123,7 +124,9 @@ class ProfileE2ETest : BehaviorSpec() {
                     email = "bob@test.com",
                     username = "bob",
                     nickname = "Bob",
-                    provider = MemberProvider("g-bob", MemberProvider.Type.GOOGLE, "Bob"),
+                    provider = Member.Provider.GOOGLE,
+                    providerId = "g-bob",
+                    providerDisplayName = "Bob"
                 )
             )
             transactionTemplate.execute {

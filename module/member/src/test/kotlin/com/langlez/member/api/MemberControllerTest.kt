@@ -3,7 +3,6 @@ package com.langlez.member.api
 import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -28,7 +27,9 @@ class MemberControllerTest : BehaviorSpec({
         email = email,
         username = username,
         nickname = nickname,
-        provider = MemberProvider("g123", MemberProvider.Type.GOOGLE, nickname)
+        provider = Member.Provider.GOOGLE,
+        providerId = "g123",
+        providerDisplayName = nickname
     )
 
     Given("내 정보 조회 시") {

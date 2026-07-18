@@ -1,5 +1,6 @@
 package com.langlez.member.domain
 
+import com.langlez.member.application.MemberEvent
 import jakarta.persistence.*
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedDate
@@ -31,7 +32,10 @@ class Member(
     var lastNicknameUpdatedAt: Instant? = null,
 
     @Enumerated(EnumType.STRING) var role: Role = Role.MEMBER,
-    @Embedded val provider: MemberProvider,
+
+    @Enumerated(EnumType.ORDINAL) @Column(name = "provider_type") var provider: Provider,
+    @Column(name = "provider_id") var providerId: String,
+    @Column(name = "provider_username") var providerDisplayName: String? = null,
 
     var isVerified: Boolean = false,
     var premiumExpiresAt: Instant? = null,
@@ -43,12 +47,28 @@ class Member(
 
     @Version var version: Long = 0
 ) {
-    constructor(email: String, username: String?, nickname: String, provider: MemberProvider) : this(
+    constructor(email: String, username: String?, nickname: String, provider: Provider, providerId: String, providerDisplayName: String?) : this(
         email = email,
         username = username ?: generateRandomUsername(),
         nickname = nickname,
         provider = provider,
+        providerId = providerId,
+        providerDisplayName = providerDisplayName,
     )
+
+    @Transient
+    private val domainEvents: MutableList<Any> = mutableListOf()
+
+    @org.springframework.data.domain.DomainEvents
+    fun domainEvents(): List<Any> = domainEvents.toList()
+
+    @org.springframework.data.domain.AfterDomainEventPublication
+    fun clearDomainEvents() { domainEvents.clear() }
+
+    @PostPersist
+    private fun onCreated() {
+        domainEvents.add(MemberEvent.Created(id, email, username, nickname))
+    }
 
     fun login() {
         lastAccessedAt = Instant.now()
@@ -63,11 +83,13 @@ class Member(
     fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
         username = newUsername
         lastUsernameUpdatedAt = now
+        domainEvents.add(MemberEvent.UsernameChanged(id, newUsername))
     }
 
     fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
         nickname = newNickname
         lastNicknameUpdatedAt = now
+        domainEvents.add(MemberEvent.NicknameChanged(id, newNickname))
     }
 
     fun upgradeToPremium() {
@@ -79,6 +101,8 @@ class Member(
     }
 
     enum class Role { MEMBER, PREMIUM, ADMIN }
+
+    enum class Provider { GOOGLE, APPLE }
 
     companion object {
         private val USERNAME_PATTERN = Regex("^[a-zA-Z0-9_]{3,20}$")

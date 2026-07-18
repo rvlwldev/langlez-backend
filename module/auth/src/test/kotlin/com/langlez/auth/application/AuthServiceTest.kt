@@ -3,7 +3,6 @@ package com.langlez.auth.application
 import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.security.util.JwtParser
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -31,7 +30,9 @@ class AuthServiceTest : BehaviorSpec({
             id = memberId,
             email = "test@example.com",
             nickname = "tester",
-            provider = MemberProvider("g123", MemberProvider.Type.GOOGLE, "tester")
+            provider = Member.Provider.GOOGLE,
+            providerId = "g123",
+            providerDisplayName = "tester"
         )
         val validRefreshToken = "valid-refresh-token"
         val newRefreshToken = "new-refresh-token"
@@ -61,7 +62,7 @@ class AuthServiceTest : BehaviorSpec({
 
             Then("UNAUTHORIZED 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh("access-token") }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
+                ex.status shouldBe 401
                 ex.message shouldBe "auth.invalid-token"
             }
         }
@@ -74,7 +75,7 @@ class AuthServiceTest : BehaviorSpec({
 
             Then("UNAUTHORIZED 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
+                ex.status shouldBe 401
                 ex.message shouldBe "auth.invalid-token"
             }
         }
@@ -87,7 +88,7 @@ class AuthServiceTest : BehaviorSpec({
 
             Then("토큰 만료 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh("old-token") }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
+                ex.status shouldBe 401
                 ex.message shouldBe "auth.token-expired"
             }
         }
@@ -100,7 +101,7 @@ class AuthServiceTest : BehaviorSpec({
 
             Then("토큰 만료 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
+                ex.status shouldBe 401
                 ex.message shouldBe "auth.token-expired"
             }
         }

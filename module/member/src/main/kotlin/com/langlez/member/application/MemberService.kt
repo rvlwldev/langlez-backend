@@ -4,9 +4,7 @@ import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.outbox.MemberOutBoxRepository
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -15,22 +13,22 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MemberService(
     private val repo: MemberRepository,
-    private val outbox: MemberOutBoxRepository,
 ) {
 
     @Transactional
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [Exception::class])
     fun createMember(providerCmd: Provider, command: Create): Member {
-        val provider = MemberProvider(providerCmd.id, providerCmd.type, providerCmd.username)
-        val member = Member(command.email, command.username, command.nickname, provider)
+        val member = Member(
+            email = command.email,
+            username = command.username,
+            nickname = command.nickname,
+            provider = providerCmd.type,
+            providerId = providerCmd.id,
+            providerDisplayName = providerCmd.username
+        )
 
         member.login()
-        val saved = repo.save(member)
-
-        val event = MemberEvent.Created(saved.id, saved.email, saved.username, saved.nickname)
-        outbox.save("MEMBER", saved.id.toString(), "member-created", event)
-
-        return saved
+        return repo.save(member)
     }
 
     @Transactional
@@ -58,7 +56,7 @@ class MemberService(
     fun findByEmail(email: String): Member? = repo.findByEmail(email)
 
     @Transactional(readOnly = true)
-    fun findByProvider(providerId: String, type: com.langlez.member.domain.MemberProvider.Type): Member? =
+    fun findByProvider(providerId: String, type: Member.Provider): Member? =
         repo.findByProvider(providerId, type)
 
     @Transactional

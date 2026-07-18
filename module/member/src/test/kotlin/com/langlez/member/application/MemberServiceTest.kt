@@ -2,9 +2,7 @@ package com.langlez.member.application
 
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.outbox.MemberOutBoxRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -15,10 +13,9 @@ import java.time.temporal.ChronoUnit
 class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
-    val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
-    val service = MemberService(repo, outbox)
+    val service = MemberService(repo)
 
-    afterEach { clearMocks(repo, outbox, answers = false) }
+    afterEach { clearMocks(repo, answers = false) }
 
     fun createMember(
         id: Long = 1L,
@@ -31,7 +28,9 @@ class MemberServiceTest : BehaviorSpec({
         email = "test@example.com",
         username = username,
         nickname = nickname,
-        provider = MemberProvider("g123", MemberProvider.Type.GOOGLE, nickname),
+        provider = Member.Provider.GOOGLE,
+        providerId = "g123",
+        providerDisplayName = nickname,
         lastUsernameUpdatedAt = lastUsernameUpdatedAt,
         lastNicknameUpdatedAt = lastNicknameUpdatedAt,
     )
