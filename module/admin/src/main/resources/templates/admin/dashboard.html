@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('대시보드')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('dashboard')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">대시보드</h1>
+                    <p class="page-subtitle">Langlez 서비스 현황을 한눈에 모니터링합니다.</p>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="card glass card-glow-primary">
+                    <span class="card-title">총 가입자 수</span>
+                    <span class="card-value" th:text="${dashboard.totalMembers}">0</span>
+                </div>
+                <div class="card glass card-glow-accent">
+                    <span class="card-title">현재 접속자 수</span>
+                    <span class="card-value" th:text="${dashboard.onlineMembers}">0</span>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

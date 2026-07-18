@@ -151,3 +151,8 @@ logger:
   redis:
     log-threshold-ms: 0
     warn-threshold-ms: 100
+
+admin:
+  username: ${ADMIN_USERNAME:admin}
+  password: ${ADMIN_PASSWORD:admin}
+

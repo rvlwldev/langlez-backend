@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('전체 채팅방 목록')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('chats')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">전체 채팅방 목록</h1>
+                    <p class="page-subtitle">서비스 내에 생성된 모든 채팅방을 모니터링합니다.</p>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Room ID</th>
+                            <th>참여자 목록</th>
+                            <th>최근 메시지</th>
+                            <th>최근 대화 시각</th>
+                            <th>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="chat : ${chats}">
+                            <td th:text="${chat.roomId}">Room ID</td>
+                            <td th:text="${#strings.listJoin(chat.participantUsernames, ', ')}">User1, User2</td>
+                            <td th:text="${chat.lastMessagePreview ?: '(메시지 없음)'}">Preview</td>
+                            <td th:text="${chat.lastMessageAt ?: '-'}">2026-07-19T00:00:00Z</td>
+                            <td>
+                                <a th:href="@{/admin/chats/{roomId}(roomId=${chat.roomId})}" class="link-action">방 모니터링</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(chats)}">
+                            <td colspan="5" style="text-align: center; color: var(--text-secondary);">채팅방이 존재하지 않습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="pagination-container" th:if="${nextCursor != null}">
+                <a th:href="@{/admin/chats(cursor=${nextCursor},size=${size})}" class="btn-secondary">다음 페이지 →</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

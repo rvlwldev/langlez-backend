@@ -64,6 +64,17 @@ class MemberRepositoryImpl(
         return ids.mapNotNull { sequences[it] }
     }
 
+    override fun countAll(): Long = jpa.count()
+
+    override fun findAll(cursor: Long?, size: Int): List<Member> {
+        val pageable = org.springframework.data.domain.PageRequest.of(0, size)
+        return if (cursor == null) {
+            jpa.findAllByOrderByIdDesc(pageable)
+        } else {
+            jpa.findByIdLessThanOrderByIdDesc(cursor, pageable)
+        }
+    }
+
     @CacheEvict(cacheNames = ["member", "member_email", "member_username", "member_provider"], allEntries = true)
     override fun deleteAll(members: List<Member>) = jpa.deleteAll(members)
 }

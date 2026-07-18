@@ -38,6 +38,7 @@ dependency-springboot-oauth2-resource = { module = "org.springframework.boot:spr
 dependency-springboot-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb", version.ref = "spring-boot" }
 dependency-springboot-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis", version.ref = "spring-boot" }
 dependency-springboot-cache = { module = "org.springframework.boot:spring-boot-starter-cache", version.ref = "spring-boot" }
+dependency-springboot-thymeleaf = { module = "org.springframework.boot:spring-boot-starter-thymeleaf", version.ref = "spring-boot" }
 
 # Spring
 dependency-spring-aspects = { module = "org.springframework:spring-aspects" }
@@ -82,7 +83,7 @@ test-kotest-spring = { module = "io.kotest.extensions:kotest-extensions-spring",
 test-mockk = { module = "io.mockk:mockk", version = "1.13.10" }
 
 test-springboot = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
-test-springboot-security = { module = "org.springframework.security:spring-security-test", version.ref = "spring-boot" }
+test-springboot-security = { module = "org.springframework.security:spring-security-test" }
 test-springboot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers", version.ref = "spring-boot" }
 test-testcontainers = { module = "org.testcontainers:testcontainers", version = "1.20.4" }
 test-testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version = "1.20.4" }

@@ -44,5 +44,15 @@ class MemberPresenceTrackerImplTest : BehaviorSpec({
                 tracker.isOnline(memberId) shouldBe false
             }
         }
+
+        When("온라인인 회원과 오프라인인 회원들이 있을 때 countOnline을 호출하면") {
+            val beforeCount = tracker.countOnline()
+            tracker.markOnline(101L)
+            tracker.markOnline(102L)
+
+            Then("온라인 회원 수가 정상 집계되어야 한다") {
+                tracker.countOnline() shouldBe beforeCount + 2
+            }
+        }
     }
 })
