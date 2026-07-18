@@ -23,6 +23,7 @@ class EchoRequest {
 
     data class ReportPost(
         @field:NotBlank
+        @field:Size(max = 500)
         val reason: String
     )
 }

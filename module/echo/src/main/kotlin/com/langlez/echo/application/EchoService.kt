@@ -92,25 +92,28 @@ class EchoService(
 
     @Transactional(readOnly = true)
     fun getFollowingFeed(memberId: Long, cursor: Long?, size: Int): EchoResponse.CursorList {
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
         val follows = relationshipRepository.findFollowings(memberId, null, 1000)
         val followedIds = follows.map { it.followedId }
-        val posts = postRepository.findFollowingFeed(followedIds, cursor, size)
-        return buildCursorList(posts, posts.size == size, posts.lastOrNull()?.id)
+        val posts = postRepository.findFollowingFeed(followedIds, cursor, boundedSize)
+        return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
     fun getRecommendedFeed(memberId: Long, cursor: Long?, size: Int): EchoResponse.CursorList {
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
         val follows = relationshipRepository.findFollowings(memberId, null, 1000)
         val excludeAuthorIds = listOf(memberId) + follows.map { it.followedId }
-        val posts = postRepository.findRecommendedFeed(excludeAuthorIds, cursor, size)
-        return buildCursorList(posts, posts.size == size, posts.lastOrNull()?.id)
+        val posts = postRepository.findRecommendedFeed(excludeAuthorIds, cursor, boundedSize)
+        return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
     fun searchByHashtag(tag: String, cursor: Long?, size: Int): EchoResponse.CursorList {
-        val posts = postRepository.findByHashtag(tag, cursor, size)
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
+        val posts = postRepository.findByHashtag(tag, cursor, boundedSize)
         hashtagTrendRepository.recordSearch(tag)
-        return buildCursorList(posts, posts.size == size, posts.lastOrNull()?.id)
+        return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
@@ -118,8 +121,14 @@ class EchoService(
         if (days != 1 && days != 7 && days != 30) {
             throw LanglezException(400, "echo.trending.invalid-days")
         }
-        val trending = hashtagTrendRepository.getTrending(days, limit)
+        val boundedLimit = limit.coerceIn(1, MAX_TRENDING_LIMIT)
+        val trending = hashtagTrendRepository.getTrending(days, boundedLimit)
         return trending.map { EchoResponse.TrendingHashtag(it.hashtag, it.count) }
+    }
+
+    companion object {
+        private const val MAX_PAGE_SIZE = 100
+        private const val MAX_TRENDING_LIMIT = 50
     }
 
     private fun buildCursorList(

@@ -31,9 +31,10 @@ class HashtagTrendRepositoryImpl(
     }
 
     override fun getTrending(days: Int, limit: Int): List<HashtagTrendCount> {
+        val boundedDays = days.coerceIn(1, MAX_TRENDING_DAYS)
         val today = LocalDate.now()
         val scores = mutableMapOf<String, Double>()
-        for (i in 0 until days) {
+        for (i in 0 until boundedDays) {
             val dateStr = today.minusDays(i.toLong()).format(DateTimeFormatter.ofPattern("yyyyMMdd"))
             val key = "echo:hashtag:post:$dateStr"
             val set = redisson.getScoredSortedSet<String>(key)
@@ -69,5 +70,9 @@ class HashtagTrendRepositoryImpl(
                 searchCount = searchMap[tag] ?: 0L
             )
         }
+    }
+
+    companion object {
+        private const val MAX_TRENDING_DAYS = 31
     }
 }
