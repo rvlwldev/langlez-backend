@@ -19,6 +19,10 @@ class MemberPresenceTrackerImpl(private val redissonClient: RedissonClient) : Me
         return redissonClient.getBucket<String>(key).isExists
     }
 
+    override fun countOnline(): Long {
+        return redissonClient.keys.getKeysByPattern("presence:member:*").toList().size.toLong()
+    }
+
     private fun getRedisKey(memberId: Long): String {
         return "presence:member:$memberId"
     }

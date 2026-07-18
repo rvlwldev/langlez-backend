@@ -85,6 +85,37 @@ class ChatMessageRepositoryImplTest : BehaviorSpec() {
                 }
             }
 
+            When("첨부파일(IMAGE/VIDEO/AUDIO)만 조회할 때") {
+                val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
+                val mText = chatMessageRepository.save(ChatMessage(roomId = "room-attach", senderId = 1L, type = ChatMessage.Type.TEXT, content = "text msg", createdAt = now.minusSeconds(10)))
+                val mImg = chatMessageRepository.save(ChatMessage(roomId = "room-attach", senderId = 1L, type = ChatMessage.Type.IMAGE, fileUrl = "http://img", createdAt = now.minusSeconds(5)))
+                val mAudio = chatMessageRepository.save(ChatMessage(roomId = "room-attach", senderId = 2L, type = ChatMessage.Type.AUDIO, fileUrl = "http://audio", createdAt = now))
+
+                Then("TEXT 를 제외한 이미지/비디오/오디오 메시지만 최신순으로 조회되어야 한다") {
+                    val attachments = chatMessageRepository.findAttachments(null, 10)
+                    attachments.any { it.id == mText.id } shouldBe false
+                    attachments.any { it.id == mImg.id } shouldBe true
+                    attachments.any { it.id == mAudio.id } shouldBe true
+                    
+                    val filterAttach = attachments.filter { it.roomId == "room-attach" }
+                    filterAttach shouldHaveSize 2
+                    filterAttach[0].id shouldBe mAudio.id
+                    filterAttach[1].id shouldBe mImg.id
+                }
+            }
+
+            When("특정 시각 이후의 방 메시지를 조회할 때") {
+                val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
+                val m1 = chatMessageRepository.save(ChatMessage(roomId = "room-since", senderId = 1L, type = ChatMessage.Type.TEXT, content = "msg1", createdAt = now.minusSeconds(10)))
+                val m2 = chatMessageRepository.save(ChatMessage(roomId = "room-since", senderId = 1L, type = ChatMessage.Type.TEXT, content = "msg2", createdAt = now.minusSeconds(5)))
+
+                Then("해당 시각 이후에 작성된 메시지만 생성순(오름차순)으로 조회되어야 한다") {
+                    val messages = chatMessageRepository.findByRoomSince("room-since", now.minusSeconds(7))
+                    messages shouldHaveSize 1
+                    messages[0].id shouldBe m2.id
+                }
+            }
+
             When("안읽은 메시지 개수를 계산할 때") {
                 val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
                 // m1: 1L이 보냄 -> 1L에게는 카운트 제외, 타인에게는 포함 가능

@@ -8,6 +8,8 @@ interface MemberRepository {
     fun findByUsername(username: String): Member?
     fun findByProvider(id: String, type: Member.Provider): Member?
     fun findByIds(ids: List<Long>): List<Member>
+    fun countAll(): Long
+    fun findAll(cursor: Long?, size: Int): List<Member>
 
     fun deleteAll(members: List<Member>)
 }

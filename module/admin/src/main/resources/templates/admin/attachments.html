@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('첨부파일 모아보기')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('attachments')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">첨부파일 모아보기</h1>
+                    <p class="page-subtitle">채팅방 내에서 공유된 사진, 동영상, 오디오 파일들을 모아봅니다.</p>
+                </div>
+            </div>
+            
+            <div class="gallery-grid">
+                <div th:each="att : ${attachments}" class="gallery-item card glass">
+                    <div class="gallery-media-wrapper">
+                        <!-- Image -->
+                        <img th:if="${att.type == 'IMAGE'}" th:src="${att.fileUrl}" alt="Attachment image" />
+                        
+                        <!-- Video -->
+                        <video th:if="${att.type == 'VIDEO'}" th:src="${att.fileUrl}" controls></video>
+                        
+                        <!-- Audio -->
+                        <audio th:if="${att.type == 'AUDIO'}" th:src="${att.fileUrl}" controls></audio>
+                    </div>
+                    <div class="gallery-info">
+                        <p style="font-weight: 600; margin-bottom: 4px;" th:text="'보낸이: @' + ${att.senderUsername}">@sender</p>
+                        <p th:text="${att.createdAt}" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">2026-07-19</p>
+                        <a th:href="@{/admin/chats/{roomId}(roomId=${att.roomId})}" class="link-action" style="font-size: 13px;">원본 방 가기 →</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div th:if="${#lists.isEmpty(attachments)}" style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                첨부파일이 존재하지 않습니다.
+            </div>
+            
+            <div class="pagination-container" th:if="${nextCursor != null}">
+                <a th:href="@{/admin/attachments(cursor=${nextCursor},size=${size})}" class="btn-secondary">다음 페이지 →</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

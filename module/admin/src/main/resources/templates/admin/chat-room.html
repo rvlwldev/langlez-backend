@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('채팅 모니터링')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('chats')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title" th:text="'채팅방 모니터링 (' + ${roomId} + ')'">채팅방 모니터링</h1>
+                    <p class="page-subtitle">해당 채팅방의 실시간 대화 내용을 모니터링합니다. (3초 간격 자동 갱신)</p>
+                </div>
+                <div>
+                    <a th:href="@{/admin/chats}" class="btn-secondary">← 목록으로</a>
+                </div>
+            </div>
+            
+            <div class="chat-layout">
+                <div class="card glass chat-room-container">
+                    <div class="chat-room-header">
+                        <span style="font-weight: 600; color: var(--primary);">REALTIME LOGS</span>
+                        <span class="badge badge-online">Monitoring Active</span>
+                    </div>
+                    
+                    <div id="message-container" class="chat-room-messages">
+                        <!-- Initial messages -->
+                        <div th:each="msg : ${messages}" 
+                             class="message-bubble" 
+                             th:data-created-at="${msg.createdAt}">
+                            <div class="message-sender" th:text="'@' + ${msg.senderUsername}">@sender</div>
+                            <div class="message-content-wrapper">
+                                <!-- Text Message -->
+                                <span th:if="${msg.type == 'TEXT'}" th:text="${msg.content}">Text content</span>
+                                
+                                <!-- Image Message -->
+                                <img th:if="${msg.type == 'IMAGE'}" th:src="${msg.fileUrl}" class="message-media" alt="Image attachment" />
+                                
+                                <!-- Video Message -->
+                                <video th:if="${msg.type == 'VIDEO'}" th:src="${msg.fileUrl}" class="message-media" controls></video>
+                                
+                                <!-- Audio Message -->
+                                <audio th:if="${msg.type == 'AUDIO'}" th:src="${msg.fileUrl}" class="message-media" controls></audio>
+                            </div>
+                            <span class="message-meta" th:text="${msg.createdAt}">2026-07-19T00:00:00Z</span>
+                        </div>
+                        <div th:if="${#lists.isEmpty(messages)}" id="empty-notice" style="text-align: center; color: var(--text-secondary); margin: auto;">
+                            대화 기록이 없습니다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        document.addEventListener("DOMContentLoaded", function() {
+            const container = document.getElementById("message-container");
+            let lastMessageAt = /*[[${lastMessageAt}]]*/ '1970-01-01T00:00:00Z';
+            const roomId = /*[[${roomId}]]*/ '';
+            const emptyNotice = document.getElementById("empty-notice");
+
+            // Scroll to bottom on load
+            container.scrollTop = container.scrollHeight;
+
+            setInterval(function() {
+                fetch(`/admin/chats/${roomId}/poll?after=${encodeURIComponent(lastMessageAt)}`)
+                    .then(response => response.text())
+                    .then(html => {
+                        if (html && html.trim().length > 0) {
+                            // Check if it's fragment layout matching our template
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const newMessages = doc.body.children;
+                            
+                            if (newMessages.length > 0) {
+                                if (emptyNotice) {
+                                    emptyNotice.remove();
+                                }
+                                
+                                // Append new messages
+                                const fragment = document.createDocumentFragment();
+                                for (let i = 0; i < newMessages.length; i++) {
+                                    fragment.appendChild(newMessages[i].cloneNode(true));
+                                }
+                                container.appendChild(fragment);
+                                
+                                // Update last message time based on the newly appended content
+                                const messageBubbles = container.querySelectorAll(".message-bubble");
+                                if (messageBubbles.length > 0) {
+                                    const lastMsg = messageBubbles[messageBubbles.length - 1];
+                                    lastMessageAt = lastMsg.getAttribute("data-created-at");
+                                }
+                                
+                                // Scroll to bottom
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        }
+                    })
+                    .catch(err => console.error("Error polling messages:", err));
+            }, 3000);
+        });
+        /*]]>*/
+    </script>
+</body>
+</html>

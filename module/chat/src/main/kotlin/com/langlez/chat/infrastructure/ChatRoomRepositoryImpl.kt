@@ -65,6 +65,30 @@ class ChatRoomRepositoryImpl(
         return mongoTemplate.find(query, ChatRoom::class.java)
     }
 
+    override fun findAllRooms(cursor: String?, size: Int): List<ChatRoom> {
+        val query = Query()
+
+        if (cursor != null) {
+            val cursorRoom = mongoTemplate.findById(cursor, ChatRoom::class.java)
+            if (cursorRoom != null) {
+                val cursorTime = cursorRoom.createdAt
+                query.addCriteria(
+                    Criteria().orOperator(
+                        Criteria.where("createdAt").lt(cursorTime),
+                        Criteria().andOperator(
+                            Criteria.where("createdAt").`is`(cursorTime),
+                            Criteria.where("id").lt(cursor)
+                        )
+                    )
+                )
+            }
+        }
+
+        query.with(Sort.by(Sort.Direction.DESC, "createdAt", "id"))
+        query.limit(size)
+        return mongoTemplate.find(query, ChatRoom::class.java)
+    }
+
     override fun updateReadStatus(roomId: String, memberId: Long, readAt: Instant) {
         val query = Query(Criteria.where("id").`is`(roomId))
         val update = Update().set("readStatus.$memberId", readAt)
