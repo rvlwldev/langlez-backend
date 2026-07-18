@@ -15,5 +15,7 @@ class ProfileRequest {
         val mbti: Profile.MBTI? = null,
         val locale: Locale? = null,
         val birthDay: LocalDate? = null,
+        val languageLevel: Profile.LanguageLevel? = null,
+        val interests: Set<String>? = null,
     )
 }

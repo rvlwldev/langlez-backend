@@ -25,6 +25,13 @@ class Profile(
     var birthDay: LocalDate? = null,
     var visitCount: Long = 0,
 
+    @Enumerated(STRING) var languageLevel: LanguageLevel? = null,
+
+    @ElementCollection
+    @CollectionTable(name = "member_profile_interests", joinColumns = [JoinColumn(name = "id")])
+    @Column(name = "interest")
+    var interests: MutableSet<String> = mutableSetOf(),
+
     @Version var version: Long? = null
 ) {
     enum class Gender { MALE, FEMALE, SECRET }
@@ -34,4 +41,5 @@ class Profile(
         INFJ, INFP, INTJ, INTP,
         ISFJ, ISFP, ISTJ, ISTP,
     }
+    enum class LanguageLevel { BEGINNER, INTERMEDIATE, ADVANCED }
 }
