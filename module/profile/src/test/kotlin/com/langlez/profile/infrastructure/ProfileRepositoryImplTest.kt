@@ -1,6 +1,8 @@
 package com.langlez.profile.infrastructure
 
 import com.langlez.profile.domain.ProfileRepository
+import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
+import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe

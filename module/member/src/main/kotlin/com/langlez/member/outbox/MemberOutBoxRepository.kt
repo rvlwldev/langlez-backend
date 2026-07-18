@@ -1,8 +1,9 @@
 package com.langlez.member.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.member.outbox.jpa.MemberOutBoxHistoryJpaRepository
+import com.langlez.member.outbox.jpa.MemberOutBoxJpaRepository
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -32,13 +33,3 @@ class MemberOutBoxRepository(
 
     fun saveAllHistory(history: List<MemberOutBoxHistory>) { historyJpa.saveAll(history) }
 }
-
-interface MemberOutBoxJpaRepository : JpaRepository<MemberOutBox, Long> {
-    fun findAllByStatusInOrderByCreatedAtAsc(
-        statuses: List<MemberOutBox.Status>,
-        pageable: org.springframework.data.domain.Pageable,
-    ): List<MemberOutBox>
-    fun findAllByStatus(status: MemberOutBox.Status): List<MemberOutBox>
-}
-
-interface MemberOutBoxHistoryJpaRepository : JpaRepository<MemberOutBoxHistory, Long>

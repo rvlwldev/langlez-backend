@@ -2,13 +2,13 @@ package com.langlez.profile
 
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.infrastructure.MemberJpaRepository
+import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
-import com.langlez.profile.infrastructure.ProfileImageJpaRepository
-import com.langlez.profile.infrastructure.ProfileJpaRepository
+import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
+import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
 import com.langlez.security.util.JwtParser
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension

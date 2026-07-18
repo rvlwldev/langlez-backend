@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.relationship.domain.RelationshipOutBox
 import com.langlez.relationship.domain.RelationshipOutBoxHistory
 import com.langlez.relationship.domain.RelationshipOutBoxRepository
+import com.langlez.relationship.infrastructure.jpa.RelationshipOutBoxHistoryJpaRepository
+import com.langlez.relationship.infrastructure.jpa.RelationshipOutBoxJpaRepository
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -36,13 +37,3 @@ class RelationshipOutBoxRepositoryImpl(
 
     override fun saveAllHistory(history: List<RelationshipOutBoxHistory>) { historyJpa.saveAll(history) }
 }
-
-interface RelationshipOutBoxJpaRepository : JpaRepository<RelationshipOutBox, Long> {
-    fun findAllByStatusInOrderByCreatedAtAsc(
-        statuses: List<RelationshipOutBox.Status>,
-        pageable: org.springframework.data.domain.Pageable,
-    ): List<RelationshipOutBox>
-    fun findAllByStatus(status: RelationshipOutBox.Status): List<RelationshipOutBox>
-}
-
-interface RelationshipOutBoxHistoryJpaRepository : JpaRepository<RelationshipOutBoxHistory, Long>

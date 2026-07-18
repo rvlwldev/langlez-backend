@@ -4,21 +4,14 @@ import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.profile.domain.QProfile.Companion.profile
+import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
+import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import org.redisson.api.RedissonClient
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
-import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
-
-interface ProfileJpaRepository : JpaRepository<Profile, Long>
-
-interface ProfileImageJpaRepository : JpaRepository<ProfileImage, ProfileImage.Key> {
-    fun findByIdAndRepresentTrue(id: Long): ProfileImage?
-    fun findByIdAndUrl(id: Long, url: String): ProfileImage?
-    fun countById(id: Long): Long
-}
 
 @Repository
 class ProfileRepositoryImpl(
