@@ -63,6 +63,22 @@ class PostRepositoryImpl(
     override fun findReport(reporterId: Long, postId: Long): PostReport? =
         postReportJpa.findByReporterIdAndPostId(reporterId, postId)
 
+    override fun incrementLikeCount(postId: Long) {
+        postJpa.incrementLikeCount(postId)
+    }
+
+    override fun decrementLikeCount(postId: Long) {
+        postJpa.decrementLikeCount(postId)
+    }
+
+    override fun incrementReportCount(postId: Long) {
+        postJpa.incrementReportCount(postId)
+    }
+
+    override fun blindIfThresholdReached(postId: Long, threshold: Int) {
+        postJpa.blindIfThresholdReached(postId, threshold)
+    }
+
     override fun findHashtagByName(name: String): Hashtag? =
         hashtagJpa.findByName(name)
 

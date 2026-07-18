@@ -21,6 +21,11 @@ interface PostRepository {
     fun saveReport(report: PostReport): PostReport
     fun findReport(reporterId: Long, postId: Long): PostReport?
 
+    fun incrementLikeCount(postId: Long)
+    fun decrementLikeCount(postId: Long)
+    fun incrementReportCount(postId: Long)
+    fun blindIfThresholdReached(postId: Long, threshold: Int)
+
     // Hashtag
     fun findHashtagByName(name: String): Hashtag?
     fun saveHashtag(hashtag: Hashtag): Hashtag

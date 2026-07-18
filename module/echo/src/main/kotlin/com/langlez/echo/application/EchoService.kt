@@ -25,7 +25,7 @@ class EchoService(
         authorId: Long,
         content: String,
         media: List<Pair<String, PostMedia.Type>>
-    ): Post {
+    ): EchoResponse.PostDto {
         val author = memberRepo.findById(authorId) ?: throw LanglezException(404, "member.not-found")
         if (author.role == Member.Role.MEMBER) {
             if (!dailyRateLimiter.tryConsume("echo:post:$authorId", 1)) {
@@ -42,8 +42,8 @@ class EchoService(
 
         val post = postRepository.save(Post(authorId = authorId, content = content))
 
-        if (media.isNotEmpty()) {
-            val mediaEntities = media.mapIndexed { index, pair ->
+        val mediaEntities = if (media.isNotEmpty()) {
+            val entities = media.mapIndexed { index, pair ->
                 PostMedia(
                     postId = post.id,
                     url = pair.first,
@@ -51,7 +51,9 @@ class EchoService(
                     sequence = index
                 )
             }
-            postRepository.saveMediaAll(mediaEntities)
+            postRepository.saveMediaAll(entities)
+        } else {
+            emptyList()
         }
 
         val regex = Regex("#([가-힣a-zA-Z0-9_]+)")
@@ -69,7 +71,15 @@ class EchoService(
             postRepository.savePostHashtag(PostHashtag(postId = post.id, hashtagId = tag.id))
         }
 
-        return post
+        return EchoResponse.PostDto(
+            postId = post.id,
+            username = author.username,
+            nickname = author.nickname,
+            content = post.content,
+            media = mediaEntities.map { EchoResponse.PostMediaDto(it.url, it.type) },
+            likeCount = post.likeCount,
+            createdAt = post.createdAt
+        )
     }
 
     fun likePost(memberId: Long, postId: Long) {
@@ -77,8 +87,7 @@ class EchoService(
         if (postRepository.findLike(memberId, postId) != null) return
 
         postRepository.saveLike(PostLike(postId = postId, memberId = memberId))
-        post.increaseLikeCount()
-        postRepository.save(post)
+        postRepository.incrementLikeCount(postId)
     }
 
     fun unlikePost(memberId: Long, postId: Long) {
@@ -86,8 +95,7 @@ class EchoService(
         val like = postRepository.findLike(memberId, postId) ?: return
 
         postRepository.deleteLike(memberId, postId)
-        post.decreaseLikeCount()
-        postRepository.save(post)
+        postRepository.decrementLikeCount(postId)
     }
 
     fun reportPost(reporterId: Long, postId: Long, reason: String) {
@@ -97,8 +105,8 @@ class EchoService(
         }
 
         postRepository.saveReport(PostReport(postId = postId, reporterId = reporterId, reason = reason))
-        post.increaseReportCount()
-        postRepository.save(post)
+        postRepository.incrementReportCount(postId)
+        postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
     }
 
     @Transactional(readOnly = true)
@@ -178,16 +186,31 @@ class EchoService(
         return EchoResponse.CursorList(nextCursor, postDtos)
     }
 
-    fun addComment(authorId: Long, postId: Long, content: String): Comment {
-        postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+    fun addComment(authorId: Long, postId: Long, content: String): EchoResponse.CommentDto {
+        val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        if (post.blinded) {
+            throw LanglezException(404, "echo.post.not-found")
+        }
         if (content.length > Comment.MAX_CONTENT_LENGTH) {
             throw LanglezException(400, "echo.comment.too-long")
         }
-        return commentRepository.save(Comment(postId = postId, authorId = authorId, content = content))
+        val author = memberRepo.findById(authorId) ?: throw LanglezException(404, "member.not-found")
+        val comment = commentRepository.save(Comment(postId = postId, authorId = authorId, content = content))
+        return EchoResponse.CommentDto(
+            commentId = comment.id,
+            username = author.username,
+            nickname = author.nickname,
+            content = comment.content,
+            createdAt = comment.createdAt
+        )
     }
 
     @Transactional(readOnly = true)
     fun getComments(postId: Long, cursor: Long?, size: Int): EchoResponse.CommentCursorList {
+        val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        if (post.blinded) {
+            throw LanglezException(404, "echo.post.not-found")
+        }
         val boundedSize = size.coerceIn(1, 100)
         val comments = commentRepository.findByPost(postId, cursor, boundedSize)
         val authorIds = comments.map { it.authorId }.distinct()

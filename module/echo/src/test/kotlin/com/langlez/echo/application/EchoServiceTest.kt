@@ -1,6 +1,7 @@
 package com.langlez.echo.application
 
 import com.langlez.core.LanglezException
+import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -39,6 +40,8 @@ class EchoServiceTest : BehaviorSpec({
         val authorMember = mockk<Member>()
         every { authorMember.id } returns authorId
         every { authorMember.role } returns Member.Role.MEMBER
+        every { authorMember.username } returns "test_user"
+        every { authorMember.nickname } returns "Test"
         every { memberRepo.findById(authorId) } returns authorMember
         every { dailyRateLimiter.tryConsume(any(), any()) } returns true
 
@@ -60,8 +63,10 @@ class EchoServiceTest : BehaviorSpec({
 
             Then("게시물이 정상적으로 저장되어야 한다") {
                 result shouldNotBe null
-                result.id shouldBe 100L
+                result.postId shouldBe 100L
                 result.content shouldBe content
+                result.username shouldBe "test_user"
+                result.nickname shouldBe "Test"
                 verify(exactly = 1) { postRepository.save(any()) }
                 verify(exactly = 1) { postRepository.saveMediaAll(any()) }
             }
@@ -115,6 +120,8 @@ class EchoServiceTest : BehaviorSpec({
             val premiumMember = mockk<Member>()
             every { premiumMember.id } returns premiumAuthorId
             every { premiumMember.role } returns Member.Role.PREMIUM
+            every { premiumMember.username } returns "premium_user"
+            every { premiumMember.nickname } returns "Premium"
             every { memberRepo.findById(premiumAuthorId) } returns premiumMember
 
             service.createPost(premiumAuthorId, content, media)
@@ -131,7 +138,8 @@ class EchoServiceTest : BehaviorSpec({
         val post = Post(id = postId, authorId = 2L, content = "테스트 본문")
 
         every { postRepository.findById(postId) } returns post
-        every { postRepository.save(any()) } answers { firstArg() }
+        every { postRepository.incrementLikeCount(postId) } returns Unit
+        every { postRepository.decrementLikeCount(postId) } returns Unit
 
         When("처음 좋아요를 누르면") {
             every { postRepository.findLike(memberId, postId) } returns null
@@ -140,8 +148,8 @@ class EchoServiceTest : BehaviorSpec({
             service.likePost(memberId, postId)
 
             Then("좋아요 정보가 저장되고 카운트가 증가해야 한다") {
-                post.likeCount shouldBe 1L
                 verify(exactly = 1) { postRepository.saveLike(any()) }
+                verify(exactly = 1) { postRepository.incrementLikeCount(postId) }
             }
         }
 
@@ -151,8 +159,8 @@ class EchoServiceTest : BehaviorSpec({
             service.likePost(memberId, postId)
 
             Then("추가 저장 없이 무시된다") {
-                post.likeCount shouldBe 1L
-                verify(exactly = 1) { postRepository.saveLike(any()) } // 누적 호출 횟수 유지
+                verify(exactly = 1) { postRepository.saveLike(any()) }
+                verify(exactly = 1) { postRepository.incrementLikeCount(postId) }
             }
         }
 
@@ -163,8 +171,8 @@ class EchoServiceTest : BehaviorSpec({
             service.unlikePost(memberId, postId)
 
             Then("좋아요 정보가 제거되고 카운트가 감소해야 한다") {
-                post.likeCount shouldBe 0L
                 verify(exactly = 1) { postRepository.deleteLike(memberId, postId) }
+                verify(exactly = 1) { postRepository.decrementLikeCount(postId) }
             }
         }
     }
@@ -175,7 +183,8 @@ class EchoServiceTest : BehaviorSpec({
 
         every { postRepository.findById(postId) } returns post
         every { postRepository.saveReport(any()) } answers { firstArg() }
-        every { postRepository.save(any()) } answers { firstArg() }
+        every { postRepository.incrementReportCount(postId) } returns Unit
+        every { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) } returns Unit
 
         When("동일 유저가 이미 신고한 게시물을 다시 신고하면") {
             every { postRepository.findReport(1L, postId) } returns PostReport(postId = postId, reporterId = 1L, reason = "spam")
@@ -192,16 +201,13 @@ class EchoServiceTest : BehaviorSpec({
         When("서로 다른 유저가 5회 이상 신고하면") {
             every { postRepository.findReport(any(), postId) } returns null
 
-            (1..4).forEach { reporterId ->
+            (1..5).forEach { reporterId ->
                 service.reportPost(reporterId.toLong(), postId, "reason")
             }
-            post.blinded shouldBe false
 
-            service.reportPost(5L, postId, "reason")
-
-            Then("게시물이 블라인드 처리되어야 한다") {
-                post.blinded shouldBe true
-                post.blindedAt shouldNotBe null
+            Then("리포지토리의 신고 증가 및 블라인드 임계치 확인 메소드가 5회 호출되어야 한다") {
+                verify(exactly = 5) { postRepository.incrementReportCount(postId) }
+                verify(exactly = 5) { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) }
             }
         }
     }
@@ -327,6 +333,12 @@ class EchoServiceTest : BehaviorSpec({
         every { postRepository.findById(postId) } returns post
         every { postRepository.findById(999L) } returns null
 
+        val authorMember = mockk<Member>()
+        every { authorMember.id } returns authorId
+        every { authorMember.username } returns "commenter"
+        every { authorMember.nickname } returns "CommenterNick"
+        every { memberRepo.findById(authorId) } returns authorMember
+
         every { commentRepository.save(any()) } answers {
             val comment = firstArg<Comment>()
             Comment(id = 200L, postId = comment.postId, authorId = comment.authorId, content = comment.content, createdAt = comment.createdAt)
@@ -337,8 +349,10 @@ class EchoServiceTest : BehaviorSpec({
 
             Then("댓글이 저장되고 저장된 댓글이 반환된다") {
                 result shouldNotBe null
-                result.id shouldBe 200L
+                result.commentId shouldBe 200L
                 result.content shouldBe "댓글 내용"
+                result.username shouldBe "commenter"
+                result.nickname shouldBe "CommenterNick"
                 verify(exactly = 1) { commentRepository.save(any()) }
             }
         }
@@ -369,11 +383,11 @@ class EchoServiceTest : BehaviorSpec({
             val comment = Comment(id = 200L, postId = postId, authorId = authorId, content = "댓글 내용")
             every { commentRepository.findByPost(postId, null, 20) } returns listOf(comment)
 
-            val authorMember = mockk<Member>()
-            every { authorMember.id } returns authorId
-            every { authorMember.username } returns "commenter"
-            every { authorMember.nickname } returns "CommenterNick"
-            every { memberRepo.findByIds(listOf(authorId)) } returns listOf(authorMember)
+            val authorMember2 = mockk<Member>()
+            every { authorMember2.id } returns authorId
+            every { authorMember2.username } returns "commenter"
+            every { authorMember2.nickname } returns "CommenterNick"
+            every { memberRepo.findByIds(listOf(authorId)) } returns listOf(authorMember2)
 
             val result = service.getComments(postId, null, 20)
 
@@ -383,6 +397,40 @@ class EchoServiceTest : BehaviorSpec({
                 result.comments[0].username shouldBe "commenter"
                 result.comments[0].nickname shouldBe "CommenterNick"
                 result.comments[0].content shouldBe "댓글 내용"
+            }
+        }
+
+        When("블라인드된 게시글에 댓글을 작성하려고 하면") {
+            val blindedPost = Post(id = 300L, authorId = 2L, content = "블라인드 게시글")
+            val field = Post::class.java.getDeclaredField("blinded")
+            field.isAccessible = true
+            field.set(blindedPost, true)
+
+            every { postRepository.findById(300L) } returns blindedPost
+
+            Then("404 에러가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.addComment(authorId, 300L, "댓글 내용")
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "echo.post.not-found"
+            }
+        }
+
+        When("블라인드된 게시글의 댓글을 조회하려고 하면") {
+            val blindedPost = Post(id = 300L, authorId = 2L, content = "블라인드 게시글")
+            val field = Post::class.java.getDeclaredField("blinded")
+            field.isAccessible = true
+            field.set(blindedPost, true)
+
+            every { postRepository.findById(300L) } returns blindedPost
+
+            Then("404 에러가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.getComments(300L, null, 20)
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "echo.post.not-found"
             }
         }
     }

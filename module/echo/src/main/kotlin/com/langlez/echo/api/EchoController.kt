@@ -1,10 +1,6 @@
 package com.langlez.echo.api
 
-import com.langlez.core.LanglezException
 import com.langlez.echo.application.EchoService
-import com.langlez.echo.domain.Post
-import com.langlez.echo.domain.PostRepository
-import com.langlez.member.domain.MemberRepository
 import com.langlez.security.web.MemberID
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -14,8 +10,6 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/echoes")
 class EchoController(
     private val service: EchoService,
-    private val memberRepo: MemberRepository,
-    private val postRepository: PostRepository,
 ) {
 
     @PostMapping
@@ -25,8 +19,7 @@ class EchoController(
         @RequestBody @Valid request: EchoRequest.CreatePost
     ): EchoResponse.PostDto {
         val mediaPairs = request.media.map { it.url to it.type }
-        val post = service.createPost(memberId, request.content, mediaPairs)
-        return toPostDto(post)
+        return service.createPost(memberId, request.content, mediaPairs)
     }
 
     @GetMapping("/feed/following")
@@ -84,22 +77,6 @@ class EchoController(
         @RequestParam(defaultValue = "10") limit: Int
     ): List<EchoResponse.TrendingHashtag> = service.getTrendingHashtags(days, limit)
 
-    private fun toPostDto(post: Post): EchoResponse.PostDto {
-        val author = memberRepo.findById(post.authorId)
-            ?: throw LanglezException(404, "member.not-found")
-        val media = postRepository.findMediaByPostId(post.id)
-            .map { EchoResponse.PostMediaDto(it.url, it.type) }
-        return EchoResponse.PostDto(
-            postId = post.id,
-            username = author.username,
-            nickname = author.nickname,
-            content = post.content,
-            media = media,
-            likeCount = post.likeCount,
-            createdAt = post.createdAt
-        )
-    }
-
     @PostMapping("/{postId}/comments")
     @ResponseStatus(HttpStatus.CREATED)
     fun createComment(
@@ -107,8 +84,7 @@ class EchoController(
         @PathVariable postId: Long,
         @RequestBody @Valid request: EchoRequest.CreateComment
     ): EchoResponse.CommentDto {
-        val comment = service.addComment(memberId, postId, request.content)
-        return toCommentDto(comment)
+        return service.addComment(memberId, postId, request.content)
     }
 
     @GetMapping("/{postId}/comments")
@@ -117,16 +93,4 @@ class EchoController(
         @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "20") size: Int
     ): EchoResponse.CommentCursorList = service.getComments(postId, cursor, size)
-
-    private fun toCommentDto(comment: com.langlez.echo.domain.Comment): EchoResponse.CommentDto {
-        val author = memberRepo.findById(comment.authorId)
-            ?: throw LanglezException(404, "member.not-found")
-        return EchoResponse.CommentDto(
-            commentId = comment.id,
-            username = author.username,
-            nickname = author.nickname,
-            content = comment.content,
-            createdAt = comment.createdAt
-        )
-    }
 }

@@ -39,25 +39,6 @@ class Post(
     var blindedAt: Instant? = null
         private set
 
-    fun increaseLikeCount() {
-        likeCount++
-    }
-
-    fun decreaseLikeCount() {
-        if (likeCount > 0) {
-            likeCount--
-        }
-    }
-
-    fun increaseReportCount(): Boolean {
-        reportCount++
-        if (reportCount >= BLIND_THRESHOLD && !blinded) {
-            blinded = true
-            blindedAt = Instant.now()
-        }
-        return blinded
-    }
-
     companion object {
         const val MAX_CONTENT_LENGTH = 1000
         const val MAX_MEDIA_COUNT = 12
