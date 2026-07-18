@@ -3,7 +3,9 @@ package com.langlez.echo.application
 import com.langlez.core.LanglezException
 import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
+import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.RelationshipRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,6 +17,7 @@ class EchoService(
     private val memberRepo: MemberRepository,
     private val relationshipRepository: RelationshipRepository,
     private val hashtagTrendRepository: HashtagTrendRepository,
+    private val dailyRateLimiter: DailyRateLimiter,
 ) {
 
     fun createPost(
@@ -22,6 +25,13 @@ class EchoService(
         content: String,
         media: List<Pair<String, PostMedia.Type>>
     ): Post {
+        val author = memberRepo.findById(authorId) ?: throw LanglezException(404, "member.not-found")
+        if (author.role == Member.Role.MEMBER) {
+            if (!dailyRateLimiter.tryConsume("echo:post:$authorId", 1)) {
+                throw LanglezException(429, "echo.post.daily-limit-exceeded")
+            }
+        }
+
         if (content.length > Post.MAX_CONTENT_LENGTH) {
             throw LanglezException(400, "echo.content.too-long")
         }

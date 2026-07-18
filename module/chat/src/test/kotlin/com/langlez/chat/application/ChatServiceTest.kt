@@ -9,6 +9,7 @@ import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.redis.ratelimit.DailyRateLimiter
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
@@ -24,17 +25,27 @@ class ChatServiceTest : BehaviorSpec({
     val memberRepository = mockk<MemberRepository>()
     val fileStorage = mockk<FileStorage>()
     val chatBroadcaster = mockk<ChatBroadcaster>(relaxed = true)
+    val dailyRateLimiter = mockk<DailyRateLimiter>()
 
     val service = ChatService(
         chatRoomRepository,
         chatMessageRepository,
         memberRepository,
         fileStorage,
-        chatBroadcaster
+        chatBroadcaster,
+        dailyRateLimiter
     )
 
     afterEach {
-        clearMocks(chatRoomRepository, chatMessageRepository, memberRepository, fileStorage, chatBroadcaster, answers = false)
+        clearMocks(
+            chatRoomRepository,
+            chatMessageRepository,
+            memberRepository,
+            fileStorage,
+            chatBroadcaster,
+            dailyRateLimiter,
+            answers = false
+        )
     }
 
     fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
@@ -67,16 +78,21 @@ class ChatServiceTest : BehaviorSpec({
             every { memberRepository.findByUsername(targetUsername) } returns targetMember
             every { chatRoomRepository.findByParticipants(1L, 2L) } returns existingRoom
 
-            Then("기존 방을 반환한다") {
+            Then("기존 방을 반환하고 rate limit 체크를 하지 않는다") {
                 val result = service.getOrCreateRoom(memberId, targetUsername)
                 result shouldBe existingRoom
                 verify(exactly = 0) { chatRoomRepository.save(any()) }
+                verify(exactly = 0) { dailyRateLimiter.tryConsume(any(), any()) }
             }
         }
 
         When("기존 방이 존재하지 않으면") {
+            val creator = createMember(memberId)
+            creator.role = Member.Role.MEMBER
             every { memberRepository.findByUsername(targetUsername) } returns targetMember
             every { chatRoomRepository.findByParticipants(1L, 2L) } returns null
+            every { memberRepository.findById(memberId) } returns creator
+            every { dailyRateLimiter.tryConsume("chat:room:$memberId", 5) } returns true
             every { chatRoomRepository.save(any()) } answers { firstArg() }
 
             Then("새로운 방을 생성하고 저장한다") {
@@ -84,6 +100,40 @@ class ChatServiceTest : BehaviorSpec({
                 result.participantIds shouldBe listOf(1L, 2L).sorted()
                 result.readStatus[memberId] shouldNotBe null
                 verify(exactly = 1) { chatRoomRepository.save(any()) }
+                verify(exactly = 1) { dailyRateLimiter.tryConsume("chat:room:$memberId", 5) }
+            }
+        }
+
+        When("MEMBER가 하루 5명 초과로 새 방 생성을 요청하면") {
+            val creator = createMember(memberId)
+            creator.role = Member.Role.MEMBER
+            every { memberRepository.findByUsername(targetUsername) } returns targetMember
+            every { chatRoomRepository.findByParticipants(1L, 2L) } returns null
+            every { memberRepository.findById(memberId) } returns creator
+            every { dailyRateLimiter.tryConsume("chat:room:$memberId", 5) } returns false
+
+            Then("429 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.getOrCreateRoom(memberId, targetUsername)
+                }
+                ex.status shouldBe 429
+                ex.message shouldBe "chat.room-daily-limit-exceeded"
+            }
+        }
+
+        When("PREMIUM이 새 방 생성을 요청하면") {
+            val creator = createMember(memberId)
+            creator.role = Member.Role.PREMIUM
+            every { memberRepository.findByUsername(targetUsername) } returns targetMember
+            every { chatRoomRepository.findByParticipants(1L, 2L) } returns null
+            every { memberRepository.findById(memberId) } returns creator
+            every { dailyRateLimiter.tryConsume("chat:room:$memberId", 30) } returns true
+            every { chatRoomRepository.save(any()) } answers { firstArg() }
+
+            Then("limit 30으로 tryConsume을 호출하고 방이 생성된다") {
+                val result = service.getOrCreateRoom(memberId, targetUsername)
+                result.participantIds shouldBe listOf(1L, 2L).sorted()
+                verify(exactly = 1) { dailyRateLimiter.tryConsume("chat:room:$memberId", 30) }
             }
         }
     }
