@@ -134,7 +134,8 @@ class ChatService(
 
     @Transactional(readOnly = true)
     fun getRooms(memberId: Long, cursor: String?, size: Int): ChatResponse.RoomCursorList {
-        val rooms = chatRoomRepository.findByParticipant(memberId, cursor, size)
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
+        val rooms = chatRoomRepository.findByParticipant(memberId, cursor, boundedSize)
 
         val otherIds = rooms.flatMap { it.participantIds }.distinct()
         val membersMap = memberRepository.findByIds(otherIds).associateBy { it.id }
@@ -159,12 +160,13 @@ class ChatService(
             )
         }
 
-        val nextCursor = if (rooms.size == size) rooms.lastOrNull()?.id else null
+        val nextCursor = if (rooms.size == boundedSize) rooms.lastOrNull()?.id else null
         return ChatResponse.RoomCursorList(nextCursor, summaries)
     }
 
     @Transactional(readOnly = true)
     fun getMessages(memberId: Long, roomId: String, cursor: String?, size: Int): ChatResponse.MessageCursorList {
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
         val room = chatRoomRepository.findById(roomId)
             ?: throw LanglezException(404, "chat.room-not-found")
 
@@ -172,7 +174,7 @@ class ChatService(
             throw LanglezException(403, "chat.room-forbidden")
         }
 
-        val messages = chatMessageRepository.findByRoom(roomId, cursor, size)
+        val messages = chatMessageRepository.findByRoom(roomId, cursor, boundedSize)
 
         val senderIds = messages.map { it.senderId }.distinct()
         val sendersMap = memberRepository.findByIds(senderIds).associateBy { it.id }
@@ -191,11 +193,15 @@ class ChatService(
             )
         }
 
-        val nextCursor = if (messages.size == size) messages.lastOrNull()?.id else null
+        val nextCursor = if (messages.size == boundedSize) messages.lastOrNull()?.id else null
         return ChatResponse.MessageCursorList(nextCursor, summaries)
     }
 
     fun generateUploadUrl(filename: String, contentType: String): String {
         return fileStorage.generateUploadUrl(filename, contentType, "chat")
+    }
+
+    companion object {
+        private const val MAX_PAGE_SIZE = 100
     }
 }
