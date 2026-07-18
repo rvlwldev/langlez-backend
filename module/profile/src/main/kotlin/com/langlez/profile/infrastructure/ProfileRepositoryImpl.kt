@@ -54,20 +54,35 @@ class ProfileRepositoryImpl(
     override fun getVisitCountDelta(username: String): Long =
         redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").count()
 
-    override fun flushVisitCounts(): Map<String, Long> {
+    override fun beginVisitCountFlush(): Map<String, Long> {
         val keys = redisson.keys.getKeysByPattern("$HLL_PREFIX*").toList()
         if (keys.isEmpty()) return emptyMap()
 
         val result = mutableMapOf<String, Long>()
         for (key in keys) {
-            val hll = redisson.getHyperLogLog<Long>(key)
-            val count = hll.count()
+            val flushingKey = if (key.endsWith(FLUSHING_SUFFIX)) key else "$key$FLUSHING_SUFFIX"
+            if (flushingKey != key) {
+                try {
+                    // 원자적 RENAME: 새 PFADD는 원래 키 이름으로 다시 생성되므로 유실되지 않는다
+                    redisson.getBucket<Any>(key).rename(flushingKey)
+                } catch (e: Exception) {
+                    // RENAME 대상 키가 존재하지 않는 경우(레이스 컨디션 등) 예외 없이 건너뛴다
+                }
+            }
+            val count = redisson.getHyperLogLog<Long>(flushingKey).count()
             if (count > 0) {
-                result[key.removePrefix(HLL_PREFIX)] = count
-                hll.delete()
+                val username = flushingKey.removePrefix(HLL_PREFIX).removeSuffix(FLUSHING_SUFFIX)
+                result[username] = count
             }
         }
         return result
+    }
+
+    override fun commitVisitCountFlush(usernames: Collection<String>) {
+        val flushingKeys = usernames.map { "$HLL_PREFIX$it$FLUSHING_SUFFIX" }
+        if (flushingKeys.isNotEmpty()) {
+            redisson.keys.delete(*flushingKeys.toTypedArray())
+        }
     }
 
     override fun incrementVisitCountInDb(username: String, delta: Long) {
@@ -79,5 +94,6 @@ class ProfileRepositoryImpl(
 
     companion object {
         private const val HLL_PREFIX = "profile:visit:"
+        private const val FLUSHING_SUFFIX = ":flushing"
     }
 }

@@ -13,7 +13,8 @@ interface ProfileRepository {
 
     fun increaseVisitCount(visitorId: Long, username: String)
     fun getVisitCountDelta(username: String): Long
-    fun flushVisitCounts(): Map<String, Long>
+    fun beginVisitCountFlush(): Map<String, Long>
+    fun commitVisitCountFlush(usernames: Collection<String>)
     fun incrementVisitCountInDb(username: String, delta: Long)
 
 }

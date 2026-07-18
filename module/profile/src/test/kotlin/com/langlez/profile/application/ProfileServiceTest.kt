@@ -71,7 +71,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.generateImageUploadUrl("video.mp4", "video/mp4")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe HttpStatus.BAD_REQUEST.value()
             }
         }
 
@@ -79,7 +79,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.generateImageUploadUrl("doc.pdf", "application/pdf")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe HttpStatus.BAD_REQUEST.value()
             }
         }
     }
@@ -141,7 +141,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.confirmAdditionalImage(1L, "https://cdn/profiles/over.jpg")
-                }.status shouldBe HttpStatus.BAD_REQUEST
+                }.status shouldBe HttpStatus.BAD_REQUEST.value()
             }
         }
 
@@ -186,7 +186,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.changeRepresentImage(1L, "https://cdn/profiles/ghost.jpg")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe HttpStatus.NOT_FOUND.value()
             }
         }
     }
@@ -210,7 +210,7 @@ class ProfileServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.getProfile("ghost")
-                }.status shouldBe HttpStatus.NOT_FOUND
+                }.status shouldBe HttpStatus.NOT_FOUND.value()
             }
         }
     }
