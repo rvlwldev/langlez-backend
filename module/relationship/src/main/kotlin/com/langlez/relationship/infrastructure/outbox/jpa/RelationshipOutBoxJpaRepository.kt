@@ -1,6 +1,6 @@
-package com.langlez.relationship.infrastructure.jpa
+package com.langlez.relationship.infrastructure.outbox.jpa
 
-import com.langlez.relationship.domain.RelationshipOutBox
+import com.langlez.relationship.infrastructure.outbox.RelationshipOutBox
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface RelationshipOutBoxJpaRepository : JpaRepository<RelationshipOutBox, Long> {

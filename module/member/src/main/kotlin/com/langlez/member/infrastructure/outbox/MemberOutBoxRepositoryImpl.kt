@@ -1,11 +1,8 @@
-package com.langlez.member.infrastructure
+package com.langlez.member.infrastructure.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.member.domain.MemberOutBox
-import com.langlez.member.domain.MemberOutBoxHistory
-import com.langlez.member.domain.MemberOutBoxRepository
-import com.langlez.member.infrastructure.jpa.MemberOutBoxHistoryJpaRepository
-import com.langlez.member.infrastructure.jpa.MemberOutBoxJpaRepository
+import com.langlez.member.infrastructure.outbox.jpa.MemberOutBoxHistoryJpaRepository
+import com.langlez.member.infrastructure.outbox.jpa.MemberOutBoxJpaRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation

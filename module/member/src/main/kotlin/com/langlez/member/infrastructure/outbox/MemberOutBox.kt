@@ -1,4 +1,4 @@
-package com.langlez.relationship.domain
+package com.langlez.member.infrastructure.outbox
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -11,8 +11,8 @@ import jakarta.persistence.Table
 import java.time.Instant
 
 @Entity
-@Table(name = "relationship_event_outbox")
-class RelationshipOutBox(
+@Table(name = "member_event_outbox")
+class MemberOutBox(
     val aggregateType: String,
     val aggregateId: String,
     val eventName: String,

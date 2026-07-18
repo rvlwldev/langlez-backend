@@ -3,7 +3,7 @@ package com.langlez.member.application
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.MemberOutBoxRepository
+import com.langlez.member.infrastructure.outbox.MemberOutBoxRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe

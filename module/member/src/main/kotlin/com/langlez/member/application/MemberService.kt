@@ -6,7 +6,7 @@ import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.MemberOutBoxRepository
+import com.langlez.member.infrastructure.outbox.MemberOutBoxRepository
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service

@@ -1,4 +1,4 @@
-package com.langlez.member.domain
+package com.langlez.member.infrastructure.outbox
 
 interface MemberOutBoxRepository {
 

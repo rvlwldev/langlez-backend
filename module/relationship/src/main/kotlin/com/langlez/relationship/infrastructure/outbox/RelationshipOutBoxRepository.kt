@@ -1,4 +1,4 @@
-package com.langlez.relationship.domain
+package com.langlez.relationship.infrastructure.outbox
 
 interface RelationshipOutBoxRepository {
 

@@ -5,7 +5,7 @@ import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
-import com.langlez.relationship.domain.RelationshipOutBoxRepository
+import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow

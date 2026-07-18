@@ -1,4 +1,4 @@
-package com.langlez.relationship.domain
+package com.langlez.member.infrastructure.outbox
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -7,8 +7,8 @@ import jakarta.persistence.Table
 import java.time.Instant
 
 @Entity
-@Table(name = "relationship_event_outbox_history")
-class RelationshipOutBoxHistory(
+@Table(name = "member_event_outbox_history")
+class MemberOutBoxHistory(
     @Id val id: Long,
     val aggregateType: String,
     val aggregateId: String,
@@ -18,7 +18,7 @@ class RelationshipOutBoxHistory(
     val createdAt: Instant,
     val processedAt: Instant = Instant.now(),
 ) {
-    constructor(o: RelationshipOutBox) : this(
+    constructor(o: MemberOutBox) : this(
         id = o.id,
         aggregateType = o.aggregateType,
         aggregateId = o.aggregateId,

@@ -1,6 +1,6 @@
-package com.langlez.member.infrastructure.jpa
+package com.langlez.member.infrastructure.outbox.jpa
 
-import com.langlez.member.domain.MemberOutBox
+import com.langlez.member.infrastructure.outbox.MemberOutBox
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface MemberOutBoxJpaRepository : JpaRepository<MemberOutBox, Long> {

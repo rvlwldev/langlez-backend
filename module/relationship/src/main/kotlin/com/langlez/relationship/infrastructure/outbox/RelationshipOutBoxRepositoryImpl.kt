@@ -1,11 +1,8 @@
-package com.langlez.relationship.infrastructure
+package com.langlez.relationship.infrastructure.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.relationship.domain.RelationshipOutBox
-import com.langlez.relationship.domain.RelationshipOutBoxHistory
-import com.langlez.relationship.domain.RelationshipOutBoxRepository
-import com.langlez.relationship.infrastructure.jpa.RelationshipOutBoxHistoryJpaRepository
-import com.langlez.relationship.infrastructure.jpa.RelationshipOutBoxJpaRepository
+import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxHistoryJpaRepository
+import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxJpaRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
