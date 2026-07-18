@@ -89,6 +89,8 @@ class ProfileService(
         request.mbti?.let { profile.mbti = it }
         request.locale?.let { profile.locale = it }
         request.birthDay?.let { profile.birthDay = it }
+        request.languageLevel?.let { profile.languageLevel = it }
+        request.interests?.let { profile.interests = it.toMutableSet() }
 
         return repo.saveProfile(profile)
     }

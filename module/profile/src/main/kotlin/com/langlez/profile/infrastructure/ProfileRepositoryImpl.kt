@@ -37,6 +37,8 @@ class ProfileRepositoryImpl(
             .where(profile.member.username.eq(username))
             .fetchOne()
 
+    override fun findAllProfiles(): List<Profile> = profileJpa.findAll()
+
     @CacheEvict(cacheNames = ["profile"], key = "#profile.id")
     override fun saveProfile(profile: Profile): Profile = profileJpa.save(profile)
 

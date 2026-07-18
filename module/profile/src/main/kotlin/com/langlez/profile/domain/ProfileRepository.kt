@@ -9,6 +9,7 @@ interface ProfileRepository {
 
     fun findProfile(id: Long): Profile?
     fun findProfileByUsername(username: String): Profile?
+    fun findAllProfiles(): List<Profile>
     fun saveProfile(profile: Profile): Profile
 
     fun increaseVisitCount(visitorId: Long, username: String)

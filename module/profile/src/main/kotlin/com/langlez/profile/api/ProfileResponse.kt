@@ -16,6 +16,8 @@ class ProfileResponse {
         val mbti: String?,
         val locale: Locale?,
         val birthDay: LocalDate?,
+        val languageLevel: String? = null,
+        val interests: Set<String> = emptySet(),
     ) {
         constructor(profile: Profile) : this(
             bio = profile.bio,
@@ -25,6 +27,8 @@ class ProfileResponse {
             mbti = profile.mbti?.name,
             locale = profile.locale,
             birthDay = profile.birthDay,
+            languageLevel = profile.languageLevel?.name,
+            interests = profile.interests,
         )
     }
 
@@ -39,6 +43,8 @@ class ProfileResponse {
         val locale: Locale?,
         val birthDay: LocalDate?,
         val visitCount: Long,
+        val languageLevel: String? = null,
+        val interests: Set<String> = emptySet(),
     ) {
         constructor(profile: Profile, member: Member, visitCount: Long) : this(
             username = member.username,
@@ -51,6 +57,8 @@ class ProfileResponse {
             locale = profile.locale,
             birthDay = profile.birthDay,
             visitCount = visitCount,
+            languageLevel = profile.languageLevel?.name,
+            interests = profile.interests,
         )
     }
 
