@@ -1,6 +1,8 @@
 package com.langlez.security.web
 
 import com.langlez.core.LanglezException
+import com.langlez.core.MemberPresenceTracker
+import com.langlez.core.TokenBlacklist
 import com.langlez.security.util.JwtParser
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -17,6 +19,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 @Component
 class JwtAuthenticationFilter(
     private val jwt: JwtParser,
+    private val tokenBlacklist: TokenBlacklist,
+    private val memberPresenceTracker: MemberPresenceTracker,
     @param:Lazy @param:Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
 
@@ -26,6 +30,10 @@ class JwtAuthenticationFilter(
                 ?.takeIf { it.startsWith("Bearer ") }
                 ?.substring(7)
                 ?: return chain.doFilter(req, res)
+
+            if (tokenBlacklist.isBlacklisted(token)) {
+                throw LanglezException(401, "auth.invalid-token")
+            }
 
             val claims = jwt.parseClaims(token)
 
@@ -37,6 +45,8 @@ class JwtAuthenticationFilter(
             val authentication = UsernamePasswordAuthenticationToken(id, null, listOf(SimpleGrantedAuthority(role)))
             SecurityContextHolder.getContext().authentication = authentication
 
+            memberPresenceTracker.markOnline(id)
+
             chain.doFilter(req, res)
         } catch (e: Exception) {
             resolver.resolveException(req, res, null, e)
@@ -44,3 +54,4 @@ class JwtAuthenticationFilter(
     }
 
 }
+

@@ -1,6 +1,7 @@
 package com.langlez.auth.application
 
 import com.langlez.core.LanglezException
+import com.langlez.core.TokenBlacklist
 import com.langlez.member.application.MemberCommand
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
@@ -21,6 +22,7 @@ class AuthService(
     private val jwt: JwtParser,
     private val redisson: RedissonClient,
     private val memberService: MemberService,
+    private val tokenBlacklist: TokenBlacklist,
 ) : OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
     private val delegate = DefaultOAuth2UserService()
@@ -68,8 +70,10 @@ class AuthService(
             ?: throw LanglezException(401, "auth.invalid-token")
 
         val bucket = redisson.getBucket<String>("refresh_token:$id")
-        if (refreshToken != bucket.get())
+        if (refreshToken != bucket.get()) {
+            bucket.delete()
             throw LanglezException(401, "auth.token-expired")
+        }
 
         return Pair(
             jwt.createRefreshToken(member.id, member.role.name),
@@ -77,7 +81,8 @@ class AuthService(
         ).also { bucket.set(it.first, 14, TimeUnit.DAYS) }
     }
 
-    fun logout(memberId: Long) {
+    fun logout(memberId: Long, accessToken: String) {
         redisson.getBucket<String>("refresh_token:$memberId").delete()
+        tokenBlacklist.blacklist(accessToken, jwt.extractRemainingValiditySeconds(accessToken))
     }
 }

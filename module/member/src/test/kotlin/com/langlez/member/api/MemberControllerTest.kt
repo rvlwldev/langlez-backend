@@ -108,4 +108,15 @@ class MemberControllerTest : BehaviorSpec({
             }
         }
     }
+
+    Given("온라인 상태 조회 시") {
+        When("username으로 조회하면") {
+            every { service.isOnline("testuser") } returns true
+
+            Then("온라인 여부가 반환된다") {
+                val result = controller.getOnlineStatus("testuser")
+                result.online shouldBe true
+            }
+        }
+    }
 })

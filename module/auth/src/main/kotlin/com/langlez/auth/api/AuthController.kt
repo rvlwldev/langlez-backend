@@ -3,6 +3,7 @@ package com.langlez.auth.api
 import com.langlez.auth.api.AuthRequest.RefreshToken
 import com.langlez.auth.api.AuthResponse.NewTokens
 import com.langlez.auth.application.AuthService
+import com.langlez.core.LanglezException
 import com.langlez.security.web.MemberID
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus.NO_CONTENT
@@ -19,5 +20,12 @@ class AuthController(private val service: AuthService) {
 
     @PostMapping("/logout")
     @ResponseStatus(NO_CONTENT)
-    fun logout(@MemberID memberId: Long) = service.logout(memberId)
+    fun logout(
+        @MemberID memberId: Long,
+        @RequestHeader("Authorization") authHeader: String
+    ) {
+        val accessToken = authHeader.takeIf { it.startsWith("Bearer ") }?.substring(7)
+            ?: throw LanglezException(400, "auth.invalid-request")
+        service.logout(memberId, accessToken)
+    }
 }
