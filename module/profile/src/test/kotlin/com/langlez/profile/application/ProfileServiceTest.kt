@@ -3,7 +3,6 @@ package com.langlez.profile.application
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -31,7 +30,9 @@ class ProfileServiceTest : BehaviorSpec({
         email = "user$id@test.com",
         username = "user$id",
         nickname = "User$id",
-        provider = MemberProvider("p$id", MemberProvider.Type.GOOGLE, "User$id")
+        provider = Member.Provider.GOOGLE,
+        providerId = "p$id",
+        providerDisplayName = "User$id"
     )
 
     fun profile(id: Long) = Profile(id = id, member = member(id))

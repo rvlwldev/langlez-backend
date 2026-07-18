@@ -3,7 +3,7 @@ package com.langlez.auth.application
 import com.langlez.core.LanglezException
 import com.langlez.member.application.MemberCommand
 import com.langlez.member.application.MemberService
-import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.Member
 import com.langlez.security.util.JwtParser
 import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.auth.oauth2.OAuth2LanglezUser
@@ -37,7 +37,7 @@ class AuthService(
     fun processLogin(profile: OAuth2UserProfile): OAuth2User {
         val providerId = profile.rawAttributes[profile.providerKey]?.toString()
             ?: throw LanglezException(400, "auth.invalid-request")
-        val providerType = MemberProvider.Type.valueOf(profile.provider.uppercase())
+        val providerType = Member.Provider.valueOf(profile.provider.uppercase())
 
         val member = memberService.findByProvider(providerId, providerType)
             ?.also { memberService.updateLastAccess(it.id) }
