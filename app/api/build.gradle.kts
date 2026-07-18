@@ -18,6 +18,8 @@ dependencies {
     implementation(project(":module:relationship"))
     implementation(project(":module:echo"))
     implementation(project(":module:chat"))
+    implementation(project(":module:matching"))
+    implementation(project(":module:wave"))
     implementation(project(":module:notification"))
 
     developmentOnly(libs.development.springboot.devtools)
