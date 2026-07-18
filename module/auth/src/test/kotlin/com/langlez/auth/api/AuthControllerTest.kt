@@ -52,12 +52,13 @@ class AuthControllerTest : BehaviorSpec({
     }
 
     Given("로그아웃 요청 시") {
-        When("memberId로 로그아웃하면") {
-            every { service.logout(1L) } just runs
+        When("memberId와 Authorization 헤더로 로그아웃하면") {
+            val token = "some-access-token"
+            every { service.logout(1L, token) } just runs
 
             Then("서비스의 logout이 정확히 호출된다") {
-                controller.logout(1L)
-                verify(exactly = 1) { service.logout(1L) }
+                controller.logout(1L, "Bearer $token")
+                verify(exactly = 1) { service.logout(1L, token) }
             }
         }
     }

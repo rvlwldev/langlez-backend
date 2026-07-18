@@ -1,6 +1,7 @@
 package com.langlez.member.application
 
 import com.langlez.core.LanglezException
+import com.langlez.core.MemberPresenceTracker
 import com.langlez.member.application.MemberCommand.Create
 import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional
 class MemberService(
     private val repo: MemberRepository,
     private val outbox: MemberOutBoxRepository,
+    private val memberPresenceTracker: MemberPresenceTracker,
 ) {
 
     @Transactional
@@ -85,5 +87,12 @@ class MemberService(
         val saved = repo.save(member)
         outbox.save("MEMBER", saved.id.toString(), "member-nickname-changed", MemberEvent.NicknameChanged(saved.id, newNickname))
         return saved
+    }
+
+    @Transactional(readOnly = true)
+    fun isOnline(username: String): Boolean {
+        val member = repo.findByUsername(username)
+            ?: throw LanglezException(404, "member.not-found")
+        return memberPresenceTracker.isOnline(member.id)
     }
 }

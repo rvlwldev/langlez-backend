@@ -15,9 +15,10 @@ class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
-    val service = MemberService(repo, outbox)
+    val memberPresenceTracker = mockk<com.langlez.core.MemberPresenceTracker>()
+    val service = MemberService(repo, outbox, memberPresenceTracker)
 
-    afterEach { clearMocks(repo, outbox, answers = false) }
+    afterEach { clearMocks(repo, outbox, memberPresenceTracker, answers = false) }
 
     fun createMember(
         id: Long = 1L,
@@ -182,6 +183,40 @@ class MemberServiceTest : BehaviorSpec({
             Then("닉네임이 변경된다") {
                 val result = service.updateNickname(1L, "New Name")
                 result.nickname shouldBe "New Name"
+            }
+        }
+    }
+
+    Given("온라인 상태 확인 시") {
+        val member = createMember(id = 1L, username = "onlineuser")
+
+        When("존재하지 않는 회원인 경우") {
+            every { repo.findByUsername("offlineuser") } returns null
+
+            Then("NOT_FOUND 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.isOnline("offlineuser")
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "member.not-found"
+            }
+        }
+
+        When("회원이 존재하고 온라인 상태인 경우") {
+            every { repo.findByUsername("onlineuser") } returns member
+            every { memberPresenceTracker.isOnline(1L) } returns true
+
+            Then("true를 반환한다") {
+                service.isOnline("onlineuser") shouldBe true
+            }
+        }
+
+        When("회원이 존재하고 오프라인 상태인 경우") {
+            every { repo.findByUsername("onlineuser") } returns member
+            every { memberPresenceTracker.isOnline(1L) } returns false
+
+            Then("false를 반환한다") {
+                service.isOnline("onlineuser") shouldBe false
             }
         }
     }

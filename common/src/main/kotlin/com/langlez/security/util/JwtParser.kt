@@ -60,4 +60,11 @@ class JwtParser(
     fun extractRole(token: String): String = parseClaims(token).get("role", String::class.java)
 
     fun extractTokenType(token: String): String = parseClaims(token).get("type", String::class.java)
+
+    fun extractRemainingValiditySeconds(token: String): Long {
+        val claims = parseClaims(token)
+        val expirationTime = claims.expiration.time
+        val currentTime = System.currentTimeMillis()
+        return (expirationTime - currentTime) / 1000
+    }
 }

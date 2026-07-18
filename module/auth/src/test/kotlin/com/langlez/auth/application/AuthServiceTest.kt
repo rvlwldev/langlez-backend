@@ -19,10 +19,11 @@ class AuthServiceTest : BehaviorSpec({
     val memberService = mockk<MemberService>()
     val redisson = mockk<RedissonClient>()
     val bucket = mockk<RBucket<String>>()
+    val tokenBlacklist = mockk<com.langlez.core.TokenBlacklist>()
 
-    val service = AuthService(jwt, redisson, memberService)
+    val service = AuthService(jwt, redisson, memberService, tokenBlacklist)
 
-    afterEach { clearMocks(jwt, memberService, redisson, bucket, answers = false) }
+    afterEach { clearMocks(jwt, memberService, redisson, bucket, tokenBlacklist, answers = false) }
 
     Given("토큰 갱신 요청 시") {
         val memberId = 1L
@@ -85,11 +86,13 @@ class AuthServiceTest : BehaviorSpec({
             every { jwt.extractID("old-token") } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns "different-token"
+            every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh("old-token") }
                 ex.status shouldBe 401
                 ex.message shouldBe "auth.token-expired"
+                verify(exactly = 1) { bucket.delete() }
             }
         }
 

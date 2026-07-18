@@ -35,4 +35,6 @@ class MemberResponse {
             role = member.role.name,
         )
     }
+
+    data class OnlineStatus(val online: Boolean)
 }

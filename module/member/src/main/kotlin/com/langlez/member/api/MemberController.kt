@@ -38,4 +38,10 @@ class MemberController(
         return MemberResponse.Public(member)
     }
 
+    @GetMapping("/{username}/online-status")
+    fun getOnlineStatus(@PathVariable username: String): MemberResponse.OnlineStatus {
+        val online = service.isOnline(username)
+        return MemberResponse.OnlineStatus(online)
+    }
+
 }
