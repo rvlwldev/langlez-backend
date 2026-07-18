@@ -12,7 +12,7 @@
 * **Language / Framework**: Kotlin 2.x, Spring Boot 3.5+, Java 21 (Virtual Threads)
 * **Database (Hybrid)**:
   * **MySQL 8.0**: 회원, 권한, 에코(Echo, 피드/댓글/해쉬태그), 구독/결제 (정형 데이터 및 트랜잭션)
-  * **MongoDB**: 채팅 메시지, 보이스룸 메타데이터, 로그 (비정형/대량 데이터)
+  * **MongoDB**: 채팅 메시지, Wave 메타데이터, 로그 (비정형/대량 데이터)
   * **Redis**: 실시간 매칭 큐, 유저 접속 상태(Presence), Rate Limiting, 번역 캐시, 에코 인기 해쉬태그 트렌딩
 * **Infrastructure**:
   * **Media**: AWS S3 + CloudFront (CDN) + Lambda@Edge (Real-time Resizing)
@@ -29,7 +29,7 @@
 | `module:echo` | Echo 피드 업로드(MySQL), 해쉬태그/트렌딩(Redis), 필터링, 신고/블라인드 로직 |
 | `module:chat` | 1:1 채팅, MongoDB 메시지 저장, 파일 전송 처리(S3 연동) |
 | `module:matching` | 게임형 실시간 매칭 큐(Redis ZSET), 조건 완화 알고리즘 |
-| `module:voiceroom` | 보이스 스트리밍(WebRTC), 무료/유료 권한별 채팅 제한 |
+| `module:wave` | 보이스 스트리밍(WebRTC), 무료/유료 권한별 채팅 제한 |
 | `module:billing` | 구독 관리, 광고 제거 상태 확인 서비스 |
 | `module:notification`| FCM 기반 푸시 알림, 인앱 알림 |
 
@@ -96,7 +96,7 @@
 
 ### Phase 5: 매칭 & 실시간
 - [ ] Matching: Redis ZSET 기반 실시간 매칭 큐, 일별 추천 알고리즘
-- [ ] Voiceroom: WebRTC 보이스 스트리밍, 무료/유료 권한별 채팅 제한
+- [ ] Wave: WebRTC 보이스 스트리밍, 무료/유료 권한별 채팅 제한
 
 ### Phase 6: 결제 & 알림
 - [ ] Billing: 구독 관리 (IAP), 광고 제거 상태 확인
