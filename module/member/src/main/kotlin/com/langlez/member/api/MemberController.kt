@@ -5,6 +5,7 @@ import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberRepository
 import com.langlez.security.web.MemberID
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -30,6 +31,12 @@ class MemberController(
     fun patchNickname(@MemberID memberId: Long, @RequestBody @Valid request: MemberRequest.UpdateNickname): MemberResponse.Me {
         val member = service.updateNickname(memberId, request.nickname)
         return MemberResponse.Me(member)
+    }
+
+    @PatchMapping("/me/fcm-token")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun patchFcmToken(@MemberID memberId: Long, @RequestBody @Valid request: MemberRequest.UpdateFcmToken) {
+        service.updateFcmToken(memberId, request.token)
     }
 
     @GetMapping("/@{username}")

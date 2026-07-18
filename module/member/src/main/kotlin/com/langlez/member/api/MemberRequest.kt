@@ -15,4 +15,9 @@ class MemberRequest {
         @field:Size(min = 1, max = 20, message = "member.nickname.invalid")
         val nickname: String,
     )
+
+    data class UpdateFcmToken(
+        @field:NotBlank
+        val token: String,
+    )
 }
