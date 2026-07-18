@@ -80,4 +80,15 @@ class HashtagTrendRepositoryImplTest : BehaviorSpec({
             }
         }
     }
+
+    Given("days가 상한(31)을 초과해서 요청되면") {
+        When("repository.getTrending을 10000일로 호출하면") {
+            val trending = repository.getTrending(10000, 10)
+
+            Then("예외 발생 없이 정상적으로 결과가 반환되어야 한다") {
+                trending shouldNotBe null
+                trending.any { it.hashtag == "kotlin" } shouldBe true
+            }
+        }
+    }
 })

@@ -204,4 +204,81 @@ class EchoServiceTest : BehaviorSpec({
             }
         }
     }
+
+    Given("피드 조회 시 size가 상한을 초과하면") {
+        val memberId = 1L
+        val followingId = 2L
+        val post = Post(id = 10L, authorId = followingId, content = "테스트 글")
+
+        every { relationshipRepository.findFollowings(memberId, null, 1000) } returns listOf(Follow(memberId, followingId))
+        every { postRepository.findFollowingFeed(listOf(followingId), null, 100) } returns listOf(post)
+        every { postRepository.findRecommendedFeed(any(), null, 100) } returns listOf(post)
+        every { postRepository.findByHashtag(any(), null, 100) } returns listOf(post)
+        every { postRepository.findMediaByPostIds(any()) } returns emptyList()
+
+        val authorMember = mockk<Member>()
+        every { authorMember.id } returns followingId
+        every { authorMember.username } returns "test_user"
+        every { authorMember.nickname } returns "Test"
+        every { memberRepo.findByIds(any()) } returns listOf(authorMember)
+
+        When("getFollowingFeed를 size 9999로 호출하면") {
+            service.getFollowingFeed(memberId, null, 9999)
+
+            Then("실제 repository는 MAX_PAGE_SIZE인 100으로 호출되어야 한다") {
+                verify { postRepository.findFollowingFeed(listOf(followingId), null, 100) }
+            }
+        }
+
+        When("getRecommendedFeed를 size 9999로 호출하면") {
+            service.getRecommendedFeed(memberId, null, 9999)
+
+            Then("실제 repository는 MAX_PAGE_SIZE인 100으로 호출되어야 한다") {
+                verify { postRepository.findRecommendedFeed(listOf(memberId, followingId), null, 100) }
+            }
+        }
+
+        When("searchByHashtag를 size 9999로 호출하면") {
+            service.searchByHashtag("tag", null, 9999)
+
+            Then("실제 repository는 MAX_PAGE_SIZE인 100으로 호출되어야 한다") {
+                verify { postRepository.findByHashtag("tag", null, 100) }
+            }
+        }
+    }
+
+    Given("인기 해시태그 조회 시") {
+        val trendingHashtags = listOf(HashtagTrendCount("kotlin", 5))
+        every { hashtagTrendRepository.getTrending(7, any()) } returns trendingHashtags
+        every { hashtagTrendRepository.getTrending(7, 50) } returns trendingHashtags
+
+        When("days가 1, 7, 30이 아닌 값(예: 5)이면") {
+            Then("400 예외(echo.trending.invalid-days)가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.getTrendingHashtags(5, 10)
+                }
+                ex.status shouldBe 400
+                ex.message shouldBe "echo.trending.invalid-days"
+            }
+        }
+
+        When("days가 유효한 값(예: 7)이면") {
+            val result = service.getTrendingHashtags(7, 10)
+
+            Then("정상적으로 hashtagTrendRepository.getTrending이 호출되고 결과가 반환된다") {
+                result.size shouldBe 1
+                result[0].hashtag shouldBe "kotlin"
+                result[0].count shouldBe 5
+                verify { hashtagTrendRepository.getTrending(7, 10) }
+            }
+        }
+
+        When("limit을 상한(50)보다 크게(예: 9999) 요청하면") {
+            service.getTrendingHashtags(7, 9999)
+
+            Then("hashtagTrendRepository.getTrending이 실제로는 limit=50으로 호출된다") {
+                verify { hashtagTrendRepository.getTrending(7, 50) }
+            }
+        }
+    }
 })
