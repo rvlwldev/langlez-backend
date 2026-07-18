@@ -1,4 +1,4 @@
-package com.langlez.member.outbox
+package com.langlez.member.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

@@ -1,6 +1,8 @@
-package com.langlez.member.outbox
+package com.langlez.member.application
 
 import com.langlez.core.MessageQueue
+import com.langlez.member.domain.MemberOutBoxHistory
+import com.langlez.member.domain.MemberOutBoxRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
