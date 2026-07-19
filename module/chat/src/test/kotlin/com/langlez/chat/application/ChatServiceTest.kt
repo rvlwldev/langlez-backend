@@ -192,4 +192,243 @@ class ChatServiceTest : BehaviorSpec({
             }
         }
     }
+
+    Given("deleteMessage 호출 시") {
+        val memberId = 1L
+        val roomId = "room1"
+        val messageId = "msg1"
+
+        When("정상 삭제 요청이면") {
+            val message = ChatMessage(id = messageId, roomId = roomId, senderId = memberId, type = ChatMessage.Type.TEXT, content = "hello")
+            every { chatMessageRepository.findById(messageId) } returns message
+            every { chatMessageRepository.markDeleted(messageId, any()) } just runs
+
+            Then("메시지를 삭제 처리하고 삭제 이벤트를 브로드캐스트한다") {
+                service.deleteMessage(memberId, roomId, messageId)
+                verify { chatMessageRepository.markDeleted(messageId, any()) }
+                verify { chatBroadcaster.broadcastMessageDeleted(roomId, messageId) }
+            }
+        }
+
+        When("본인이 작성하지 않은 메시지를 삭제하려고 하면") {
+            val message = ChatMessage(id = messageId, roomId = roomId, senderId = 2L, type = ChatMessage.Type.TEXT, content = "hello")
+            every { chatMessageRepository.findById(messageId) } returns message
+
+            Then("403 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deleteMessage(memberId, roomId, messageId)
+                }
+                ex.status shouldBe 403
+                ex.message shouldBe "chat.not-sender"
+            }
+        }
+
+        When("이미 삭제된 메시지를 다시 삭제하려고 하면") {
+            val message = ChatMessage(
+                id = messageId,
+                roomId = roomId,
+                senderId = memberId,
+                type = ChatMessage.Type.TEXT,
+                content = "hello",
+                deletedAt = Instant.now()
+            )
+            every { chatMessageRepository.findById(messageId) } returns message
+
+            Then("409 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deleteMessage(memberId, roomId, messageId)
+                }
+                ex.status shouldBe 409
+                ex.message shouldBe "chat.already-deleted"
+            }
+        }
+    }
+
+    Given("getMessages 호출 시") {
+        val memberId = 1L
+        val roomId = "room1"
+
+        When("삭제된 메시지가 포함되어 있으면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
+            val deletedMsg = ChatMessage(
+                id = "msg1",
+                roomId = roomId,
+                senderId = memberId,
+                type = ChatMessage.Type.TEXT,
+                content = "secret content",
+                fileUrl = "http://example.com/file",
+                deletedAt = Instant.now()
+            )
+            val normalMsg = ChatMessage(
+                id = "msg2",
+                roomId = roomId,
+                senderId = memberId,
+                type = ChatMessage.Type.TEXT,
+                content = "hello",
+                deletedAt = null
+            )
+
+            every { chatRoomRepository.findById(roomId) } returns room
+            every { chatMessageRepository.findByRoom(roomId, null, 20) } returns listOf(deletedMsg, normalMsg)
+            every { chatMessageRepository.findByIds(emptyList()) } returns emptyList()
+            every { memberRepository.findByIds(listOf(memberId)) } returns listOf(createMember(memberId))
+
+            Then("삭제된 메시지도 목록에 포함되지만 content/fileUrl은 null이고 deleted=true이다") {
+                val result = service.getMessages(memberId, roomId, null, 20)
+                result.messages shouldHaveSize 2
+
+                val first = result.messages[0]
+                first.id shouldBe "msg1"
+                first.content shouldBe null
+                first.fileUrl shouldBe null
+                first.deleted shouldBe true
+
+                val second = result.messages[1]
+                second.id shouldBe "msg2"
+                second.content shouldBe "hello"
+                second.deleted shouldBe false
+            }
+        }
+    }
+
+    Given("sendMessage with replyToMessageId 호출 시") {
+        val memberId = 1L
+        val roomId = "room1"
+
+        When("정상적인 답장 전송 요청이면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
+            val targetMsg = ChatMessage(id = "target1", roomId = roomId, senderId = 2L, type = ChatMessage.Type.TEXT, content = "target content")
+            val savedMsg = ChatMessage(
+                id = "msg2",
+                roomId = roomId,
+                senderId = memberId,
+                type = ChatMessage.Type.TEXT,
+                content = "reply content",
+                replyToMessageId = "target1"
+            )
+
+            every { chatRoomRepository.findById(roomId) } returns room
+            every { memberRepository.findById(memberId) } returns createMember(memberId, "user1")
+            every { chatMessageRepository.findById("target1") } returns targetMsg
+            every { chatMessageRepository.save(any()) } returns savedMsg
+            every { chatRoomRepository.save(any()) } returns room
+            every { memberRepository.findById(2L) } returns createMember(2L, "user2")
+
+            Then("replyToMessageId를 저장하고 replyPreview가 채워진 summary를 반환한다") {
+                val result = service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "reply content", null, replyToMessageId = "target1")
+                result shouldBe savedMsg
+
+                val summary = service.toMessageSummary(savedMsg)
+                summary.replyPreview shouldNotBe null
+                summary.replyPreview?.messageId shouldBe "target1"
+                summary.replyPreview?.senderUsername shouldBe "user2"
+                summary.replyPreview?.contentPreview shouldBe "target content"
+                summary.replyPreview?.deleted shouldBe false
+            }
+        }
+
+        When("존재하지 않는 답장 대상이면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
+            every { chatRoomRepository.findById(roomId) } returns room
+            every { chatMessageRepository.findById("invalid") } returns null
+
+            Then("404 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "reply content", null, replyToMessageId = "invalid")
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "chat.reply-target-not-found"
+            }
+        }
+
+        When("삭제된 메시지에 답장하는 경우") {
+            val targetMsg = ChatMessage(
+                id = "target1",
+                roomId = roomId,
+                senderId = 2L,
+                type = ChatMessage.Type.TEXT,
+                content = "secret target",
+                deletedAt = Instant.now()
+            )
+            val savedMsg = ChatMessage(
+                id = "msg2",
+                roomId = roomId,
+                senderId = memberId,
+                type = ChatMessage.Type.TEXT,
+                content = "reply content",
+                replyToMessageId = "target1"
+            )
+
+            every { chatMessageRepository.findById("target1") } returns targetMsg
+            every { memberRepository.findById(memberId) } returns createMember(memberId, "user1")
+
+            Then("replyPreview의 deleted=true이고 내용이 은닉된다") {
+                val summary = service.toMessageSummary(savedMsg)
+                summary.replyPreview shouldNotBe null
+                summary.replyPreview?.deleted shouldBe true
+                summary.replyPreview?.senderUsername shouldBe "알 수 없음"
+                summary.replyPreview?.contentPreview shouldBe null
+            }
+        }
+    }
+
+    Given("reportUser 호출 시") {
+        val reporterId = 1L
+        val reportedUserId = 2L
+        val roomId = "room1"
+
+        When("정상적인 신고 요청이면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
+            val lastMsg = ChatMessage(id = "lastMsg1", roomId = roomId, senderId = reportedUserId, type = ChatMessage.Type.TEXT, content = "bad msg")
+
+            every { chatRoomRepository.findById(roomId) } returns room
+            every { chatMessageRepository.findLastMessage(roomId) } returns lastMsg
+            every { chatOutBoxRepository.save(any(), any(), any(), any()) } returns mockk()
+
+            Then("outbox에 CHAT_REPORT 이벤트를 저장한다") {
+                service.reportUser(reporterId, roomId, reportedUserId, "inappropriate content")
+                verify {
+                    chatOutBoxRepository.save(
+                        aggregateType = "CHAT_REPORT",
+                        aggregateId = roomId,
+                        eventName = "chat-user-reported",
+                        payload = match {
+                            it is ChatUserReportedEvent &&
+                                    it.roomId == roomId &&
+                                    it.reporterId == reporterId &&
+                                    it.reportedUserId == reportedUserId &&
+                                    it.reason == "inappropriate content" &&
+                                    it.triggerMessageId == "lastMsg1"
+                        }
+                    )
+                }
+            }
+        }
+
+        When("신고 대상이 방 참가자가 아니면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
+            every { chatRoomRepository.findById(roomId) } returns room
+
+            Then("400 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.reportUser(reporterId, roomId, 3L, "reason")
+                }
+                ex.status shouldBe 400
+                ex.message shouldBe "chat.reported-user-not-participant"
+            }
+        }
+
+        When("신고자 본인이 방 참가자가 아니면") {
+            val room = ChatRoom(id = roomId, participantIds = listOf(2L, 3L))
+            every { chatRoomRepository.findById(roomId) } returns room
+
+            Then("403 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.reportUser(reporterId, roomId, 2L, "reason")
+                }
+                ex.status shouldBe 403
+                ex.message shouldBe "chat.room-forbidden"
+            }
+        }
+    }
 })

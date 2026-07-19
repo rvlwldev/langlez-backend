@@ -57,18 +57,34 @@ class ChatController(
             roomId = roomId,
             type = request.type,
             content = request.content,
-            fileUrl = request.fileUrl
+            fileUrl = request.fileUrl,
+            replyToMessageId = request.replyToMessageId
         )
-        val sender = memberRepo.findById(memberId)
-            ?: throw LanglezException(404, "member.not-found")
+        return service.toMessageSummary(message)
+    }
 
-        return ChatResponse.MessageSummary(
-            id = message.id!!,
-            senderUsername = sender.username,
-            type = message.type,
-            content = message.content,
-            fileUrl = message.fileUrl,
-            createdAt = message.createdAt
+    @DeleteMapping("/rooms/{roomId}/messages/{messageId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteMessage(
+        @MemberID memberId: Long,
+        @PathVariable roomId: String,
+        @PathVariable messageId: String
+    ) {
+        service.deleteMessage(memberId, roomId, messageId)
+    }
+
+    @PostMapping("/rooms/{roomId}/report")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun reportUser(
+        @MemberID memberId: Long,
+        @PathVariable roomId: String,
+        @RequestBody request: ChatReportRequest
+    ) {
+        service.reportUser(
+            reporterId = memberId,
+            roomId = roomId,
+            reportedUserId = request.reportedUserId,
+            reason = request.reason
         )
     }
 
@@ -111,5 +127,11 @@ class ChatController(
 data class SendMessageRequest(
     val type: ChatMessage.Type,
     val content: String? = null,
-    val fileUrl: String? = null
+    val fileUrl: String? = null,
+    val replyToMessageId: String? = null
+)
+
+data class ChatReportRequest(
+    val reportedUserId: Long,
+    val reason: String
 )
