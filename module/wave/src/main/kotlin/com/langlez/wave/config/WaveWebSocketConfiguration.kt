@@ -3,6 +3,7 @@ package com.langlez.wave.config
 import com.langlez.core.LanglezException
 import com.langlez.core.TokenBlacklist
 import com.langlez.security.util.JwtParser
+import com.langlez.wave.domain.WaveRoom
 import com.langlez.wave.domain.WaveRoomRepository
 import com.langlez.wave.infrastructure.WaveViewerTracker
 import org.springframework.context.annotation.Bean
@@ -83,10 +84,24 @@ class WaveJwtChannelInterceptor(
         when (accessor.command) {
             StompCommand.CONNECT -> authenticate(accessor)
             StompCommand.SUBSCRIBE -> {
-                val roomId = authorizeRoomAccess(accessor)
-                if (roomId != null) trackJoin(accessor, roomId)
+                val room = authorizeRoomAccess(accessor)
+                if (room != null) {
+                    val memberId = (accessor.user as? WaveStompPrincipal)?.memberId
+                    if (memberId != null) {
+                        checkBanAndParticipantLimit(room, memberId)
+                    }
+                    trackJoin(accessor, room.id)
+                }
             }
-            StompCommand.SEND -> authorizeRoomAccess(accessor)
+            StompCommand.SEND -> {
+                val room = authorizeRoomAccess(accessor)
+                if (room != null) {
+                    val memberId = (accessor.user as? WaveStompPrincipal)?.memberId
+                    if (memberId != null && viewerTracker.isBanned(room.id, memberId)) {
+                        throw LanglezException(403, "wave.banned-user")
+                    }
+                }
+            }
             StompCommand.UNSUBSCRIBE -> trackLeave(accessor)
             else -> {}
         }
@@ -113,7 +128,7 @@ class WaveJwtChannelInterceptor(
         }
     }
 
-    private fun authorizeRoomAccess(accessor: StompHeaderAccessor): Long? {
+    private fun authorizeRoomAccess(accessor: StompHeaderAccessor): WaveRoom? {
         val destination = accessor.destination ?: return null
         val roomId = roomIdPattern.find(destination)?.groupValues?.get(1)?.toLongOrNull() ?: return null
 
@@ -124,7 +139,17 @@ class WaveJwtChannelInterceptor(
             throw LanglezException(403, "wave.room-ended")
         }
 
-        return roomId
+        return room
+    }
+
+    private fun checkBanAndParticipantLimit(room: WaveRoom, memberId: Long) {
+        if (viewerTracker.isBanned(room.id, memberId)) {
+            throw LanglezException(403, "wave.banned-user")
+        }
+
+        if (!viewerTracker.isViewer(room.id, memberId) && viewerTracker.viewerCount(room.id) >= room.maxParticipants) {
+            throw LanglezException(403, "wave.room-full")
+        }
     }
 
     private fun trackJoin(accessor: StompHeaderAccessor, roomId: Long) {

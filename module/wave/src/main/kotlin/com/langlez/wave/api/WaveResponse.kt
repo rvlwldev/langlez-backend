@@ -7,6 +7,8 @@ class WaveResponse {
         val id: Long,
         val broadcasterUsername: String,
         val broadcasterNickname: String,
+        val title: String,
+        val maxParticipants: Int,
         val startedAt: Instant,
         val endedAt: Instant?,
         val viewerCount: Long

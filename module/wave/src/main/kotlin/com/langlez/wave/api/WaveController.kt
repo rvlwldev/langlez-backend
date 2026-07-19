@@ -13,8 +13,11 @@ class WaveController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun startLive(@MemberID memberId: Long): WaveResponse.RoomSummary {
-        val room = service.startLive(memberId)
+    fun startLive(
+        @MemberID memberId: Long,
+        @RequestBody request: WaveRequest.StartLive
+    ): WaveResponse.RoomSummary {
+        val room = service.startLive(memberId, request.title, request.maxParticipants)
         return service.toRoomSummary(room)
     }
 
@@ -25,6 +28,36 @@ class WaveController(
     ): WaveResponse.RoomSummary {
         val room = service.endLive(memberId, roomId)
         return service.toRoomSummary(room)
+    }
+
+    @PatchMapping("/{roomId}/title")
+    fun updateTitle(
+        @MemberID memberId: Long,
+        @PathVariable roomId: Long,
+        @RequestBody request: WaveRequest.UpdateTitle
+    ): WaveResponse.RoomSummary {
+        val room = service.updateTitle(memberId, roomId, request.title)
+        return service.toRoomSummary(room)
+    }
+
+    @PostMapping("/{roomId}/mute")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun muteMember(
+        @MemberID memberId: Long,
+        @PathVariable roomId: Long,
+        @RequestBody request: WaveRequest.MuteMember
+    ) {
+        service.muteMember(memberId, roomId, request.targetMemberId)
+    }
+
+    @PostMapping("/{roomId}/kick")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun kickMember(
+        @MemberID memberId: Long,
+        @PathVariable roomId: Long,
+        @RequestBody request: WaveRequest.KickMember
+    ) {
+        service.kickMember(memberId, roomId, request.targetMemberId)
     }
 
     @GetMapping

@@ -21,9 +21,10 @@ class WaveService(
     private val relationshipRepository: RelationshipRepository,
     private val viewerTracker: WaveViewerTracker,
     private val notificator: Notificator,
+    private val broadcaster: WaveBroadcaster,
 ) {
 
-    fun startLive(memberId: Long): WaveRoom {
+    fun startLive(memberId: Long, title: String, maxParticipants: Int): WaveRoom {
         val broadcaster = memberRepository.findById(memberId)
             ?: throw LanglezException(404, "member.not-found")
 
@@ -31,7 +32,13 @@ class WaveService(
             throw LanglezException(403, "wave.premium-required")
         }
 
-        val room = waveRoomRepository.save(WaveRoom(broadcasterId = memberId))
+        val room = waveRoomRepository.save(
+            WaveRoom(
+                broadcasterId = memberId,
+                title = title,
+                maxParticipants = maxParticipants
+            )
+        )
 
         val followerIds = relationshipRepository.findFollowers(memberId, null, FOLLOWER_NOTIFY_PAGE_SIZE)
             .map { it.followerId }
@@ -63,6 +70,38 @@ class WaveService(
         return waveRoomRepository.save(room)
     }
 
+    fun updateTitle(memberId: Long, roomId: Long, title: String): WaveRoom {
+        val room = getRoom(roomId)
+        if (room.broadcasterId != memberId) {
+            throw LanglezException(403, "wave.not-broadcaster")
+        }
+        room.updateTitle(title)
+        return waveRoomRepository.save(room)
+    }
+
+    fun muteMember(memberId: Long, roomId: Long, targetMemberId: Long) {
+        val room = getRoom(roomId)
+        if (room.broadcasterId != memberId) {
+            throw LanglezException(403, "wave.not-broadcaster")
+        }
+        if (room.isEnded()) {
+            throw LanglezException(409, "wave.already-ended")
+        }
+        broadcaster.sendMuteToUser(targetMemberId, WaveMutePayload(roomId))
+    }
+
+    fun kickMember(memberId: Long, roomId: Long, targetMemberId: Long) {
+        val room = getRoom(roomId)
+        if (room.broadcasterId != memberId) {
+            throw LanglezException(403, "wave.not-broadcaster")
+        }
+        if (room.isEnded()) {
+            throw LanglezException(409, "wave.already-ended")
+        }
+        viewerTracker.kickUser(roomId, targetMemberId)
+        broadcaster.sendKickToUser(targetMemberId, WaveKickPayload(roomId))
+    }
+
     @Transactional(readOnly = true)
     fun getActiveRooms(cursor: Long?, size: Int): List<WaveRoom> {
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
@@ -77,6 +116,8 @@ class WaveService(
             id = room.id,
             broadcasterUsername = broadcaster.username,
             broadcasterNickname = broadcaster.nickname,
+            title = room.title,
+            maxParticipants = room.maxParticipants,
             startedAt = room.startedAt,
             endedAt = room.endedAt,
             viewerCount = viewerTracker.viewerCount(room.id)

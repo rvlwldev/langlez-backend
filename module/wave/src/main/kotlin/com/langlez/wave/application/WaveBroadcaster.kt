@@ -19,6 +19,14 @@ class WaveBroadcaster(
     fun sendErrorToUser(username: String, payload: WaveErrorPayload) {
         messagingTemplate.convertAndSendToUser(username, "/queue/wave/errors", payload)
     }
+
+    fun sendMuteToUser(targetMemberId: Long, payload: WaveMutePayload) {
+        messagingTemplate.convertAndSendToUser(targetMemberId.toString(), "/queue/wave/mute", payload)
+    }
+
+    fun sendKickToUser(targetMemberId: Long, payload: WaveKickPayload) {
+        messagingTemplate.convertAndSendToUser(targetMemberId.toString(), "/queue/wave/kicked", payload)
+    }
 }
 
 data class WaveChatBroadcastPayload(
@@ -30,4 +38,12 @@ data class WaveChatBroadcastPayload(
 data class WaveErrorPayload(
     val status: Int,
     val message: String,
+)
+
+data class WaveMutePayload(
+    val roomId: Long,
+)
+
+data class WaveKickPayload(
+    val roomId: Long,
 )

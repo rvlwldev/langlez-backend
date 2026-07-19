@@ -33,5 +33,21 @@ class WaveViewerTracker(
         removeViewer(roomId, memberId)
     }
 
+    fun isViewer(roomId: Long, memberId: Long): Boolean =
+        redissonClient.getSet<Long>(viewersKey(roomId)).contains(memberId)
+
+    fun banUser(roomId: Long, memberId: Long) {
+        redissonClient.getSet<Long>(bannedKey(roomId)).add(memberId)
+    }
+
+    fun isBanned(roomId: Long, memberId: Long): Boolean =
+        redissonClient.getSet<Long>(bannedKey(roomId)).contains(memberId)
+
+    fun kickUser(roomId: Long, memberId: Long) {
+        banUser(roomId, memberId)
+        removeViewer(roomId, memberId)
+    }
+
     private fun viewersKey(roomId: Long) = "wave:room:$roomId:viewers"
+    private fun bannedKey(roomId: Long) = "wave:room:$roomId:banned"
 }
