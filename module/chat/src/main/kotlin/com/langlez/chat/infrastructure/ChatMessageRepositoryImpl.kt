@@ -10,6 +10,8 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
+import org.springframework.data.mongodb.core.query.Update
+
 @Repository
 class ChatMessageRepositoryImpl(
     private val mongoRepo: ChatMessageMongoRepository,
@@ -18,6 +20,16 @@ class ChatMessageRepositoryImpl(
 
     override fun save(message: ChatMessage): ChatMessage {
         return mongoRepo.save(message)
+    }
+
+    override fun findById(id: String): ChatMessage? {
+        return mongoRepo.findById(id).orElse(null)
+    }
+
+    override fun findByIds(ids: List<String>): List<ChatMessage> {
+        if (ids.isEmpty()) return emptyList()
+        val query = Query(Criteria.where("id").`in`(ids))
+        return mongoTemplate.find(query, ChatMessage::class.java)
     }
 
     override fun findByRoom(roomId: String, cursor: String?, size: Int): List<ChatMessage> {
@@ -62,5 +74,18 @@ class ChatMessageRepositoryImpl(
         )
         query.with(Sort.by(Sort.Direction.ASC, "createdAt"))
         return mongoTemplate.find(query, ChatMessage::class.java)
+    }
+
+    override fun markDeleted(messageId: String, deletedAt: Instant) {
+        val query = Query(Criteria.where("id").`is`(messageId))
+        val update = Update().set("deletedAt", deletedAt)
+        mongoTemplate.updateFirst(query, update, ChatMessage::class.java)
+    }
+
+    override fun findLastMessage(roomId: String): ChatMessage? {
+        val query = Query(Criteria.where("roomId").`is`(roomId))
+            .with(Sort.by(Sort.Direction.DESC, "createdAt", "id"))
+            .limit(1)
+        return mongoTemplate.findOne(query, ChatMessage::class.java)
     }
 }

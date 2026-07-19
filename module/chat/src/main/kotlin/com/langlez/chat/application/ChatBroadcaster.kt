@@ -18,6 +18,11 @@ class ChatBroadcaster(
         val payload = ReadEventPayload(username = username, readAt = readAt)
         messagingTemplate.convertAndSend("/topic/chat/room/$roomId/read", payload)
     }
+
+    fun broadcastMessageDeleted(roomId: String, messageId: String) {
+        val payload = MessageDeletedPayload(messageId = messageId, roomId = roomId)
+        messagingTemplate.convertAndSend("/topic/chat/room/$roomId/deleted", payload)
+    }
 }
 
 data class ChatMessageBroadcastPayload(
@@ -33,4 +38,9 @@ data class ChatMessageBroadcastPayload(
 data class ReadEventPayload(
     val username: String,
     val readAt: Instant
+)
+
+data class MessageDeletedPayload(
+    val messageId: String,
+    val roomId: String
 )

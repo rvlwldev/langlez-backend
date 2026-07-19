@@ -62,13 +62,21 @@ class ChatService(
         roomId: String,
         type: ChatMessage.Type,
         content: String?,
-        fileUrl: String?
+        fileUrl: String?,
+        replyToMessageId: String? = null,
     ): ChatMessage {
         val room = chatRoomRepository.findById(roomId)
             ?: throw LanglezException(404, "chat.room-not-found")
 
         if (!room.hasParticipant(memberId)) {
             throw LanglezException(403, "chat.room-forbidden")
+        }
+
+        if (replyToMessageId != null) {
+            val replyTarget = chatMessageRepository.findById(replyToMessageId)
+            if (replyTarget == null || replyTarget.roomId != roomId) {
+                throw LanglezException(404, "chat.reply-target-not-found")
+            }
         }
 
         val sender = memberRepository.findById(memberId)
@@ -81,6 +89,7 @@ class ChatService(
             type = type,
             content = content,
             fileUrl = fileUrl,
+            replyToMessageId = replyToMessageId,
             createdAt = now
         )
         val savedMessage = chatMessageRepository.save(message)
@@ -122,6 +131,56 @@ class ChatService(
         chatBroadcaster.broadcastMessage(roomId, broadcastPayload)
 
         return savedMessage
+    }
+
+    fun deleteMessage(memberId: Long, roomId: String, messageId: String) {
+        val message = chatMessageRepository.findById(messageId)
+            ?: throw LanglezException(404, "chat.message-not-found")
+
+        if (message.roomId != roomId) {
+            throw LanglezException(404, "chat.message-not-found")
+        }
+
+        if (message.senderId != memberId) {
+            throw LanglezException(403, "chat.not-sender")
+        }
+
+        if (message.deletedAt != null) {
+            throw LanglezException(409, "chat.already-deleted")
+        }
+
+        val now = Instant.now()
+        chatMessageRepository.markDeleted(messageId, now)
+        chatBroadcaster.broadcastMessageDeleted(roomId, messageId)
+    }
+
+    fun reportUser(reporterId: Long, roomId: String, reportedUserId: Long, reason: String) {
+        val room = chatRoomRepository.findById(roomId)
+            ?: throw LanglezException(404, "chat.room-not-found")
+
+        if (!room.hasParticipant(reporterId)) {
+            throw LanglezException(403, "chat.room-forbidden")
+        }
+
+        if (!room.hasParticipant(reportedUserId)) {
+            throw LanglezException(400, "chat.reported-user-not-participant")
+        }
+
+        val lastMessage = chatMessageRepository.findLastMessage(roomId)
+        val triggerMessageId = lastMessage?.id
+
+        chatOutBoxRepository.save(
+            aggregateType = "CHAT_REPORT",
+            aggregateId = roomId,
+            eventName = "chat-user-reported",
+            payload = ChatUserReportedEvent(
+                roomId = roomId,
+                reporterId = reporterId,
+                reportedUserId = reportedUserId,
+                reason = reason,
+                triggerMessageId = triggerMessageId,
+            )
+        )
     }
 
     fun markAsRead(memberId: Long, roomId: String) {
@@ -185,25 +244,103 @@ class ChatService(
 
         val messages = chatMessageRepository.findByRoom(roomId, cursor, boundedSize)
 
-        val senderIds = messages.map { it.senderId }.distinct()
-        val sendersMap = memberRepository.findByIds(senderIds).associateBy { it.id }
+        val replyIds = messages.mapNotNull { it.replyToMessageId }.distinct()
+        val replyMessagesMap = if (replyIds.isNotEmpty()) {
+            chatMessageRepository.findByIds(replyIds).associateBy { it.id!! }
+        } else emptyMap()
+
+        val allSenderIds = (messages.map { it.senderId } + replyMessagesMap.values.map { it.senderId }).distinct()
+        val sendersMap = memberRepository.findByIds(allSenderIds).associateBy { it.id }
 
         val summaries = messages.map { msg ->
             val sender = sendersMap[msg.senderId]
             val senderUsername = sender?.username ?: "unknown"
 
+            val replyPreview = msg.replyToMessageId?.let { replyId ->
+                val replyTarget = replyMessagesMap[replyId]
+                if (replyTarget != null) {
+                    if (replyTarget.deletedAt != null) {
+                        ChatResponse.ReplyPreview(
+                            messageId = replyId,
+                            senderUsername = "알 수 없음",
+                            type = replyTarget.type,
+                            contentPreview = null,
+                            deleted = true
+                        )
+                    } else {
+                        val replySender = sendersMap[replyTarget.senderId]
+                        val replySenderUsername = replySender?.username ?: "알 수 없음"
+                        val contentPreview = if (replyTarget.type == ChatMessage.Type.TEXT) replyTarget.content?.take(100) else null
+                        ChatResponse.ReplyPreview(
+                            messageId = replyId,
+                            senderUsername = replySenderUsername,
+                            type = replyTarget.type,
+                            contentPreview = contentPreview,
+                            deleted = false
+                        )
+                    }
+                } else null
+            }
+
+            val isDeleted = msg.deletedAt != null
             ChatResponse.MessageSummary(
                 id = msg.id!!,
                 senderUsername = senderUsername,
                 type = msg.type,
-                content = msg.content,
-                fileUrl = msg.fileUrl,
-                createdAt = msg.createdAt
+                content = if (isDeleted) null else msg.content,
+                fileUrl = if (isDeleted) null else msg.fileUrl,
+                createdAt = msg.createdAt,
+                replyPreview = replyPreview,
+                deleted = isDeleted
             )
         }
 
         val nextCursor = if (messages.size == boundedSize) messages.lastOrNull()?.id else null
         return ChatResponse.MessageCursorList(nextCursor, summaries)
+    }
+
+    @Transactional(readOnly = true)
+    fun toMessageSummary(message: ChatMessage): ChatResponse.MessageSummary {
+        val sender = memberRepository.findById(message.senderId)
+        val senderUsername = sender?.username ?: "unknown"
+
+        val replyPreview = message.replyToMessageId?.let { replyId ->
+            val replyTarget = chatMessageRepository.findById(replyId)
+            if (replyTarget != null) {
+                if (replyTarget.deletedAt != null) {
+                    ChatResponse.ReplyPreview(
+                        messageId = replyId,
+                        senderUsername = "알 수 없음",
+                        type = replyTarget.type,
+                        contentPreview = null,
+                        deleted = true
+                    )
+                } else {
+                    val replySender = memberRepository.findById(replyTarget.senderId)
+                    val replySenderUsername = replySender?.username ?: "알 수 없음"
+                    val contentPreview = if (replyTarget.type == ChatMessage.Type.TEXT) replyTarget.content?.take(100) else null
+                    ChatResponse.ReplyPreview(
+                        messageId = replyId,
+                        senderUsername = replySenderUsername,
+                        type = replyTarget.type,
+                        contentPreview = contentPreview,
+                        deleted = false
+                    )
+                }
+            } else null
+        }
+
+        val isDeleted = message.deletedAt != null
+        return ChatResponse.MessageSummary(
+            id = message.id!!,
+            senderUsername = senderUsername,
+            type = message.type,
+            content = if (isDeleted) null else message.content,
+            fileUrl = if (isDeleted) null else message.fileUrl,
+            createdAt = message.createdAt,
+            replyPreview = replyPreview,
+            deleted = isDeleted
+        )
     }
 
     fun generateUploadUrl(filename: String, contentType: String): String {

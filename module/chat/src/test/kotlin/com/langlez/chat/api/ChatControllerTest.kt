@@ -117,9 +117,17 @@ class ChatControllerTest : BehaviorSpec({
             val sender = createMember(1L, "user1")
             val message = ChatMessage(id = "msg1", roomId = "room1", senderId = 1L, type = ChatMessage.Type.TEXT, content = "hello")
             val request = SendMessageRequest(type = ChatMessage.Type.TEXT, content = "hello")
+            val summary = ChatResponse.MessageSummary(
+                id = "msg1",
+                senderUsername = "user1",
+                type = ChatMessage.Type.TEXT,
+                content = "hello",
+                fileUrl = null,
+                createdAt = message.createdAt
+            )
 
-            every { service.sendMessage(1L, "room1", ChatMessage.Type.TEXT, "hello", null) } returns message
-            every { memberRepo.findById(1L) } returns sender
+            every { service.sendMessage(1L, "room1", ChatMessage.Type.TEXT, "hello", null, null) } returns message
+            every { service.toMessageSummary(message) } returns summary
 
             Then("보낸 메시지 정보가 반환된다") {
                 val result = controller.sendMessage(1L, "room1", request)
@@ -130,11 +138,9 @@ class ChatControllerTest : BehaviorSpec({
         }
 
         When("존재하지 않는 멤버가 메시지를 보낼 때") {
-            val message = ChatMessage(id = "msg1", roomId = "room1", senderId = 99L, type = ChatMessage.Type.TEXT, content = "hello")
             val request = SendMessageRequest(type = ChatMessage.Type.TEXT, content = "hello")
 
-            every { service.sendMessage(99L, "room1", ChatMessage.Type.TEXT, "hello", null) } returns message
-            every { memberRepo.findById(99L) } returns null
+            every { service.sendMessage(99L, "room1", ChatMessage.Type.TEXT, "hello", null, null) } throws LanglezException(404, "member.not-found")
 
             Then("404 Not Found 예외를 발생시킨다") {
                 val ex = shouldThrow<LanglezException> {
