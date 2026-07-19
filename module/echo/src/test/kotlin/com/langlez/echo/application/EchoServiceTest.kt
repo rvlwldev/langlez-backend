@@ -13,6 +13,8 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.*
+import org.redisson.api.RBucket
+import org.redisson.api.RedissonClient
 
 class EchoServiceTest : BehaviorSpec({
 
@@ -23,6 +25,7 @@ class EchoServiceTest : BehaviorSpec({
     val dailyRateLimiter = mockk<DailyRateLimiter>()
     val commentRepository = mockk<CommentRepository>()
     val echoOutBoxRepository = mockk<com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository>(relaxed = true)
+    val redissonClient = mockk<RedissonClient>()
 
     val service = EchoService(
         postRepository,
@@ -32,6 +35,7 @@ class EchoServiceTest : BehaviorSpec({
         dailyRateLimiter,
         commentRepository,
         echoOutBoxRepository,
+        redissonClient,
     )
 
     Given("게시물 작성 시") {
@@ -179,37 +183,153 @@ class EchoServiceTest : BehaviorSpec({
         }
     }
 
+    Given("게시물 삭제 시") {
+        val postId = 100L
+        val authorId = 1L
+        val otherMemberId = 2L
+        val post = Post(id = postId, authorId = authorId, content = "삭제 대상 글")
+
+        every { postRepository.save(any()) } answers { firstArg() }
+
+        When("작성자 본인이 삭제를 요청하면") {
+            every { postRepository.findById(postId) } returns post
+
+            service.deletePost(authorId, postId)
+
+            Then("deletedAt 필드가 설정되고 저장되어야 한다") {
+                post.deletedAt shouldNotBe null
+                verify { postRepository.save(post) }
+            }
+        }
+
+        When("작성자가 아닌 유저가 삭제를 요청하면") {
+            every { postRepository.findById(postId) } returns post
+
+            Then("403 예외가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deletePost(otherMemberId, postId)
+                }
+                ex.status shouldBe 403
+                ex.message shouldBe "echo.not-author"
+            }
+        }
+
+        When("존재하지 않는 게시물 삭제를 요청하면") {
+            every { postRepository.findById(999L) } returns null
+
+            Then("404 예외가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deletePost(authorId, 999L)
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "echo.post.not-found"
+            }
+        }
+    }
+
+    Given("댓글 삭제 시") {
+        val postId = 100L
+        val commentId = 200L
+        val authorId = 1L
+        val otherMemberId = 2L
+        val post = Post(id = postId, authorId = 10L, content = "게시글")
+        val comment = Comment(id = commentId, postId = postId, authorId = authorId, content = "삭제 대상 댓글")
+
+        every { commentRepository.save(any()) } answers { firstArg() }
+
+        When("작성자 본인이 댓글 삭제를 요청하면") {
+            every { postRepository.findById(postId) } returns post
+            every { commentRepository.findById(commentId) } returns comment
+
+            service.deleteComment(authorId, postId, commentId)
+
+            Then("deletedAt 필드가 설정되고 저장되어야 한다") {
+                comment.deletedAt shouldNotBe null
+                verify { commentRepository.save(comment) }
+            }
+        }
+
+        When("작성자가 아닌 유저가 댓글 삭제를 요청하면") {
+            every { postRepository.findById(postId) } returns post
+            every { commentRepository.findById(commentId) } returns comment
+
+            Then("403 예외가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deleteComment(otherMemberId, postId, commentId)
+                }
+                ex.status shouldBe 403
+                ex.message shouldBe "echo.not-author"
+            }
+        }
+
+        When("존재하지 않는 댓글 삭제를 요청하면") {
+            every { postRepository.findById(postId) } returns post
+            every { commentRepository.findById(999L) } returns null
+
+            Then("404 예외가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.deleteComment(authorId, postId, 999L)
+                }
+                ex.status shouldBe 404
+                ex.message shouldBe "echo.comment.not-found"
+            }
+        }
+    }
+
     Given("게시물 신고 시") {
         val postId = 100L
         val post = Post(id = postId, authorId = 10L, content = "신고 대상 글")
+        val bucket = mockk<RBucket<String>>(relaxed = true)
 
         every { postRepository.findById(postId) } returns post
-        every { postRepository.saveReport(any()) } answers { firstArg() }
+        every { redissonClient.getBucket<String>(any<String>()) } returns bucket
         every { postRepository.incrementReportCount(postId) } returns Unit
         every { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) } returns Unit
 
-        When("동일 유저가 이미 신고한 게시물을 다시 신고하면") {
-            every { postRepository.findReport(1L, postId) } returns PostReport(postId = postId, reporterId = 1L, reason = "spam")
+        When("자기 글을 신고하려고 하면") {
+            Then("400 예외가 발생해야 한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.reportPost(10L, postId, "spam")
+                }
+                ex.status shouldBe 400
+                ex.message shouldBe "echo.report.cannot-report-own-post"
+            }
+        }
 
-            Then("예외가 발생해야 한다") {
+        When("정상 신고 시") {
+            every { bucket.isExists } returns false
+
+            service.reportPost(1L, postId, "spam")
+
+            Then("outbox 이벤트 저장 및 레디스 키 세팅이 수행되어야 한다") {
+                verify(exactly = 1) { bucket.set("1") }
+                verify(exactly = 1) { postRepository.incrementReportCount(postId) }
+                verify(exactly = 1) { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) }
+                verify(exactly = 1) {
+                    echoOutBoxRepository.save(
+                        aggregateType = "ECHO_REPORT",
+                        aggregateId = postId.toString(),
+                        eventName = "echo-post-reported",
+                        payload = EchoPostReportedEvent(
+                            postId = postId.toString(),
+                            reporterId = 1L,
+                            reportedUserId = 10L,
+                            reason = "spam"
+                        )
+                    )
+                }
+            }
+        }
+
+        When("동일 유저가 이미 신고한 게시물을 다시 신고하면") {
+            every { bucket.isExists } returns true
+
+            Then("400 예외가 발생해야 한다") {
                 val ex = shouldThrow<LanglezException> {
                     service.reportPost(1L, postId, "spam")
                 }
                 ex.status shouldBe 400
                 ex.message shouldBe "echo.report.already-reported"
-            }
-        }
-
-        When("서로 다른 유저가 5회 이상 신고하면") {
-            every { postRepository.findReport(any(), postId) } returns null
-
-            (1..5).forEach { reporterId ->
-                service.reportPost(reporterId.toLong(), postId, "reason")
-            }
-
-            Then("리포지토리의 신고 증가 및 블라인드 임계치 확인 메소드가 5회 호출되어야 한다") {
-                verify(exactly = 5) { postRepository.incrementReportCount(postId) }
-                verify(exactly = 5) { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) }
             }
         }
     }
@@ -328,6 +448,7 @@ class EchoServiceTest : BehaviorSpec({
     }
 
     Given("댓글 작성 및 조회 시") {
+        clearMocks(commentRepository)
         val authorId = 1L
         val postId = 100L
         val post = Post(id = postId, authorId = 2L, content = "게시글")

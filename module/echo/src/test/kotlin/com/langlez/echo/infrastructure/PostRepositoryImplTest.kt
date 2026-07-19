@@ -239,15 +239,16 @@ class PostRepositoryImplTest : BehaviorSpec() {
                 }
             }
 
-            When("신고를 저장, 조회할 때") {
-                val p = postRepository.save(Post(authorId = userA.id, content = "ReportPost"))
-                val report = PostReport(postId = p.id, reporterId = userB.id, reason = "SPAM")
+            When("소프트 딜리트(deletedAt != null)된 게시물이 있을 때") {
+                val pDeleted = postRepository.save(Post(authorId = userA.id, content = "DeletedPost"))
+                pDeleted.delete()
+                postRepository.save(pDeleted)
 
-                Then("정상적으로 저장 및 조회가 가능해야 한다") {
-                    postRepository.saveReport(report)
-                    val found = postRepository.findReport(userB.id, p.id)
-                    found shouldNotBe null
-                    found!!.reason shouldBe "SPAM"
+                Then("findById 및 피드 조회에서 제외되어야 한다") {
+                    postRepository.findById(pDeleted.id) shouldBe null
+
+                    val feed = postRepository.findFollowingFeed(listOf(userA.id), null, 10)
+                    feed.any { it.id == pDeleted.id } shouldBe false
                 }
             }
         }

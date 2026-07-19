@@ -8,6 +8,7 @@ import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.RelationshipRepository
+import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -21,6 +22,7 @@ class EchoService(
     private val dailyRateLimiter: DailyRateLimiter,
     private val commentRepository: CommentRepository,
     private val echoOutBoxRepository: EchoOutBoxRepository,
+    private val redissonClient: RedissonClient,
 ) {
 
     fun createPost(
@@ -113,15 +115,54 @@ class EchoService(
         postRepository.decrementLikeCount(postId)
     }
 
+    fun deletePost(memberId: Long, postId: Long) {
+        val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        if (post.authorId != memberId) {
+            throw LanglezException(403, "echo.not-author")
+        }
+        post.delete()
+        postRepository.save(post)
+    }
+
+    fun deleteComment(memberId: Long, postId: Long, commentId: Long) {
+        postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        val comment = commentRepository.findById(commentId) ?: throw LanglezException(404, "echo.comment.not-found")
+        if (comment.postId != postId) {
+            throw LanglezException(404, "echo.comment.not-found")
+        }
+        if (comment.authorId != memberId) {
+            throw LanglezException(403, "echo.not-author")
+        }
+        comment.delete()
+        commentRepository.save(comment)
+    }
+
     fun reportPost(reporterId: Long, postId: Long, reason: String) {
         val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
-        if (postRepository.findReport(reporterId, postId) != null) {
-            throw LanglezException(400, "echo.report.already-reported")
+        if (post.authorId == reporterId) {
+            throw LanglezException(400, "echo.report.cannot-report-own-post")
         }
 
-        postRepository.saveReport(PostReport(postId = postId, reporterId = reporterId, reason = reason))
+        val bucket = redissonClient.getBucket<String>("echo:report:$postId:$reporterId")
+        if (bucket.isExists) {
+            throw LanglezException(400, "echo.report.already-reported")
+        }
+        bucket.set("1")
+
         postRepository.incrementReportCount(postId)
         postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
+
+        echoOutBoxRepository.save(
+            aggregateType = "ECHO_REPORT",
+            aggregateId = postId.toString(),
+            eventName = "echo-post-reported",
+            payload = EchoPostReportedEvent(
+                postId = postId.toString(),
+                reporterId = reporterId,
+                reportedUserId = post.authorId,
+                reason = reason,
+            ),
+        )
     }
 
     @Transactional(readOnly = true)

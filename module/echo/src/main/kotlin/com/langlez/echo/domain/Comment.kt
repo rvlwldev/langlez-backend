@@ -26,6 +26,15 @@ class Comment(
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),
 ) {
+    @Column(name = "deleted_at")
+    var deletedAt: Instant? = null
+        private set
+
+    fun delete(now: Instant = Instant.now()) {
+        if (this.deletedAt != null) return
+        this.deletedAt = now
+    }
+
     companion object {
         const val MAX_CONTENT_LENGTH = 500
     }

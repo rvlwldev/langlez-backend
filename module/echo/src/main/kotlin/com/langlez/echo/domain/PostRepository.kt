@@ -17,10 +17,6 @@ interface PostRepository {
     fun findLike(memberId: Long, postId: Long): PostLike?
     fun deleteLike(memberId: Long, postId: Long)
 
-    // PostReport
-    fun saveReport(report: PostReport): PostReport
-    fun findReport(reporterId: Long, postId: Long): PostReport?
-
     fun incrementLikeCount(postId: Long)
     fun decrementLikeCount(postId: Long)
     fun incrementReportCount(postId: Long)

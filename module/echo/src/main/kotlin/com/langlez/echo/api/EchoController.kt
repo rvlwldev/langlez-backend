@@ -77,6 +77,15 @@ class EchoController(
         @RequestParam(defaultValue = "10") limit: Int
     ): List<EchoResponse.TrendingHashtag> = service.getTrendingHashtags(days, limit)
 
+    @DeleteMapping("/{postId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deletePost(
+        @MemberID memberId: Long,
+        @PathVariable postId: Long
+    ) {
+        service.deletePost(memberId, postId)
+    }
+
     @PostMapping("/{postId}/comments")
     @ResponseStatus(HttpStatus.CREATED)
     fun createComment(
@@ -85,6 +94,16 @@ class EchoController(
         @RequestBody @Valid request: EchoRequest.CreateComment
     ): EchoResponse.CommentDto {
         return service.addComment(memberId, postId, request.content)
+    }
+
+    @DeleteMapping("/{postId}/comments/{commentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteComment(
+        @MemberID memberId: Long,
+        @PathVariable postId: Long,
+        @PathVariable commentId: Long
+    ) {
+        service.deleteComment(memberId, postId, commentId)
     }
 
     @GetMapping("/{postId}/comments")

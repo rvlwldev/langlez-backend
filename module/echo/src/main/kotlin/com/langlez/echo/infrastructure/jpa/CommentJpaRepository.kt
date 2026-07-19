@@ -6,8 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 
 interface CommentJpaRepository : JpaRepository<Comment, Long> {
-    @Query("SELECT c FROM Comment c WHERE c.postId = :postId AND (:cursor IS NULL OR c.id < :cursor) ORDER BY c.id DESC")
+    @Query("SELECT c FROM Comment c WHERE c.postId = :postId AND c.deletedAt IS NULL AND (:cursor IS NULL OR c.id < :cursor) ORDER BY c.id DESC")
     fun findByPost(postId: Long, cursor: Long?, pageable: Pageable): List<Comment>
 
+    @Query("SELECT COUNT(c) FROM Comment c WHERE c.postId = :postId AND c.deletedAt IS NULL")
     fun countByPostId(postId: Long): Long
 }

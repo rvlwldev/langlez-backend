@@ -11,14 +11,13 @@ class PostRepositoryImpl(
     private val postJpa: PostJpaRepository,
     private val postMediaJpa: PostMediaJpaRepository,
     private val postLikeJpa: PostLikeJpaRepository,
-    private val postReportJpa: PostReportJpaRepository,
     private val hashtagJpa: HashtagJpaRepository,
     private val postHashtagJpa: PostHashtagJpaRepository,
 ) : PostRepository {
 
     override fun save(post: Post): Post = postJpa.save(post)
 
-    override fun findById(id: Long): Post? = postJpa.findByIdOrNull(id)
+    override fun findById(id: Long): Post? = postJpa.findByIdOrNull(id)?.takeIf { it.deletedAt == null }
 
     override fun findFollowingFeed(authorIds: List<Long>, cursor: Long?, size: Int): List<Post> {
         if (authorIds.isEmpty()) return emptyList()
@@ -26,7 +25,7 @@ class PostRepositoryImpl(
     }
 
     override fun findRecommendedFeed(excludeAuthorIds: List<Long>, cursor: Long?, size: Int): List<Post> {
-        val cursorLikeCount = cursor?.let { postJpa.findByIdOrNull(it)?.likeCount }
+        val cursorLikeCount = cursor?.let { postJpa.findByIdOrNull(it)?.takeIf { p -> p.deletedAt == null }?.likeCount }
         val pageable = PageRequest.of(0, size)
         return if (excludeAuthorIds.isEmpty()) {
             postJpa.findRecommendedFeedWithoutExcludes(cursor, cursorLikeCount, pageable)
@@ -56,12 +55,6 @@ class PostRepositoryImpl(
 
     override fun deleteLike(memberId: Long, postId: Long) =
         postLikeJpa.deleteByMemberIdAndPostId(memberId, postId)
-
-    override fun saveReport(report: PostReport): PostReport =
-        postReportJpa.save(report)
-
-    override fun findReport(reporterId: Long, postId: Long): PostReport? =
-        postReportJpa.findByReporterIdAndPostId(reporterId, postId)
 
     override fun incrementLikeCount(postId: Long) {
         postJpa.incrementLikeCount(postId)

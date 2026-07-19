@@ -39,6 +39,15 @@ class Post(
     var blindedAt: Instant? = null
         private set
 
+    @Column(name = "deleted_at")
+    var deletedAt: Instant? = null
+        private set
+
+    fun delete(now: Instant = Instant.now()) {
+        if (this.deletedAt != null) return
+        this.deletedAt = now
+    }
+
     companion object {
         const val MAX_CONTENT_LENGTH = 1000
         const val MAX_MEDIA_COUNT = 12
