@@ -3,6 +3,7 @@ package com.langlez.echo.application
 import com.langlez.core.LanglezException
 import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
+import com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.ratelimit.DailyRateLimiter
@@ -19,6 +20,7 @@ class EchoService(
     private val hashtagTrendRepository: HashtagTrendRepository,
     private val dailyRateLimiter: DailyRateLimiter,
     private val commentRepository: CommentRepository,
+    private val echoOutBoxRepository: EchoOutBoxRepository,
 ) {
 
     fun createPost(
@@ -51,7 +53,20 @@ class EchoService(
                     sequence = index
                 )
             }
-            postRepository.saveMediaAll(entities)
+            postRepository.saveMediaAll(entities).also { saved ->
+                echoOutBoxRepository.save(
+                    aggregateType = "ECHO_POST",
+                    aggregateId = post.id.toString(),
+                    eventName = "echo-attachments-uploaded",
+                    payload = EchoAttachmentsUploadedEvent(
+                        postId = post.id.toString(),
+                        uploaderId = authorId,
+                        attachments = saved.map {
+                            EchoAttachmentsUploadedEvent.Item(storageKey = it.url, fileType = it.type.name)
+                        },
+                    ),
+                )
+            }
         } else {
             emptyList()
         }

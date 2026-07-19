@@ -22,6 +22,7 @@ class EchoServiceTest : BehaviorSpec({
     val hashtagTrendRepository = mockk<HashtagTrendRepository>(relaxed = true)
     val dailyRateLimiter = mockk<DailyRateLimiter>()
     val commentRepository = mockk<CommentRepository>()
+    val echoOutBoxRepository = mockk<com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository>(relaxed = true)
 
     val service = EchoService(
         postRepository,
@@ -30,6 +31,7 @@ class EchoServiceTest : BehaviorSpec({
         hashtagTrendRepository,
         dailyRateLimiter,
         commentRepository,
+        echoOutBoxRepository,
     )
 
     Given("게시물 작성 시") {

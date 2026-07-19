@@ -5,6 +5,7 @@ import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
+import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.MemberRepository
@@ -21,6 +22,7 @@ class ChatService(
     private val fileStorage: FileStorage,
     private val chatBroadcaster: ChatBroadcaster,
     private val chatRoomCreator: ChatRoomCreator,
+    private val chatOutBoxRepository: ChatOutBoxRepository,
 ) {
 
     fun getOrCreateRoom(memberId: Long, targetUsername: String): ChatRoom {
@@ -82,6 +84,20 @@ class ChatService(
             createdAt = now
         )
         val savedMessage = chatMessageRepository.save(message)
+
+        if (type != ChatMessage.Type.TEXT && fileUrl != null) {
+            chatOutBoxRepository.save(
+                aggregateType = "CHAT_MESSAGE",
+                aggregateId = roomId,
+                eventName = "chat-attachment-uploaded",
+                payload = ChatAttachmentUploadedEvent(
+                    roomId = roomId,
+                    uploaderId = memberId,
+                    storageKey = fileUrl,
+                    fileType = type.name,
+                ),
+            )
+        }
 
         val preview = when (type) {
             ChatMessage.Type.TEXT -> content ?: ""

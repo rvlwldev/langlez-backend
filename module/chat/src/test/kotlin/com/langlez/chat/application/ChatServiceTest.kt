@@ -5,6 +5,7 @@ import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
+import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
@@ -25,6 +26,7 @@ class ChatServiceTest : BehaviorSpec({
     val fileStorage = mockk<FileStorage>()
     val chatBroadcaster = mockk<ChatBroadcaster>(relaxed = true)
     val chatRoomCreator = mockk<ChatRoomCreator>()
+    val chatOutBoxRepository = mockk<ChatOutBoxRepository>(relaxed = true)
 
     val service = ChatService(
         chatRoomRepository,
@@ -32,7 +34,8 @@ class ChatServiceTest : BehaviorSpec({
         memberRepository,
         fileStorage,
         chatBroadcaster,
-        chatRoomCreator
+        chatRoomCreator,
+        chatOutBoxRepository
     )
 
     afterEach {
@@ -43,6 +46,7 @@ class ChatServiceTest : BehaviorSpec({
             fileStorage,
             chatBroadcaster,
             chatRoomCreator,
+            chatOutBoxRepository,
             answers = false
         )
     }

@@ -31,3 +31,13 @@ data class AdminMessageRow(
     val fileUrl: String?,
     val createdAt: Instant
 )
+
+data class AdminAttachmentRow(
+    val id: Long,
+    val uploaderUsername: String,
+    val sourceType: String,
+    val sourceId: String,
+    val fileType: String,
+    val storageKey: String,
+    val createdAt: Instant
+)

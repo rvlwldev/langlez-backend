@@ -1,6 +1,7 @@
 package com.langlez.admin.api
 
 import com.langlez.admin.application.AdminService
+import com.langlez.attachment.domain.Attachment
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
@@ -98,15 +99,19 @@ class AdminController(
 
     @GetMapping("/attachments")
     fun attachments(
-        @RequestParam(required = false) cursor: String?,
+        @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "30") size: Int,
+        @RequestParam(required = false) sourceType: Attachment.SourceType?,
+        @RequestParam(required = false) fileType: Attachment.FileType?,
         model: Model
     ): String {
-        val attachments = adminService.getAttachments(cursor, size)
+        val attachments = adminService.getAttachments(cursor, size, sourceType, fileType)
         val nextCursor = if (attachments.size == size) attachments.last().id else null
         model.addAttribute("attachments", attachments)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)
+        model.addAttribute("sourceType", sourceType)
+        model.addAttribute("fileType", fileType)
         return "admin/attachments"
     }
 }

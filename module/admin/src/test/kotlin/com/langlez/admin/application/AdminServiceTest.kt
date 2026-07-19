@@ -1,5 +1,7 @@
 package com.langlez.admin.application
 
+import com.langlez.attachment.domain.Attachment
+import com.langlez.attachment.domain.AttachmentRepository
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoom
@@ -23,16 +25,18 @@ class AdminServiceTest : BehaviorSpec({
     val memberPresenceTracker = mockk<MemberPresenceTracker>()
     val chatRoomRepository = mockk<ChatRoomRepository>()
     val chatMessageRepository = mockk<ChatMessageRepository>()
+    val attachmentRepository = mockk<AttachmentRepository>()
 
     val adminService = AdminService(
         memberRepository,
         memberPresenceTracker,
         chatRoomRepository,
-        chatMessageRepository
+        chatMessageRepository,
+        attachmentRepository
     )
 
     afterEach {
-        clearMocks(memberRepository, memberPresenceTracker, chatRoomRepository, chatMessageRepository)
+        clearMocks(memberRepository, memberPresenceTracker, chatRoomRepository, chatMessageRepository, attachmentRepository)
     }
 
     fun createMember(id: Long, username: String, nickname: String) = Member(
@@ -178,25 +182,25 @@ class AdminServiceTest : BehaviorSpec({
 
     Given("첨부파일 모아보기 시") {
         val m1 = createMember(1L, "user1", "nick1")
-        val imgMsg = ChatMessage(
-            id = "m4",
-            roomId = "room1",
-            senderId = 1L,
-            type = ChatMessage.Type.IMAGE,
-            fileUrl = "http://test.com/image.png"
+        val attachment = Attachment(
+            uploaderId = 1L,
+            sourceType = Attachment.SourceType.CHAT,
+            sourceId = "room1",
+            fileType = Attachment.FileType.IMAGE,
+            storageKey = "chat/uuid_image.png"
         )
 
-        every { chatMessageRepository.findAttachments(null, 1) } returns listOf(imgMsg)
+        every { attachmentRepository.findAll(null, 1, null, null, null) } returns listOf(attachment)
         every { memberRepository.findByIds(listOf(1L)) } returns listOf(m1)
 
         When("조회하면") {
             val result = adminService.getAttachments(null, 1)
 
-            Then("이미지/비디오/오디오 형태의 첨부파일 메시지가 정상 반환되어야 한다") {
+            Then("이미지/비디오/오디오 형태의 첨부파일이 정상 반환되어야 한다") {
                 result shouldHaveSize 1
-                result[0].id shouldBe "m4"
-                result[0].fileUrl shouldBe "http://test.com/image.png"
-                result[0].type shouldBe "IMAGE"
+                result[0].storageKey shouldBe "chat/uuid_image.png"
+                result[0].fileType shouldBe "IMAGE"
+                result[0].uploaderUsername shouldBe "user1"
             }
         }
     }

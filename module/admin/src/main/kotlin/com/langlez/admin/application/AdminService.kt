@@ -1,5 +1,7 @@
 package com.langlez.admin.application
 
+import com.langlez.attachment.domain.Attachment
+import com.langlez.attachment.domain.AttachmentRepository
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
@@ -14,6 +16,7 @@ class AdminService(
     private val memberPresenceTracker: MemberPresenceTracker,
     private val chatRoomRepository: ChatRoomRepository,
     private val chatMessageRepository: ChatMessageRepository,
+    private val attachmentRepository: AttachmentRepository,
 ) {
 
     fun getDashboard(): AdminDashboardView {
@@ -121,23 +124,27 @@ class AdminService(
         }
     }
 
-    fun getAttachments(cursor: String?, size: Int): List<AdminMessageRow> {
-        val messages = chatMessageRepository.findAttachments(cursor, size)
-        
-        // 1+N 방지
-        val senderIds = messages.map { it.senderId }.distinct()
-        val sendersMap = memberRepository.findByIds(senderIds).associateBy { it.id }
+    fun getAttachments(
+        cursor: Long?,
+        size: Int,
+        sourceType: Attachment.SourceType? = null,
+        fileType: Attachment.FileType? = null,
+    ): List<AdminAttachmentRow> {
+        val attachments = attachmentRepository.findAll(cursor, size, sourceType, null, fileType)
 
-        return messages.map { message ->
-            val senderUsername = sendersMap[message.senderId]?.username ?: "Unknown"
-            AdminMessageRow(
-                id = message.id,
-                roomId = message.roomId,
-                senderUsername = senderUsername,
-                type = message.type.name,
-                content = message.content,
-                fileUrl = message.fileUrl,
-                createdAt = message.createdAt
+        // 1+N 방지
+        val uploaderIds = attachments.map { it.uploaderId }.distinct()
+        val uploadersMap = memberRepository.findByIds(uploaderIds).associateBy { it.id }
+
+        return attachments.map { attachment ->
+            AdminAttachmentRow(
+                id = attachment.id,
+                uploaderUsername = uploadersMap[attachment.uploaderId]?.username ?: "Unknown",
+                sourceType = attachment.sourceType.name,
+                sourceId = attachment.sourceId,
+                fileType = attachment.fileType.name,
+                storageKey = attachment.storageKey,
+                createdAt = attachment.createdAt
             )
         }
     }

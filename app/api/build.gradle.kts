@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":module:matching"))
     implementation(project(":module:wave"))
     implementation(project(":module:notification"))
+    implementation(project(":module:attachment"))
 
     developmentOnly(libs.development.springboot.devtools)
 

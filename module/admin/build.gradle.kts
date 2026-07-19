@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":module:member"))
     implementation(project(":module:chat"))
+    implementation(project(":module:attachment"))
     implementation(project(":infra:redis"))
     implementation(libs.dependency.springboot.thymeleaf)
 
