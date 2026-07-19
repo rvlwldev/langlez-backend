@@ -11,7 +11,7 @@
         <neverBlock>true</neverBlock>
     </appender>
 
-    <property name="APP_LOG_PATH" value="${APP_LOG_PATH:-logs}"/>
+    <property name="APP_LOG_PATH" value="${APP_LOG_PATH:-build/test-logs}"/>
 
     <!-- JSON File Appender (Promtail이 이 경로/포맷을 읽어 Loki로 수집) -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
