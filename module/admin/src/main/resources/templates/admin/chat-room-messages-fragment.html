@@ -6,7 +6,10 @@
     <div th:each="msg : ${messages}" 
          class="message-bubble" 
          th:data-created-at="${msg.createdAt}">
-        <div class="message-sender" th:text="'@' + ${msg.senderUsername}">@sender</div>
+        <div class="message-sender">
+            <span th:text="'@' + ${msg.senderUsername}">@sender</span>
+            <span th:if="${msg.deleted}" class="badge badge-offline" style="margin-left: 6px; font-size: 10px; padding: 2px 6px; background: rgba(239, 68, 68, 0.15); color: var(--danger);">삭제됨</span>
+        </div>
         <div class="message-content-wrapper">
             <!-- Text Message -->
             <span th:if="${msg.type == 'TEXT'}" th:text="${msg.content}">Text content</span>

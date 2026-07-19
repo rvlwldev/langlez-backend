@@ -8,8 +8,14 @@ import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
 import com.langlez.core.MemberPresenceTracker
+import com.langlez.echo.domain.Comment
+import com.langlez.echo.domain.CommentRepository
+import com.langlez.echo.domain.Post
+import com.langlez.echo.domain.PostRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.report.domain.Report
+import com.langlez.report.domain.ReportRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
@@ -26,17 +32,32 @@ class AdminServiceTest : BehaviorSpec({
     val chatRoomRepository = mockk<ChatRoomRepository>()
     val chatMessageRepository = mockk<ChatMessageRepository>()
     val attachmentRepository = mockk<AttachmentRepository>()
+    val postRepository = mockk<PostRepository>()
+    val commentRepository = mockk<CommentRepository>()
+    val reportRepository = mockk<ReportRepository>()
 
     val adminService = AdminService(
         memberRepository,
         memberPresenceTracker,
         chatRoomRepository,
         chatMessageRepository,
-        attachmentRepository
+        attachmentRepository,
+        postRepository,
+        commentRepository,
+        reportRepository
     )
 
     afterEach {
-        clearMocks(memberRepository, memberPresenceTracker, chatRoomRepository, chatMessageRepository, attachmentRepository)
+        clearMocks(
+            memberRepository,
+            memberPresenceTracker,
+            chatRoomRepository,
+            chatMessageRepository,
+            attachmentRepository,
+            postRepository,
+            commentRepository,
+            reportRepository
+        )
     }
 
     fun createMember(id: Long, username: String, nickname: String) = Member(
@@ -143,7 +164,7 @@ class AdminServiceTest : BehaviorSpec({
     Given("채팅방 메시지 히스토리 조회 시") {
         val m1 = createMember(1L, "user1", "nick1")
         val msg1 = ChatMessage(id = "m1", roomId = "room1", senderId = 1L, type = ChatMessage.Type.TEXT, content = "Hello")
-        val msg2 = ChatMessage(id = "m2", roomId = "room1", senderId = 1L, type = ChatMessage.Type.TEXT, content = "World")
+        val msg2 = ChatMessage(id = "m2", roomId = "room1", senderId = 1L, type = ChatMessage.Type.TEXT, content = "World", deletedAt = Instant.now())
 
         every { chatMessageRepository.findByRoom("room1", null, 2) } returns listOf(msg2, msg1)
         every { memberRepository.findByIds(listOf(1L)) } returns listOf(m1)
@@ -151,12 +172,14 @@ class AdminServiceTest : BehaviorSpec({
         When("조회하면") {
             val result = adminService.getChatRoomMessages("room1", null, 2)
 
-            Then("메시지가 시간 순서(오래된 순)로 뒤집혀 렌더링을 위해 정렬되어야 한다") {
+            Then("메시지가 시간 순서(오래된 순)로 정렬되고 삭제 여부가 매핑되어야 한다") {
                 result shouldHaveSize 2
                 result[0].id shouldBe "m1"
                 result[0].content shouldBe "Hello"
+                result[0].deleted shouldBe false
                 result[1].id shouldBe "m2"
                 result[1].content shouldBe "World"
+                result[1].deleted shouldBe true
             }
         }
     }
@@ -176,6 +199,7 @@ class AdminServiceTest : BehaviorSpec({
                 result shouldHaveSize 1
                 result[0].id shouldBe "m3"
                 result[0].content shouldBe "New Message"
+                result[0].deleted shouldBe false
             }
         }
     }
@@ -201,6 +225,78 @@ class AdminServiceTest : BehaviorSpec({
                 result[0].storageKey shouldBe "chat/uuid_image.png"
                 result[0].fileType shouldBe "IMAGE"
                 result[0].uploaderUsername shouldBe "user1"
+            }
+        }
+    }
+
+    Given("게시물 목록 조회 시 (삭제/블라인드 포함)") {
+        val m1 = createMember(1L, "user1", "nick1")
+        val post1 = Post(id = 10L, authorId = 1L, content = "Post 1")
+        val post2 = Post(id = 11L, authorId = 1L, content = "Post 2").apply { delete() }
+
+        every { postRepository.findAllForAdmin(null, 2) } returns listOf(post2, post1)
+        every { memberRepository.findByIds(listOf(1L)) } returns listOf(m1)
+
+        When("게시물 목록을 가져오면") {
+            val result = adminService.getPosts(null, 2)
+
+            Then("삭제 여부 및 블라인드 여부를 포함한 게시물 정보가 반환된다") {
+                result shouldHaveSize 2
+                result[0].id shouldBe 11L
+                result[0].authorUsername shouldBe "user1"
+                result[0].deleted shouldBe true
+                result[0].blinded shouldBe false
+                result[1].id shouldBe 10L
+                result[1].deleted shouldBe false
+            }
+        }
+    }
+
+    Given("게시물 댓글 목록 조회 시 (삭제 포함)") {
+        val m1 = createMember(1L, "user1", "nick1")
+        val comment1 = Comment(id = 100L, postId = 10L, authorId = 1L, content = "Comment 1")
+        val comment2 = Comment(id = 101L, postId = 10L, authorId = 1L, content = "Deleted Comment").apply { delete() }
+
+        every { commentRepository.findByPostForAdmin(10L, null, 2) } returns listOf(comment2, comment1)
+        every { memberRepository.findByIds(listOf(1L)) } returns listOf(m1)
+
+        When("댓글 목록을 가져오면") {
+            val result = adminService.getPostComments(10L, null, 2)
+
+            Then("삭제 여부를 포함한 댓글 목록이 반환된다") {
+                result shouldHaveSize 2
+                result[0].id shouldBe 101L
+                result[0].deleted shouldBe true
+                result[1].id shouldBe 100L
+                result[1].deleted shouldBe false
+            }
+        }
+    }
+
+    Given("신고 이력 조회 시") {
+        val reporter = createMember(1L, "user1", "nick1")
+        val reported = createMember(2L, "user2", "nick2")
+        val report = Report(
+            reporterId = 1L,
+            reportedUserId = 2L,
+            sourceType = Report.SourceType.ECHO_POST,
+            sourceId = "10",
+            reason = "Spam"
+        )
+
+        every { reportRepository.findAll(null, 1, Report.SourceType.ECHO_POST, null) } returns listOf(report)
+        every { memberRepository.findByIds(listOf(1L, 2L)) } returns listOf(reporter, reported)
+
+        When("신고 목록을 가져오면") {
+            val result = adminService.getReports(null, 1, Report.SourceType.ECHO_POST)
+
+            Then("신고자와 피신고자 정보가 매핑되어 반환된다") {
+                result shouldHaveSize 1
+                result[0].reporterUsername shouldBe "user1"
+                result[0].reportedUsername shouldBe "user2"
+                result[0].sourceType shouldBe "ECHO_POST"
+                result[0].sourceId shouldBe "10"
+                result[0].reason shouldBe "Spam"
             }
         }
     }

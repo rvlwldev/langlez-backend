@@ -20,6 +20,9 @@ interface PostJpaRepository : JpaRepository<Post, Long> {
     @Query("SELECT p FROM Post p JOIN PostHashtag ph ON p.id = ph.postId JOIN Hashtag h ON ph.hashtagId = h.id WHERE h.name = :hashtag AND p.blinded = false AND p.deletedAt IS NULL AND (:cursor IS NULL OR p.id < :cursor) ORDER BY p.id DESC")
     fun findByHashtag(hashtag: String, cursor: Long?, pageable: PageRequest): List<Post>
 
+    @Query("SELECT p FROM Post p WHERE (:cursor IS NULL OR p.id < :cursor) ORDER BY p.id DESC")
+    fun findAllForAdmin(cursor: Long?, pageable: PageRequest): List<Post>
+
     @Transactional
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Post p SET p.likeCount = p.likeCount + 1 WHERE p.id = :postId")

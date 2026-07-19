@@ -7,6 +7,9 @@ interface PostRepository {
     fun findRecommendedFeed(excludeAuthorIds: List<Long>, cursor: Long?, size: Int): List<Post>
     fun findByHashtag(hashtag: String, cursor: Long?, size: Int): List<Post>
 
+    // Admin
+    fun findAllForAdmin(cursor: Long?, size: Int): List<Post>
+
     // PostMedia
     fun saveMediaAll(mediaList: List<PostMedia>): List<PostMedia>
     fun findMediaByPostId(postId: Long): List<PostMedia>

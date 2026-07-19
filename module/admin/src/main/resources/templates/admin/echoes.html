@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('게시물 모니터링')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('echoes')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">게시물 모니터링</h1>
+                    <p class="page-subtitle">Echo 게시물을 모니터링합니다. (삭제 및 블라인드 게시물 포함)</p>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>작성자</th>
+                            <th>내용</th>
+                            <th>상태</th>
+                            <th>좋아요</th>
+                            <th>신고 수</th>
+                            <th>작성 시각</th>
+                            <th>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="post : ${posts}">
+                            <td th:text="${post.id}">1</td>
+                            <td th:text="'@' + ${post.authorUsername}">@author</td>
+                            <td th:text="${post.content}">Content</td>
+                            <td>
+                                <span th:if="${post.deleted}" class="badge badge-offline" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">삭제됨</span>
+                                <span th:if="${post.blinded}" class="badge" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">블라인드됨</span>
+                                <span th:if="${!post.deleted && !post.blinded}" class="badge badge-online">정상</span>
+                            </td>
+                            <td th:text="${post.likeCount}">0</td>
+                            <td th:text="${post.reportCount}">0</td>
+                            <td th:text="${post.createdAt}">2026-07-19T00:00:00Z</td>
+                            <td>
+                                <a th:href="@{/admin/echoes/{postId}/comments(postId=${post.id})}" class="link-action">댓글 보기</a>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(posts)}">
+                            <td colspan="8" style="text-align: center; color: var(--text-secondary);">게시물이 존재하지 않습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="pagination-container" th:if="${nextCursor != null}">
+                <a th:href="@{/admin/echoes(cursor=${nextCursor},size=${size})}" class="btn-secondary">다음 페이지 →</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

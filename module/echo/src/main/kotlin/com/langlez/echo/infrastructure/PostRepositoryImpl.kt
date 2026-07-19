@@ -37,6 +37,9 @@ class PostRepositoryImpl(
     override fun findByHashtag(hashtag: String, cursor: Long?, size: Int): List<Post> =
         postJpa.findByHashtag(hashtag, cursor, PageRequest.of(0, size))
 
+    override fun findAllForAdmin(cursor: Long?, size: Int): List<Post> =
+        postJpa.findAllForAdmin(cursor, PageRequest.of(0, size))
+
     override fun saveMediaAll(mediaList: List<PostMedia>): List<PostMedia> =
         postMediaJpa.saveAll(mediaList)
 

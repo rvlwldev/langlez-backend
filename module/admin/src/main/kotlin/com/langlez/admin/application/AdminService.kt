@@ -6,7 +6,11 @@ import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
 import com.langlez.core.MemberPresenceTracker
+import com.langlez.echo.domain.CommentRepository
+import com.langlez.echo.domain.PostRepository
 import com.langlez.member.domain.MemberRepository
+import com.langlez.report.domain.Report
+import com.langlez.report.domain.ReportRepository
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -17,6 +21,9 @@ class AdminService(
     private val chatRoomRepository: ChatRoomRepository,
     private val chatMessageRepository: ChatMessageRepository,
     private val attachmentRepository: AttachmentRepository,
+    private val postRepository: PostRepository,
+    private val commentRepository: CommentRepository,
+    private val reportRepository: ReportRepository,
 ) {
 
     fun getDashboard(): AdminDashboardView {
@@ -98,7 +105,8 @@ class AdminService(
                 type = message.type.name,
                 content = message.content,
                 fileUrl = message.fileUrl,
-                createdAt = message.createdAt
+                createdAt = message.createdAt,
+                deleted = message.deletedAt != null
             )
         }
     }
@@ -119,7 +127,8 @@ class AdminService(
                 type = message.type.name,
                 content = message.content,
                 fileUrl = message.fileUrl,
-                createdAt = message.createdAt
+                createdAt = message.createdAt,
+                deleted = message.deletedAt != null
             )
         }
     }
@@ -145,6 +154,66 @@ class AdminService(
                 fileType = attachment.fileType.name,
                 storageKey = attachment.storageKey,
                 createdAt = attachment.createdAt
+            )
+        }
+    }
+
+    fun getPosts(cursor: Long?, size: Int): List<AdminPostRow> {
+        val posts = postRepository.findAllForAdmin(cursor, size)
+
+        // 1+N 방지
+        val authorIds = posts.map { it.authorId }.distinct()
+        val authorsMap = memberRepository.findByIds(authorIds).associateBy { it.id }
+
+        return posts.map { post ->
+            AdminPostRow(
+                id = post.id,
+                authorUsername = authorsMap[post.authorId]?.username ?: "Unknown",
+                content = post.content,
+                deleted = post.deletedAt != null,
+                blinded = post.blinded,
+                likeCount = post.likeCount,
+                reportCount = post.reportCount,
+                createdAt = post.createdAt
+            )
+        }
+    }
+
+    fun getPostComments(postId: Long, cursor: Long?, size: Int): List<AdminCommentRow> {
+        val comments = commentRepository.findByPostForAdmin(postId, cursor, size)
+
+        // 1+N 방지
+        val authorIds = comments.map { it.authorId }.distinct()
+        val authorsMap = memberRepository.findByIds(authorIds).associateBy { it.id }
+
+        return comments.map { comment ->
+            AdminCommentRow(
+                id = comment.id,
+                authorUsername = authorsMap[comment.authorId]?.username ?: "Unknown",
+                content = comment.content,
+                deleted = comment.deletedAt != null,
+                createdAt = comment.createdAt
+            )
+        }
+    }
+
+    fun getReports(cursor: Long?, size: Int, sourceType: Report.SourceType?): List<AdminReportRow> {
+        val reports = reportRepository.findAll(cursor, size, sourceType, null)
+
+        // 1+N 방지
+        val memberIds = reports.flatMap { listOf(it.reporterId, it.reportedUserId) }.distinct()
+        val membersMap = memberRepository.findByIds(memberIds).associateBy { it.id }
+
+        return reports.map { report ->
+            AdminReportRow(
+                id = report.id,
+                reporterUsername = membersMap[report.reporterId]?.username ?: "Unknown",
+                reportedUsername = membersMap[report.reportedUserId]?.username ?: "Unknown",
+                sourceType = report.sourceType.name,
+                sourceId = report.sourceId,
+                reason = report.reason,
+                triggerMessageId = report.triggerMessageId,
+                createdAt = report.createdAt
             )
         }
     }

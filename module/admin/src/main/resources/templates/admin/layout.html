@@ -28,6 +28,16 @@
                 <span>채팅 모니터링</span>
             </a>
         </li>
+        <li class="menu-item" th:classappend="${activePage == 'echoes'} ? 'active'">
+            <a th:href="@{/admin/echoes}">
+                <span>게시물 모니터링</span>
+            </a>
+        </li>
+        <li class="menu-item" th:classappend="${activePage == 'reports'} ? 'active'">
+            <a th:href="@{/admin/reports}">
+                <span>신고 이력</span>
+            </a>
+        </li>
         <li class="menu-item" th:classappend="${activePage == 'attachments'} ? 'active'">
             <a th:href="@{/admin/attachments}">
                 <span>첨부파일 모아보기</span>

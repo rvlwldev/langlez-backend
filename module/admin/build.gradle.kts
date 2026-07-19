@@ -11,6 +11,8 @@ dependencies {
     implementation(project(":module:member"))
     implementation(project(":module:chat"))
     implementation(project(":module:attachment"))
+    implementation(project(":module:echo"))
+    implementation(project(":module:report"))
     implementation(project(":infra:redis"))
     implementation(libs.dependency.springboot.thymeleaf)
 

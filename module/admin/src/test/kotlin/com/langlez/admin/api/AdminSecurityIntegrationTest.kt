@@ -1,10 +1,14 @@
 package com.langlez.admin.api
 
 import com.langlez.admin.TestAdminApplication
+import com.langlez.attachment.domain.AttachmentRepository
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.MemberPresenceTracker
+import com.langlez.echo.domain.CommentRepository
+import com.langlez.echo.domain.PostRepository
 import com.langlez.member.domain.MemberRepository
+import com.langlez.report.domain.ReportRepository
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldNotBe
@@ -55,6 +59,18 @@ class AdminSecurityIntegrationTest : DescribeSpec() {
 
         @Bean
         fun chatMessageRepository(): ChatMessageRepository = mockk(relaxed = true)
+
+        @Bean
+        fun attachmentRepository(): AttachmentRepository = mockk(relaxed = true)
+
+        @Bean
+        fun postRepository(): PostRepository = mockk(relaxed = true)
+
+        @Bean
+        fun commentRepository(): CommentRepository = mockk(relaxed = true)
+
+        @Bean
+        fun reportRepository(): ReportRepository = mockk(relaxed = true)
 
         @Bean
         fun entityManagerFactory(): jakarta.persistence.EntityManagerFactory = mockk(relaxed = true)

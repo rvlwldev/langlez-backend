@@ -21,6 +21,9 @@ class CommentRepositoryImpl(
     override fun findByPost(postId: Long, cursor: Long?, size: Int): List<Comment> =
         commentJpaRepository.findByPost(postId, cursor, PageRequest.of(0, size))
 
+    override fun findByPostForAdmin(postId: Long, cursor: Long?, size: Int): List<Comment> =
+        commentJpaRepository.findByPostForAdmin(postId, cursor, PageRequest.of(0, size))
+
     override fun countByPost(postId: Long): Long =
         commentJpaRepository.countByPostId(postId)
 }

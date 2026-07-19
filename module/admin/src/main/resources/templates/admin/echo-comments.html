@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('게시물 댓글 목록')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('echoes')}"></div>
+        
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title" th:text="'게시물 #' + ${postId} + ' 댓글 목록'">게시물 댓글 목록</h1>
+                    <p class="page-subtitle">해당 게시물에 작성된 댓글을 모니터링합니다. (삭제된 댓글 포함)</p>
+                </div>
+                <div>
+                    <a th:href="@{/admin/echoes}" class="btn-secondary">← 게시물 목록으로</a>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>작성자</th>
+                            <th>내용</th>
+                            <th>상태</th>
+                            <th>작성 시각</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="comment : ${comments}">
+                            <td th:text="${comment.id}">1</td>
+                            <td th:text="'@' + ${comment.authorUsername}">@author</td>
+                            <td th:text="${comment.content}">Content</td>
+                            <td>
+                                <span th:if="${comment.deleted}" class="badge badge-offline" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">삭제됨</span>
+                                <span th:if="${!comment.deleted}" class="badge badge-online">정상</span>
+                            </td>
+                            <td th:text="${comment.createdAt}">2026-07-19T00:00:00Z</td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(comments)}">
+                            <td colspan="5" style="text-align: center; color: var(--text-secondary);">댓글이 존재하지 않습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="pagination-container" th:if="${nextCursor != null}">
+                <a th:href="@{/admin/echoes/{postId}/comments(postId=${postId},cursor=${nextCursor},size=${size})}" class="btn-secondary">다음 페이지 →</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -15,6 +15,10 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
         MongoDataAutoConfiguration::class,
         MongoAutoConfiguration::class,
         RedisAutoConfiguration::class
+    ],
+    excludeName = [
+        "com.langlez.mongo.config.MongoConfiguration",
+        "com.langlez.mysql.config.MySQLConfiguration"
     ]
 )
 class TestAdminApplication

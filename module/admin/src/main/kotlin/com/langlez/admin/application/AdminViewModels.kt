@@ -29,7 +29,8 @@ data class AdminMessageRow(
     val type: String,
     val content: String?,
     val fileUrl: String?,
-    val createdAt: Instant
+    val createdAt: Instant,
+    val deleted: Boolean
 )
 
 data class AdminAttachmentRow(
@@ -39,5 +40,35 @@ data class AdminAttachmentRow(
     val sourceId: String,
     val fileType: String,
     val storageKey: String,
+    val createdAt: Instant
+)
+
+data class AdminPostRow(
+    val id: Long,
+    val authorUsername: String,
+    val content: String,
+    val deleted: Boolean,
+    val blinded: Boolean,
+    val likeCount: Long,
+    val reportCount: Int,
+    val createdAt: Instant
+)
+
+data class AdminCommentRow(
+    val id: Long,
+    val authorUsername: String,
+    val content: String,
+    val deleted: Boolean,
+    val createdAt: Instant
+)
+
+data class AdminReportRow(
+    val id: Long,
+    val reporterUsername: String,
+    val reportedUsername: String,
+    val sourceType: String,
+    val sourceId: String,
+    val reason: String,
+    val triggerMessageId: String?,
     val createdAt: Instant
 )

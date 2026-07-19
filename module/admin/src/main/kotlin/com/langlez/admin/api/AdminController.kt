@@ -2,6 +2,7 @@ package com.langlez.admin.api
 
 import com.langlez.admin.application.AdminService
 import com.langlez.attachment.domain.Attachment
+import com.langlez.report.domain.Report
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
@@ -113,5 +114,51 @@ class AdminController(
         model.addAttribute("sourceType", sourceType)
         model.addAttribute("fileType", fileType)
         return "admin/attachments"
+    }
+
+    @GetMapping("/echoes")
+    fun echoes(
+        @RequestParam(required = false) cursor: Long?,
+        @RequestParam(defaultValue = "20") size: Int,
+        model: Model
+    ): String {
+        val posts = adminService.getPosts(cursor, size)
+        val nextCursor = if (posts.size == size) posts.last().id else null
+        model.addAttribute("posts", posts)
+        model.addAttribute("nextCursor", nextCursor)
+        model.addAttribute("size", size)
+        return "admin/echoes"
+    }
+
+    @GetMapping("/echoes/{postId}/comments")
+    fun echoComments(
+        @PathVariable postId: Long,
+        @RequestParam(required = false) cursor: Long?,
+        @RequestParam(defaultValue = "20") size: Int,
+        model: Model
+    ): String {
+        val comments = adminService.getPostComments(postId, cursor, size)
+        val nextCursor = if (comments.size == size) comments.last().id else null
+        model.addAttribute("postId", postId)
+        model.addAttribute("comments", comments)
+        model.addAttribute("nextCursor", nextCursor)
+        model.addAttribute("size", size)
+        return "admin/echo-comments"
+    }
+
+    @GetMapping("/reports")
+    fun reports(
+        @RequestParam(required = false) cursor: Long?,
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(required = false) sourceType: Report.SourceType?,
+        model: Model
+    ): String {
+        val reports = adminService.getReports(cursor, size, sourceType)
+        val nextCursor = if (reports.size == size) reports.last().id else null
+        model.addAttribute("reports", reports)
+        model.addAttribute("nextCursor", nextCursor)
+        model.addAttribute("size", size)
+        model.addAttribute("sourceType", sourceType)
+        return "admin/reports"
     }
 }
