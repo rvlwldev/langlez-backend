@@ -5,6 +5,7 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.wave.application.WaveBroadcaster
 import com.langlez.wave.application.WaveChatBroadcastPayload
 import com.langlez.wave.application.WaveErrorPayload
+import com.langlez.wavechat.application.WaveChatService
 import org.redisson.api.RedissonClient
 import org.springframework.messaging.handler.annotation.DestinationVariable
 import org.springframework.messaging.handler.annotation.MessageMapping
@@ -18,6 +19,7 @@ class WaveWebSocketController(
     private val broadcaster: WaveBroadcaster,
     private val memberRepository: MemberRepository,
     private val redissonClient: RedissonClient,
+    private val waveChatService: WaveChatService,
 ) {
 
     @MessageMapping("/wave/{roomId}/signal")
@@ -49,7 +51,9 @@ class WaveWebSocketController(
             }
         }
 
-        broadcaster.broadcastChat(roomId, WaveChatBroadcastPayload(roomId, memberId, payload.content))
+        val savedMessage = waveChatService.sendMessage(roomId, memberId, payload.content)
+
+        broadcaster.broadcastChat(roomId, WaveChatBroadcastPayload(roomId, memberId, savedMessage.content))
     }
 }
 

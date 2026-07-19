@@ -9,18 +9,10 @@ plugins {
 dependencies {
     implementation(project(":core"))
     implementation(project(":common"))
-    implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
-
-    implementation(project(":module:member"))
-    implementation(project(":module:relationship"))
-    implementation(project(":module:wavechat"))
-
-    implementation(libs.dependency.springboot.websocket)
+    implementation(project(":infra:mysql"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.bundles.testcontainers)
-    testImplementation(libs.bundles.test.kotest)
-    testImplementation(libs.test.mockk)
 }

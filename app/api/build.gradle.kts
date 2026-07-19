@@ -23,6 +23,8 @@ dependencies {
     implementation(project(":module:wave"))
     implementation(project(":module:notification"))
     implementation(project(":module:attachment"))
+    implementation(project(":module:report"))
+    implementation(project(":module:wavechat"))
 
     developmentOnly(libs.development.springboot.devtools)
 
