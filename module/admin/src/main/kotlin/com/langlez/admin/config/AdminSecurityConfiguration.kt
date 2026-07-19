@@ -14,10 +14,10 @@ import org.springframework.security.web.SecurityFilterChain
 @Configuration
 class AdminSecurityConfiguration {
 
-    @Value("\${admin.username}")
+    @Value($$"${admin.username}")
     private lateinit var adminUsername: String
 
-    @Value("\${admin.password}")
+    @Value($$"${admin.password}")
     private lateinit var adminPassword: String
 
     @Bean

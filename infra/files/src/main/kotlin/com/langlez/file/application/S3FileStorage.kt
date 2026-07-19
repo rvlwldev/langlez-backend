@@ -17,7 +17,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 internal class S3FileStorage(
     private val s3Client: S3Client,
     private val s3Presigner: S3Presigner,
-    @param:Value("\${cloud.aws.s3.bucket}") private val bucket: String,
+    @param:Value($$"${cloud.aws.s3.bucket}") private val bucket: String,
 ) : FileStorage {
 
     override fun generateUploadUrl(filename: String, contentType: String, directory: String): String {

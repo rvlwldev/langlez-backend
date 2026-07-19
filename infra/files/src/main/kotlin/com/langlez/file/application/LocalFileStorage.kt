@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 @Component
 @Profile("!production")
 class LocalFileStorage(
-    @param:Value("\${server.port:8080}") private val port: Int,
+    @param:Value($$"${server.port:8080}") private val port: Int,
 ) : FileStorage {
     private val rootPath = "attachments"
 
