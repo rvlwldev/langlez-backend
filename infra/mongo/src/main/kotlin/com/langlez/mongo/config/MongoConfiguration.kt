@@ -6,21 +6,20 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.mongo.MongoClientSettingsBuilderCustomizer
 import org.springframework.context.annotation.Bean
-import org.springframework.data.mongodb.MongoDatabaseFactory
-import org.springframework.data.mongodb.MongoTransactionManager
+import org.springframework.context.annotation.ComponentScan.Filter
+import org.springframework.context.annotation.FilterType
 import org.springframework.data.mongodb.config.EnableMongoAuditing
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories
 
 @AutoConfiguration
-@EnableMongoRepositories(basePackages = ["com.langlez"])
+@EnableMongoRepositories(
+    basePackages = ["com.langlez"],
+    excludeFilters = [Filter(type = FilterType.REGEX, pattern = [".*\\.jpa\\..*"])],
+)
 @EnableMongoAuditing
 class MongoConfiguration {
 
     private val logger = LoggerFactory.getLogger(MongoConfiguration::class.java)
-
-    @Bean
-    fun mongoTransactionManager(dbFactory: MongoDatabaseFactory) =
-        MongoTransactionManager(dbFactory)
 
     @Bean
     fun mongoObservabilityCustomizer(logger: PerformanceLogger, properties: LoggerProperties) =

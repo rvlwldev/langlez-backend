@@ -1,4 +1,4 @@
-package com.langlez.file.repository
+package com.langlez.file.repository.jpa
 
 import com.langlez.file.domain.File
 import org.springframework.data.jpa.repository.JpaRepository

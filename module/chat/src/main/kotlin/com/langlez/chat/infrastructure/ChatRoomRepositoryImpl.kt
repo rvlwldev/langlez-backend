@@ -2,18 +2,14 @@ package com.langlez.chat.infrastructure
 
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
+import com.langlez.chat.infrastructure.mongo.ChatRoomMongoRepository
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 import java.time.Instant
-
-interface ChatRoomMongoRepository : MongoRepository<ChatRoom, String> {
-    fun findByParticipantIds(participantIds: List<Long>): ChatRoom?
-}
 
 @Repository
 class ChatRoomRepositoryImpl(

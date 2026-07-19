@@ -37,6 +37,8 @@ spring:
     redis:
       host: localhost
       port: 6379
+      repositories:
+        enabled: false   # RedissonClient를 직접 사용, Spring Data Redis Repository는 쓰지 않음
 
   jpa:
     hibernate:
@@ -143,11 +145,11 @@ management:
 # 슬로우 쿼리 추적 임계값 (P6Spy / PerformanceLogger)
 logger:
   mysql:
-    log-threshold-ms: 0         # 로컬: 모든 쿼리 INFO 로깅 (가시성)
-    warn-threshold-ms: 200      # 200ms 이상 → 슬로우 쿼리 WARN
+    log-threshold-ms: 0         # 로컬: 모든 쿼리 TRACE 로깅 (가시성)
+    warn-threshold-ms: 500      # 500ms 이상 → 슬로우 쿼리 WARN
   mongo:
     log-threshold-ms: 0
-    warn-threshold-ms: 200
+    warn-threshold-ms: 500
   redis:
     log-threshold-ms: 0
     warn-threshold-ms: 100

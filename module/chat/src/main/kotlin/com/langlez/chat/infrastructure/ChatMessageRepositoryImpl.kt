@@ -2,15 +2,13 @@ package com.langlez.chat.infrastructure
 
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
+import com.langlez.chat.infrastructure.mongo.ChatMessageMongoRepository
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 import java.time.Instant
-
-interface ChatMessageMongoRepository : MongoRepository<ChatMessage, String>
 
 @Repository
 class ChatMessageRepositoryImpl(

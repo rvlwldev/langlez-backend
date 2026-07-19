@@ -6,10 +6,17 @@ import jakarta.persistence.PersistenceContext
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.ComponentScan.Filter
+import org.springframework.context.annotation.FilterType
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import javax.sql.DataSource
 
 @AutoConfiguration
 @ConditionalOnClass(DataSource::class)
+@EnableJpaRepositories(
+    basePackages = ["com.langlez"],
+    excludeFilters = [Filter(type = FilterType.REGEX, pattern = [".*\\.mongo\\..*"])],
+)
 class MySQLConfiguration {
     @PersistenceContext
     private lateinit var entityManager: EntityManager
