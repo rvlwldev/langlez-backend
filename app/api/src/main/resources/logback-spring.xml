@@ -42,4 +42,7 @@
         <appender-ref ref="ASYNC_CONSOLE"/>
         <appender-ref ref="ASYNC_FILE"/>
     </logger>
+
+    <!-- macOS 네이티브 DNS resolver 미존재 경고: 로컬(macOS)에서만 뜨는 무해한 노이즈, 의존성 추가는 프로덕션(Linux)에 안 맞아서 로그만 숨김 -->
+    <logger name="io.netty.resolver.dns.DnsServerAddressStreamProviders" level="ERROR"/>
 </configuration>
