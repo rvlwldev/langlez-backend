@@ -41,6 +41,9 @@ out/
 
 .gemini/
 GEMINI.md
+.claude/
+CLAUDE.md
+AGENTS.md
 **/**/**.log
 
 .env
