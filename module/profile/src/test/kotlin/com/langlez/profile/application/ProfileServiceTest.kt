@@ -20,10 +20,11 @@ class ProfileServiceTest : BehaviorSpec({
     val repo = mockk<ProfileRepository>()
     val storage = mockk<FileStorage>()
     val transaction = mockk<TransactionTemplate>()
+    val profileImageLocker = mockk<ProfileImageLocker>()
 
-    val service = ProfileService(repo, storage, transaction)
+    val service = ProfileService(repo, storage, transaction, profileImageLocker)
 
-    afterEach { clearMocks(repo, storage, transaction, answers = false) }
+    afterEach { clearMocks(repo, storage, transaction, profileImageLocker, answers = false) }
 
     fun member(id: Long) = Member(
         id = id,
@@ -122,39 +123,16 @@ class ProfileServiceTest : BehaviorSpec({
 
     Given("추가 사진 업로드 확정 시") {
 
-        When("사진이 5장 미만일 때 추가 사진을 확정하면") {
-            setupTransaction()
+        When("confirmAdditionalImage를 호출하면") {
             val addedImage = image(1L, "https://cdn/profiles/add.jpg", represent = false, sequence = 3)
-            every { repo.countImages(1L) } returns 2L
-            every { repo.saveImage(any()) } returns addedImage
+            every { profileImageLocker.confirmAdditionalImage(1L, "https://cdn/profiles/add.jpg") } returns addedImage
 
             val result = service.confirmAdditionalImage(1L, "https://cdn/profiles/add.jpg")
 
-            Then("추가 사진으로 저장된다") {
+            Then("ProfileImageLocker로 위임되어 수행된다") {
                 result.represent shouldBe false
                 result.url shouldBe "https://cdn/profiles/add.jpg"
-            }
-        }
-
-        When("이미 사진이 6장(최대)일 때 추가하면") {
-            every { repo.countImages(1L) } returns 6L
-
-            Then("BAD_REQUEST 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.confirmAdditionalImage(1L, "https://cdn/profiles/over.jpg")
-                }.status shouldBe HttpStatus.BAD_REQUEST.value()
-            }
-        }
-
-        When("사진이 정확히 5장일 때 추가하면 (경계값)") {
-            setupTransaction()
-            val addedImage = image(1L, "https://cdn/profiles/sixth.jpg", represent = false, sequence = 6)
-            every { repo.countImages(1L) } returns 5L
-            every { repo.saveImage(any()) } returns addedImage
-
-            Then("6번째 사진으로 저장된다") {
-                service.confirmAdditionalImage(1L, "https://cdn/profiles/sixth.jpg")
-                verify { repo.saveImage(any()) }
+                verify { profileImageLocker.confirmAdditionalImage(1L, "https://cdn/profiles/add.jpg") }
             }
         }
     }

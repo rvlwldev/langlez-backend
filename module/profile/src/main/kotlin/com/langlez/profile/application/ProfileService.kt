@@ -17,6 +17,7 @@ class ProfileService(
     private val repo: ProfileRepository,
     private val storage: FileStorage,
     private val transaction: TransactionTemplate,
+    private val profileImageLocker: ProfileImageLocker,
 ) {
 
     @Transactional(readOnly = true)
@@ -49,12 +50,7 @@ class ProfileService(
             ?: throw LanglezException(500, "profile.image.confirm-failed")
 
     fun confirmAdditionalImage(memberId: Long, fileUrl: String): ProfileImage =
-        transaction.execute {
-            if (repo.countImages(memberId) >= MAX_IMAGES)
-                throw LanglezException(400, "profile.image.limit-exceeded")
-            val sequence = repo.countImages(memberId) + 1
-            repo.saveImage(ProfileImage(memberId, fileUrl, sequence, 0L, false))
-        } ?: throw LanglezException(500, "profile.image.confirm-failed")
+        profileImageLocker.confirmAdditionalImage(memberId, fileUrl)
 
     fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute {
@@ -106,6 +102,5 @@ class ProfileService(
 
     companion object {
         private const val IMAGE_DIRECTORY = "profiles"
-        private const val MAX_IMAGES = 6L
     }
 }
