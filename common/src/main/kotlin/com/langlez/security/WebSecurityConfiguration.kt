@@ -6,6 +6,7 @@ import com.langlez.security.web.JwtAuthenticationFilter
 import com.langlez.security.web.MemberIdArgumentResolver
 import com.langlez.security.web.MemberRoleArgumentResolver
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Lazy
@@ -33,6 +34,7 @@ class WebSecurityConfiguration(
     private val objectMapper: ObjectMapper,
     @param:Lazy private val oauth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
     @param:Lazy private val oauth2SuccessHandler: AuthenticationSuccessHandler?,
+    @param:Value($$"${app.cors.allowed-origins}") private val allowedOrigins: List<String>,
 ) : WebMvcConfigurer {
 
     @Bean
@@ -63,7 +65,7 @@ class WebSecurityConfiguration(
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration().apply {
-            allowedOriginPatterns = listOf("*")
+            allowedOrigins = this@WebSecurityConfiguration.allowedOrigins
             allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             allowedHeaders = listOf("*")
             allowCredentials = true
