@@ -6,6 +6,7 @@ import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 @Component
 class ReportEventListener(
@@ -14,6 +15,7 @@ class ReportEventListener(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     @MessageListener(topic = "topic-echo_report", group = "report-service")
     fun onEchoPostReported(payload: String) {
         val event = runCatching { mapper.readValue(payload, EchoReportPayload::class.java) }
@@ -34,6 +36,7 @@ class ReportEventListener(
         )
     }
 
+    @Transactional
     @MessageListener(topic = "topic-chat_report", group = "report-service")
     fun onChatUserReported(payload: String) {
         val event = runCatching { mapper.readValue(payload, ChatReportPayload::class.java) }

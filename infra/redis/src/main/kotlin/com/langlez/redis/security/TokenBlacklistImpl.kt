@@ -13,7 +13,7 @@ class TokenBlacklistImpl(private val redissonClient: RedissonClient) : TokenBlac
         if (remainingValiditySeconds <= 0) return
         val key = getRedisKey(token)
         val bucket = redissonClient.getBucket<String>(key)
-        bucket.set("1", remainingValiditySeconds, TimeUnit.SECONDS)
+        bucket.set("1", java.time.Duration.ofSeconds(remainingValiditySeconds))
     }
 
     override fun isBlacklisted(token: String): Boolean {

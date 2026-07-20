@@ -1,5 +1,7 @@
 package com.langlez.security
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.exception.ExceptionResponse
 import com.langlez.security.web.JwtAuthenticationFilter
 import com.langlez.security.web.MemberIdArgumentResolver
 import com.langlez.security.web.MemberRoleArgumentResolver
@@ -17,6 +19,9 @@ import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
@@ -25,13 +30,15 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 class WebSecurityConfiguration(
     private val memberIdArgumentResolver: MemberIdArgumentResolver,
     private val memberRoleArgumentResolver: MemberRoleArgumentResolver,
+    private val objectMapper: ObjectMapper,
     @param:Lazy private val oauth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
     @param:Lazy private val oauth2SuccessHandler: AuthenticationSuccessHandler?,
 ) : WebMvcConfigurer {
 
     @Bean
     fun filterChain(http: HttpSecurity, filter: JwtAuthenticationFilter): SecurityFilterChain =
-        http.csrf { it.disable() }
+        http.cors { }
+            .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { customizer ->
                 val swagger = arrayOf("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api-docs/**")
@@ -53,6 +60,19 @@ class WebSecurityConfiguration(
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
 
+    @Bean
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val configuration = CorsConfiguration().apply {
+            allowedOriginPatterns = listOf("*")
+            allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            allowedHeaders = listOf("*")
+            allowCredentials = true
+        }
+        val source = UrlBasedCorsConfigurationSource()
+        source.registerCorsConfiguration("/**", configuration)
+        return source
+    }
+
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
         resolvers.add(memberIdArgumentResolver)
         resolvers.add(memberRoleArgumentResolver)
@@ -62,6 +82,7 @@ class WebSecurityConfiguration(
         res.status = status
         res.contentType = MediaType.APPLICATION_JSON_VALUE
         res.characterEncoding = "UTF-8"
-        res.writer.write("""{"status":$status,"message":"$message"}""")
+        val response = ExceptionResponse(status, message)
+        res.writer.write(objectMapper.writeValueAsString(response))
     }
 }

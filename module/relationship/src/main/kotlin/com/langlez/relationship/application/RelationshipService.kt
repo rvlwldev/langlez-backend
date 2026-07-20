@@ -2,7 +2,6 @@ package com.langlez.relationship.application
 
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.MemberRepository
-import com.langlez.relationship.api.RelationshipResponse
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
@@ -60,21 +59,21 @@ class RelationshipService(
     }
 
     @Transactional(readOnly = true)
-    fun getFollowings(followerId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+    fun getFollowings(followerId: Long, cursor: Long?, size: Int): RelationshipResult.CursorList {
         val follows = repo.findFollowings(followerId, cursor, size)
         val memberIds = follows.map { it.followedId }
         return buildCursorList(memberIds, follows.size == size, follows.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
-    fun getFollowers(followedId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+    fun getFollowers(followedId: Long, cursor: Long?, size: Int): RelationshipResult.CursorList {
         val follows = repo.findFollowers(followedId, cursor, size)
         val memberIds = follows.map { it.followerId }
         return buildCursorList(memberIds, follows.size == size, follows.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
-    fun getBlocks(blockerId: Long, cursor: Long?, size: Int): RelationshipResponse.CursorList {
+    fun getBlocks(blockerId: Long, cursor: Long?, size: Int): RelationshipResult.CursorList {
         val blocks = repo.findBlocks(blockerId, cursor, size)
         val memberIds = blocks.map { it.blockedId }
         return buildCursorList(memberIds, blocks.size == size, blocks.lastOrNull()?.id)
@@ -84,11 +83,12 @@ class RelationshipService(
         memberIds: List<Long>,
         hasMore: Boolean,
         lastEntityId: Long?,
-    ): RelationshipResponse.CursorList {
+    ): RelationshipResult.CursorList {
         val members = memberRepo.findByIds(memberIds)
-        val summaries = memberIds.mapNotNull { id -> members.find { it.id == id } }
-            .map { RelationshipResponse.MemberSummary(it.username, it.nickname) }
+        val memberMap = members.associateBy { it.id }
+        val summaries = memberIds.mapNotNull { id -> memberMap[id] }
+            .map { RelationshipResult.MemberSummary(it.username, it.nickname) }
         val nextCursor = if (hasMore) lastEntityId else null
-        return RelationshipResponse.CursorList(nextCursor, summaries)
+        return RelationshipResult.CursorList(nextCursor, summaries)
     }
 }

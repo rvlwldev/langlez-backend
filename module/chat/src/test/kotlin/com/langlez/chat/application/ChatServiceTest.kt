@@ -136,15 +136,13 @@ class ChatServiceTest : BehaviorSpec({
             every { chatRoomRepository.findById(roomId) } returns room
             every { memberRepository.findById(memberId) } returns sender
             every { chatMessageRepository.save(any()) } returns savedMsg
-            every { chatRoomRepository.save(any()) } returns room
+            every { chatRoomRepository.updateLastMessageAndReadStatus(roomId, "hello", any(), memberId) } just runs
 
             Then("메시지를 저장하고 방의 lastMessageAt을 갱신하며 브로드캐스트한다") {
                 val result = service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "hello", null)
                 result shouldBe savedMsg
-                room.lastMessagePreview shouldBe "hello"
-                room.lastMessageAt shouldNotBe null
                 verify { chatMessageRepository.save(any()) }
-                verify { chatRoomRepository.save(room) }
+                verify { chatRoomRepository.updateLastMessageAndReadStatus(roomId, "hello", any(), memberId) }
                 verify { chatBroadcaster.broadcastMessage(roomId, any()) }
             }
         }
@@ -311,7 +309,7 @@ class ChatServiceTest : BehaviorSpec({
             every { memberRepository.findById(memberId) } returns createMember(memberId, "user1")
             every { chatMessageRepository.findById("target1") } returns targetMsg
             every { chatMessageRepository.save(any()) } returns savedMsg
-            every { chatRoomRepository.save(any()) } returns room
+            every { chatRoomRepository.updateLastMessageAndReadStatus(roomId, any(), any(), memberId) } just runs
             every { memberRepository.findById(2L) } returns createMember(2L, "user2")
 
             Then("replyToMessageId를 저장하고 replyPreview가 채워진 summary를 반환한다") {

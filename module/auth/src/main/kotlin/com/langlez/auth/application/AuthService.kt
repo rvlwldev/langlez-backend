@@ -65,7 +65,7 @@ class AuthService(
         if (tokenType != "refresh")
             throw LanglezException(401, "auth.invalid-token")
 
-        val id = jwt.extractID(refreshToken)
+        val id = jwt.extractId(refreshToken)
         val member = memberService.findById(id)
             ?: throw LanglezException(401, "auth.invalid-token")
 

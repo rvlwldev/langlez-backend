@@ -47,21 +47,24 @@ class RelationshipController(
         @MemberID followerId: Long,
         @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList = service.getFollowings(followerId, cursor, size)
+    ): RelationshipResponse.CursorList =
+        RelationshipResponse.CursorList.from(service.getFollowings(followerId, cursor, size))
 
     @GetMapping("/followers")
     fun getFollowers(
         @MemberID followedId: Long,
         @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList = service.getFollowers(followedId, cursor, size)
+    ): RelationshipResponse.CursorList =
+        RelationshipResponse.CursorList.from(service.getFollowers(followedId, cursor, size))
 
     @GetMapping("/blocks")
     fun getBlocks(
         @MemberID blockerId: Long,
         @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList = service.getBlocks(blockerId, cursor, size)
+    ): RelationshipResponse.CursorList =
+        RelationshipResponse.CursorList.from(service.getBlocks(blockerId, cursor, size))
 
     private fun resolveUsername(username: String): Long =
         memberRepo.findByUsername(username)?.id

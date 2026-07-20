@@ -46,7 +46,7 @@ class ProfileService(
 
     fun confirmRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute { replaceRepresentImage(memberId, fileUrl) }
-            ?: throw LanglezException()
+            ?: throw LanglezException(500, "profile.image.confirm-failed")
 
     fun confirmAdditionalImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute {
@@ -54,7 +54,7 @@ class ProfileService(
                 throw LanglezException(400, "profile.image.limit-exceeded")
             val sequence = repo.countImages(memberId) + 1
             repo.saveImage(ProfileImage(memberId, fileUrl, sequence, 0L, false))
-        } ?: throw LanglezException()
+        } ?: throw LanglezException(500, "profile.image.confirm-failed")
 
     fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
         transaction.execute {
@@ -66,7 +66,7 @@ class ProfileService(
             }
             target.represent = true
             repo.saveImage(target)
-        } ?: throw LanglezException()
+        } ?: throw LanglezException(500, "profile.image.change-failed")
 
     fun deleteImage(memberId: Long, fileUrl: String) {
         transaction.execute {

@@ -18,7 +18,7 @@ data class OAuth2UserProfile(
         private fun byApple(key: String, attributes: Map<String, Any>) = OAuth2UserProfile(
             provider = "APPLE",
             providerKey = key,
-            email = attributes["email"] as String,
+            email = attributes["email"]?.toString() ?: "",
             displayName = (attributes["name"] as? String) ?: "AppleUser",
             rawAttributes = attributes,
         )
@@ -26,7 +26,7 @@ data class OAuth2UserProfile(
         private fun byGoogle(key: String, attributes: Map<String, Any>) = OAuth2UserProfile(
             provider = "GOOGLE",
             providerKey = key,
-            email = attributes["email"] as String,
+            email = attributes["email"]?.toString() ?: "",
             displayName = attributes["name"] as? String ?: "GoogleUser",
             rawAttributes = attributes,
         )

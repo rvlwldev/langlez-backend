@@ -38,7 +38,7 @@ internal class S3FileStorage(
     }
 
     override fun delete(fileUrl: String) {
-        val key = fileUrl.substringAfter(".com/")
+        val key = java.net.URI(fileUrl).path.removePrefix("/")
         val deleteRequest = DeleteObjectRequest.builder().bucket(bucket).key(key).build()
         s3Client.deleteObject(deleteRequest)
     }

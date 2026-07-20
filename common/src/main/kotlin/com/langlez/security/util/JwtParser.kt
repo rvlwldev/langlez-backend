@@ -9,7 +9,9 @@ import io.jsonwebtoken.io.Decoders
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.*
+import java.time.Duration
+import java.time.Instant
+import java.util.Date
 import javax.crypto.SecretKey
 
 @Component
@@ -35,27 +37,33 @@ class JwtParser(
         }
     }
 
-    fun createRefreshToken(id: Long, role: String): String =
-        Jwts.builder()
+    fun createRefreshToken(id: Long, role: String): String {
+        val now = Instant.now()
+        val expiration = now.plus(Duration.ofSeconds(refreshTokenTTL))
+        return Jwts.builder()
             .subject(id.toString())
             .claim("role", role)
             .claim("type", "refresh")
-            .issuedAt(Date())
-            .expiration(Date(Date().time + refreshTokenTTL * 1000))
+            .issuedAt(Date.from(now))
+            .expiration(Date.from(expiration))
             .signWith(key)
             .compact()
+    }
 
-    fun createAccessToken(id: Long, role: String): String =
-        Jwts.builder()
+    fun createAccessToken(id: Long, role: String): String {
+        val now = Instant.now()
+        val expiration = now.plus(Duration.ofSeconds(accessTokenTTL))
+        return Jwts.builder()
             .subject(id.toString())
             .claim("role", role)
             .claim("type", "access")
-            .issuedAt(Date())
-            .expiration(Date(Date().time + accessTokenTTL * 1000))
+            .issuedAt(Date.from(now))
+            .expiration(Date.from(expiration))
             .signWith(key)
             .compact()
+    }
 
-    fun extractID(token: String): Long = parseClaims(token).subject.toLong()
+    fun extractId(token: String): Long = parseClaims(token).subject.toLong()
 
     fun extractRole(token: String): String = parseClaims(token).get("role", String::class.java)
 
@@ -63,8 +71,8 @@ class JwtParser(
 
     fun extractRemainingValiditySeconds(token: String): Long {
         val claims = parseClaims(token)
-        val expirationTime = claims.expiration.time
-        val currentTime = System.currentTimeMillis()
-        return (expirationTime - currentTime) / 1000
+        val expirationInstant = claims.expiration.toInstant()
+        val now = Instant.now()
+        return Duration.between(now, expirationInstant).seconds
     }
 }

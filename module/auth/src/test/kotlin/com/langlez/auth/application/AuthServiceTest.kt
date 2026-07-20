@@ -43,7 +43,7 @@ class AuthServiceTest : BehaviorSpec({
 
         When("유효한 리프레시 토큰으로 갱신하면") {
             every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractID(validRefreshToken) } returns memberId
+            every { jwt.extractId(validRefreshToken) } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns validRefreshToken
             every { jwt.createRefreshToken(memberId, "MEMBER") } returns newRefreshToken
@@ -70,7 +70,7 @@ class AuthServiceTest : BehaviorSpec({
 
         When("존재하지 않는 회원의 토큰으로 갱신하면") {
             every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractID(validRefreshToken) } returns 999L
+            every { jwt.extractId(validRefreshToken) } returns 999L
             every { memberService.findById(999L) } returns null
             every { redisson.getBucket<String>("refresh_token:999") } returns bucket
 
@@ -83,7 +83,7 @@ class AuthServiceTest : BehaviorSpec({
 
         When("Redis에 저장된 토큰과 다른 토큰으로 갱신하면") {
             every { jwt.extractTokenType("old-token") } returns "refresh"
-            every { jwt.extractID("old-token") } returns memberId
+            every { jwt.extractId("old-token") } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns "different-token"
             every { bucket.delete() } returns true
@@ -98,7 +98,7 @@ class AuthServiceTest : BehaviorSpec({
 
         When("Redis에 토큰이 없으면(만료)") {
             every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractID(validRefreshToken) } returns memberId
+            every { jwt.extractId(validRefreshToken) } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns null
 

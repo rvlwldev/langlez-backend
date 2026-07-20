@@ -115,9 +115,7 @@ class ChatService(
             ChatMessage.Type.AUDIO -> "[AUDIO]"
         }
 
-        room.updateLastMessage(preview, savedMessage.createdAt)
-        room.updateReadStatus(memberId, savedMessage.createdAt)
-        chatRoomRepository.save(room)
+        chatRoomRepository.updateLastMessageAndReadStatus(roomId, preview, savedMessage.createdAt, memberId)
 
         val broadcastPayload = ChatMessageBroadcastPayload(
             id = savedMessage.id,

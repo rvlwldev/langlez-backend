@@ -4,7 +4,6 @@ import com.langlez.matching.domain.MatchingQueueRepository
 import org.redisson.api.RScoredSortedSet
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Repository
-import java.time.Duration
 import java.time.Instant
 
 @Repository
@@ -30,7 +29,7 @@ class MatchingQueueRepositoryImpl(
     override fun allMembers(): List<Long> = queue().readAll().toList()
 
     override fun saveJoinedAt(memberId: Long, at: Instant) {
-        redissonClient.getBucket<Long>(joinedAtKey(memberId)).set(at.toEpochMilli(), JOINED_AT_TTL)
+        redissonClient.getBucket<Long>(joinedAtKey(memberId)).set(at.toEpochMilli())
     }
 
     override fun findJoinedAt(memberId: Long): Instant? =
@@ -42,7 +41,6 @@ class MatchingQueueRepositoryImpl(
 
     companion object {
         const val QUEUE_KEY = "matching:queue"
-        private val JOINED_AT_TTL: Duration = Duration.ofMinutes(5)
         private fun joinedAtKey(memberId: Long) = "matching:joined-at:$memberId"
     }
 }

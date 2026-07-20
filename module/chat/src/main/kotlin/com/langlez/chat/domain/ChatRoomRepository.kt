@@ -8,5 +8,6 @@ interface ChatRoomRepository {
     fun findByParticipant(memberId: Long, cursor: String?, size: Int): List<ChatRoom>
     fun findAllRooms(cursor: String?, size: Int): List<ChatRoom>
     fun updateReadStatus(roomId: String, memberId: Long, readAt: Instant)
+    fun updateLastMessageAndReadStatus(roomId: String, preview: String, at: Instant, memberId: Long)
     fun findById(roomId: String): ChatRoom?
 }

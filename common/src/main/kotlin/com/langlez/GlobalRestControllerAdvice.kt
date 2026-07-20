@@ -31,7 +31,9 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
         e: MethodArgumentNotValidException,
         locale: Locale
     ): ResponseEntity<ExceptionResponse> {
-        val message = getMessage("common.invalid-argument", locale)
+        val fieldErrors = e.bindingResult.fieldErrors
+            .joinToString(", ") { "${it.field}: ${it.defaultMessage ?: "invalid"}" }
+        val message = if (fieldErrors.isNotBlank()) fieldErrors else getMessage("common.invalid-argument", locale)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(ExceptionResponse(HttpStatus.BAD_REQUEST, message))
@@ -66,15 +68,10 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
             .body(ExceptionResponse(HttpStatus.INTERNAL_SERVER_ERROR, message))
     }
 
-    private fun getMessage(key: String, locale: Locale): String {
-        return try {
-            source.getMessage(key, null, locale)
-        } catch (_: Exception) {
-            try {
-                source.getMessage(key, null, Locale.ENGLISH)
-            } catch (_: Exception) {
-                key
+    private fun getMessage(key: String, locale: Locale): String =
+        runCatching { source.getMessage(key, null, locale) }
+            .getOrElse {
+                runCatching { source.getMessage(key, null, Locale.ENGLISH) }
+                    .getOrDefault(key)
             }
-        }
-    }
 }

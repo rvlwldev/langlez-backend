@@ -11,6 +11,7 @@ import com.langlez.relationship.domain.RelationshipRepository
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 
 @Service
 @Transactional
@@ -147,7 +148,7 @@ class EchoService(
         if (bucket.isExists) {
             throw LanglezException(400, "echo.report.already-reported")
         }
-        bucket.set("1")
+        bucket.set("1", Duration.ofDays(30))
 
         postRepository.incrementReportCount(postId)
         postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)

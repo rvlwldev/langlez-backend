@@ -1,5 +1,6 @@
 package com.langlez.redis.cache
 
+import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.CacheManager
@@ -9,12 +10,14 @@ import org.springframework.data.redis.cache.RedisCacheManager
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.scheduling.annotation.Scheduled
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ResilientCacheManager(
     private val redisCacheManager: RedisCacheManager,
     private val caffeineCacheManager: CaffeineCacheManager,
     private val connectionFactory: RedisConnectionFactory,
+    private val redissonClient: RedissonClient,
 ) : CacheManager {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -38,7 +41,7 @@ class ResilientCacheManager(
             connectionFactory.connection.use { it.ping() }
             if (_isRedisAvailable.compareAndSet(false, true)) {
                 logger.info("Redis is back online! Starting migration from local to Redis...")
-                migrateLocalToRedis()
+                executeMigrationWithLock()
             }
         } catch (e: Exception) {
             markRedisDown()
@@ -48,6 +51,27 @@ class ResilientCacheManager(
     private fun markRedisDown() {
         if (_isRedisAvailable.compareAndSet(true, false))
             logger.error("Redis connection failed. Falling back to local cache.")
+    }
+
+    private fun executeMigrationWithLock() {
+        val lock = redissonClient.getLock("lock:resilient-cache:migration")
+        val acquired = try {
+            lock.tryLock(0, 60, TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (acquired) {
+            try {
+                migrateLocalToRedis()
+            } finally {
+                if (lock.isHeldByCurrentThread) {
+                    lock.unlock()
+                }
+            }
+        } else {
+            logger.info("Another WAS instance is performing local to Redis migration. Skipping.")
+        }
     }
 
     private fun migrateLocalToRedis() {
@@ -62,3 +86,4 @@ class ResilientCacheManager(
         }
     }
 }
+

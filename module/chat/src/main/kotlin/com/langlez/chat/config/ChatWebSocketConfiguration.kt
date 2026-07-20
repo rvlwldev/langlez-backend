@@ -91,7 +91,7 @@ class JwtChannelInterceptor(
         }
 
         try {
-            val memberId = jwtParser.extractID(token)
+            val memberId = jwtParser.extractId(token)
             if (jwtParser.extractTokenType(token) != "access") {
                 throw LanglezException(401, "auth.invalid-token")
             }

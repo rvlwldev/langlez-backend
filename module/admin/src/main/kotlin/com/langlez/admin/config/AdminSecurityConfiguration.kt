@@ -8,6 +8,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.userdetails.User
 import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.provisioning.InMemoryUserDetailsManager
 import org.springframework.security.web.SecurityFilterChain
 
@@ -21,9 +23,12 @@ class AdminSecurityConfiguration {
     private lateinit var adminPassword: String
 
     @Bean
-    fun adminUserDetailsService(): UserDetailsService {
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+
+    @Bean
+    fun adminUserDetailsService(passwordEncoder: PasswordEncoder): UserDetailsService {
         val user = User.withUsername(adminUsername)
-            .password("{noop}$adminPassword")
+            .password(passwordEncoder.encode(adminPassword))
             .roles("ADMIN")
             .build()
         return InMemoryUserDetailsManager(user)
@@ -31,7 +36,7 @@ class AdminSecurityConfiguration {
 
     @Bean
     @Order(1)
-    fun adminSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun adminSecurityFilterChain(http: HttpSecurity, adminUserDetailsService: UserDetailsService): SecurityFilterChain {
         http
             .securityMatcher("/admin/**")
             .authorizeHttpRequests { auth ->
@@ -63,7 +68,7 @@ class AdminSecurityConfiguration {
             .sessionManagement { session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             }
-            .userDetailsService(adminUserDetailsService())
+            .userDetailsService(adminUserDetailsService)
         
         return http.build()
     }

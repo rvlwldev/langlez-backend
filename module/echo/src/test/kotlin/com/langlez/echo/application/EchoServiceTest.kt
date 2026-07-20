@@ -15,6 +15,7 @@ import io.kotest.matchers.shouldNotBe
 import io.mockk.*
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
+import java.time.Duration
 
 class EchoServiceTest : BehaviorSpec({
 
@@ -302,7 +303,7 @@ class EchoServiceTest : BehaviorSpec({
             service.reportPost(1L, postId, "spam")
 
             Then("outbox 이벤트 저장 및 레디스 키 세팅이 수행되어야 한다") {
-                verify(exactly = 1) { bucket.set("1") }
+                verify(exactly = 1) { bucket.set("1", any<Duration>()) }
                 verify(exactly = 1) { postRepository.incrementReportCount(postId) }
                 verify(exactly = 1) { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) }
                 verify(exactly = 1) {

@@ -10,6 +10,8 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 
+import com.langlez.relationship.application.RelationshipResult
+
 class RelationshipControllerTest : BehaviorSpec({
 
     val service = mockk<RelationshipService>()
@@ -54,11 +56,11 @@ class RelationshipControllerTest : BehaviorSpec({
 
     Given("팔로잉 목록 조회 시") {
         When("서비스가 정상 처리하면") {
-            val cursorList = RelationshipResponse.CursorList(
+            val cursorList = RelationshipResult.CursorList(
                 nextCursor = 10L,
                 members = listOf(
-                    RelationshipResponse.MemberSummary("user2", "User 2"),
-                    RelationshipResponse.MemberSummary("user3", "User 3"),
+                    RelationshipResult.MemberSummary("user2", "User 2"),
+                    RelationshipResult.MemberSummary("user3", "User 3"),
                 )
             )
             every { service.getFollowings(1L, null, 20) } returns cursorList
@@ -73,10 +75,10 @@ class RelationshipControllerTest : BehaviorSpec({
 
     Given("차단 목록 조회 시") {
         When("서비스가 정상 처리하면") {
-            val cursorList = RelationshipResponse.CursorList(
+            val cursorList = RelationshipResult.CursorList(
                 nextCursor = null,
                 members = listOf(
-                    RelationshipResponse.MemberSummary("user10", "User 10"),
+                    RelationshipResult.MemberSummary("user10", "User 10"),
                 )
             )
             every { service.getBlocks(1L, null, 20) } returns cursorList

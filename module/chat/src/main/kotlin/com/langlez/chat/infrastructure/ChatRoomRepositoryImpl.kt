@@ -91,6 +91,15 @@ class ChatRoomRepositoryImpl(
         mongoTemplate.updateFirst(query, update, ChatRoom::class.java)
     }
 
+    override fun updateLastMessageAndReadStatus(roomId: String, preview: String, at: Instant, memberId: Long) {
+        val query = Query(Criteria.where("id").`is`(roomId))
+        val update = Update()
+            .set("lastMessagePreview", preview)
+            .set("lastMessageAt", at)
+            .set("readStatus.$memberId", at)
+        mongoTemplate.updateFirst(query, update, ChatRoom::class.java)
+    }
+
     override fun findById(roomId: String): ChatRoom? {
         return mongoRepo.findById(roomId).orElse(null)
     }

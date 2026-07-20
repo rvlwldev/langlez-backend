@@ -7,8 +7,12 @@ import org.springframework.security.core.context.SecurityContextHolder
 object ContextUser {
 
     val id: Long
-        get() = runCatching { auth.principal.toString().toLong() }
-            .getOrElse { throw LanglezException(401, "auth.invalid-request") }
+        get() {
+            val principal = auth.principal
+            return (principal as? Long)
+                ?: (principal as? String)?.toLongOrNull()
+                ?: throw LanglezException(401, "auth.invalid-request")
+        }
 
     val role: String
         get() = auth.authorities.firstOrNull()?.authority

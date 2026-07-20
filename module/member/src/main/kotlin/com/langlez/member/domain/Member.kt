@@ -32,7 +32,7 @@ class Member(
 
     @Enumerated(EnumType.STRING) var role: Role = Role.MEMBER,
 
-    @Enumerated(EnumType.ORDINAL) @Column(name = "provider_type") var provider: Provider,
+    @Enumerated(EnumType.STRING) @Column(name = "provider_type") var provider: Provider,
     @Column(name = "provider_id") var providerId: String,
     @Column(name = "provider_username") var providerDisplayName: String? = null,
 

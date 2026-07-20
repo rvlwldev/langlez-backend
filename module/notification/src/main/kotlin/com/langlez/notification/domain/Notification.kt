@@ -8,7 +8,10 @@ import java.time.Instant
 
 @Entity
 @EntityListeners(AuditingEntityListener::class)
-@Table(name = "notifications")
+@Table(
+    name = "notifications",
+    indexes = [Index(name = "IDX_NOTIFICATION_RECIPIENT", columnList = "recipient_id, id DESC")]
+)
 class Notification(
     @Id @GeneratedValue(strategy = IDENTITY)
     val id: Long = 0,
