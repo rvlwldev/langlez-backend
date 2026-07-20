@@ -7,6 +7,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.Message
 import com.google.firebase.messaging.Notification as FcmNotification
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 
 @Component
@@ -28,6 +29,7 @@ class FcmPushSender {
         }
     }
 
+    @Async
     fun send(fcmToken: String, title: String, body: String, data: Map<String, String>) {
         if (!initialized) {
             logger.warn("FirebaseApp is not initialized. Skip sending push notification to token: {}", fcmToken)
