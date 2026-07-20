@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit
         "jwt.access-token-ttl-secs=3600",
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
-        "spring.threads.virtual.enabled=true"
+        "spring.threads.virtual.enabled=true",
+        "app.cors.allowed-origins=http://localhost:3000"
     ]
 )
 class FcmPushSenderAsyncTest : FunSpec() {

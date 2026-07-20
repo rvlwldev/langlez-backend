@@ -45,6 +45,7 @@ import org.testcontainers.containers.MySQLContainer
             "org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration," +
             "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration",
         "spring.main.allow-bean-definition-overriding=true",
+        "app.cors.allowed-origins=http://localhost:3000",
     ]
 )
 @Import(ProfileE2ETest.TestRedisConfig::class)

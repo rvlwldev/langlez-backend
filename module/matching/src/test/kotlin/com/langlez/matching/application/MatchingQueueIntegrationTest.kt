@@ -29,6 +29,7 @@ import org.testcontainers.containers.MySQLContainer
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
         "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.cors.allowed-origins=http://localhost:3000",
     ]
 )
 class MatchingQueueIntegrationTest : BehaviorSpec() {

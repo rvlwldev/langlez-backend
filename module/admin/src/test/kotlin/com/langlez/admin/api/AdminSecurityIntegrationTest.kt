@@ -34,7 +34,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
     properties = [
         "admin.username=admin",
         "admin.password=admin",
-        "spring.main.allow-bean-definition-overriding=true"
+        "spring.main.allow-bean-definition-overriding=true",
+        "app.cors.allowed-origins=http://localhost:3000"
     ]
 )
 @AutoConfigureMockMvc

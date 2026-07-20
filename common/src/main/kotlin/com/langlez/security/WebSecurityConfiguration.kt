@@ -34,7 +34,7 @@ class WebSecurityConfiguration(
     private val objectMapper: ObjectMapper,
     @param:Lazy private val oauth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
     @param:Lazy private val oauth2SuccessHandler: AuthenticationSuccessHandler?,
-    @param:Value($$"${app.cors.allowed-origins:http://localhost:3000}") private val allowedOrigins: List<String>,
+    @param:Value($$"${app.cors.allowed-origins}") private val allowedOrigins: List<String>,
 ) : WebMvcConfigurer {
 
     @Bean

@@ -23,7 +23,8 @@ import java.util.concurrent.TimeUnit
         "jwt.access-token-ttl-secs=3600",
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.cors.allowed-origins=http://localhost:3000"
     ]
 )
 class PostRepositoryConcurrencyTest : BehaviorSpec() {
