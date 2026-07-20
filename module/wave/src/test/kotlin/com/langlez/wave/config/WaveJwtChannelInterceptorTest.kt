@@ -72,8 +72,7 @@ class WaveJwtChannelInterceptorTest : BehaviorSpec({
             val room = WaveRoom(id = roomId, broadcasterId = 2L, title = "Full Room", maxParticipants = 4)
             every { waveRoomRepository.findById(roomId) } returns room
             every { viewerTracker.isBanned(roomId, memberId) } returns false
-            every { viewerTracker.isViewer(roomId, memberId) } returns false
-            every { viewerTracker.viewerCount(roomId) } returns 4L
+            every { viewerTracker.addViewerIfAllowed(roomId, memberId, 4) } returns false
 
             Then("403 예외(wave.room-full)가 발생하여 입장이 거부된다") {
                 val message = createSubscribeMessage(destination, memberId)
@@ -89,9 +88,8 @@ class WaveJwtChannelInterceptorTest : BehaviorSpec({
             val room = WaveRoom(id = roomId, broadcasterId = 2L, title = "Full Room", maxParticipants = 4)
             every { waveRoomRepository.findById(roomId) } returns room
             every { viewerTracker.isBanned(roomId, memberId) } returns false
-            every { viewerTracker.isViewer(roomId, memberId) } returns true
-            every { viewerTracker.viewerCount(roomId) } returns 4L
-            every { viewerTracker.join(any(), any(), any()) } returns Unit
+            every { viewerTracker.addViewerIfAllowed(roomId, memberId, 4) } returns true
+            every { viewerTracker.trackSession(any(), any(), any()) } returns Unit
 
             Then("거부되지 않고 정상적으로 수락된다") {
                 val message = createSubscribeMessage(destination, memberId)
@@ -124,9 +122,8 @@ class WaveJwtChannelInterceptorTest : BehaviorSpec({
             val room = WaveRoom(id = roomId, broadcasterId = 2L, title = "Open Room", maxParticipants = 4)
             every { waveRoomRepository.findById(roomId) } returns room
             every { viewerTracker.isBanned(roomId, memberId) } returns false
-            every { viewerTracker.isViewer(roomId, memberId) } returns false
-            every { viewerTracker.viewerCount(roomId) } returns 2L
-            every { viewerTracker.join(any(), any(), any()) } returns Unit
+            every { viewerTracker.addViewerIfAllowed(roomId, memberId, 4) } returns true
+            every { viewerTracker.trackSession(any(), any(), any()) } returns Unit
 
             Then("정상적으로 입장이 허용된다") {
                 val message = createSubscribeMessage(destination, memberId)

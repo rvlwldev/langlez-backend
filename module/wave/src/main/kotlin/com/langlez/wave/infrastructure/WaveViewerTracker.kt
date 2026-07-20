@@ -25,7 +25,34 @@ class WaveViewerTracker(
 
     fun join(sessionId: String, roomId: Long, memberId: Long) {
         addViewer(roomId, memberId)
+        trackSession(sessionId, roomId, memberId)
+    }
+
+    fun trackSession(sessionId: String, roomId: Long, memberId: Long) {
         sessionRooms[sessionId] = roomId to memberId
+    }
+
+    fun addViewerIfAllowed(roomId: Long, memberId: Long, maxParticipants: Int): Boolean {
+        val script = """
+            if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+                return 1
+            end
+            if redis.call('SCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+                return 0
+            end
+            redis.call('SADD', KEYS[1], ARGV[1])
+            return 1
+        """.trimIndent()
+
+        val result = redissonClient.script.eval<Long>(
+            org.redisson.api.RScript.Mode.READ_WRITE,
+            script,
+            org.redisson.api.RScript.ReturnType.INTEGER,
+            listOf(viewersKey(roomId)),
+            memberId,
+            maxParticipants
+        )
+        return result == 1L
     }
 
     fun leave(sessionId: String) {
