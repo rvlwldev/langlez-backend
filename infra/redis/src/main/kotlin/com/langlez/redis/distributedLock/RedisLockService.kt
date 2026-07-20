@@ -1,9 +1,12 @@
 package com.langlez.redis.distributedLock
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class RedisLockService(private val redissonClient: RedissonClient) {
@@ -50,16 +53,46 @@ class RedisLockService(private val redissonClient: RedissonClient) {
 
         logger.debug("Lock acquired successfully: $key")
 
-        return try {
-            action()
-        } finally {
-            try {
-                if (rLock.isHeldByCurrentThread) {
-                    rLock.unlock()
-                    logger.debug("Lock released: $key")
+        val isReleased = AtomicBoolean(false)
+        val releaseLock = {
+            if (isReleased.compareAndSet(false, true)) {
+                try {
+                    if (rLock.isHeldByCurrentThread) {
+                        rLock.unlock()
+                        logger.debug("Lock released: $key")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Failed to release lock: $key", e)
                 }
-            } catch (e: Exception) {
-                logger.warn("Failed to release lock: $key", e)
+            }
+        }
+
+        var isRegisteredToSync = false
+
+        return try {
+            val result = action()
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                    override fun afterCompletion(status: Int) {
+                        releaseLock()
+                    }
+                })
+                isRegisteredToSync = true
+            }
+            result
+        } catch (e: Throwable) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                    override fun afterCompletion(status: Int) {
+                        releaseLock()
+                    }
+                })
+                isRegisteredToSync = true
+            }
+            throw e
+        } finally {
+            if (!isRegisteredToSync) {
+                releaseLock()
             }
         }
     }
