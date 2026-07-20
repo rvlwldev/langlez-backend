@@ -104,6 +104,8 @@ app:
     profile-path: profile
   oauth2:
     redirect-uri: "http://localhost:3000/oauth2/callback"
+  cors:
+    allowed-origins: "http://localhost:3000,http://localhost:5173"
 
 swagger:
   enabled: true
