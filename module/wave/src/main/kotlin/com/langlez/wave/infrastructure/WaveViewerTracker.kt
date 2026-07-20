@@ -1,5 +1,7 @@
 package com.langlez.wave.infrastructure
 
+import com.langlez.redis.distributedLock.DistributedLock
+import com.langlez.redis.distributedLock.LockKey
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -32,27 +34,12 @@ class WaveViewerTracker(
         sessionRooms[sessionId] = roomId to memberId
     }
 
-    fun addViewerIfAllowed(roomId: Long, memberId: Long, maxParticipants: Int): Boolean {
-        val script = """
-            if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
-                return 1
-            end
-            if redis.call('SCARD', KEYS[1]) >= tonumber(ARGV[2]) then
-                return 0
-            end
-            redis.call('SADD', KEYS[1], ARGV[1])
-            return 1
-        """.trimIndent()
-
-        val result = redissonClient.script.eval<Long>(
-            org.redisson.api.RScript.Mode.READ_WRITE,
-            script,
-            org.redisson.api.RScript.ReturnType.INTEGER,
-            listOf(viewersKey(roomId)),
-            memberId,
-            maxParticipants
-        )
-        return result == 1L
+    @DistributedLock(prefix = "lock:wave-join:", ttl = 5, retries = 20, wait = 100)
+    fun addViewerIfAllowed(@LockKey roomId: Long, memberId: Long, maxParticipants: Int): Boolean {
+        if (isViewer(roomId, memberId)) return true
+        if (viewerCount(roomId) >= maxParticipants) return false
+        addViewer(roomId, memberId)
+        return true
     }
 
     fun leave(sessionId: String) {
