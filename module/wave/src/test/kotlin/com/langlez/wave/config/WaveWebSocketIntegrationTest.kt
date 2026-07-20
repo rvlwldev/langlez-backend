@@ -7,6 +7,7 @@ import com.langlez.security.util.JwtParser
 import com.langlez.wave.application.WaveChatBroadcastPayload
 import com.langlez.wave.domain.WaveRoom
 import com.langlez.wave.domain.WaveRoomRepository
+import com.langlez.wave.infrastructure.WaveViewerTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
@@ -58,6 +59,9 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
 
     @Autowired
     lateinit var memberRepository: MemberRepository
+
+    @Autowired
+    lateinit var viewerTracker: WaveViewerTracker
 
     companion object {
         @JvmField
@@ -115,6 +119,18 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
                 objectMapper.registerKotlinModule()
             }
             val wsUrl = "ws://localhost:$port/ws/wave"
+
+            When("addViewerIfAllowed를 직접 호출하면") {
+                val member = createMember(Member.Role.MEMBER)
+                val room = waveRoomRepository.save(WaveRoom(broadcasterId = member.id))
+
+                Then("정상적으로 뷰어로 등록되고 시청자 수가 1 증가해야 한다") {
+                    val allowed = viewerTracker.addViewerIfAllowed(room.id, member.id, room.maxParticipants)
+                    allowed shouldBe true
+                    viewerTracker.isViewer(room.id, member.id) shouldBe true
+                    viewerTracker.viewerCount(room.id) shouldBe 1L
+                }
+            }
 
             When("존재하지 않는 방을 구독하려 하면") {
                 val stranger = createMember(Member.Role.MEMBER)

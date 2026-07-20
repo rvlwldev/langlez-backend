@@ -1,5 +1,7 @@
 package com.langlez.wave.infrastructure
 
+import com.langlez.redis.distributedLock.DistributedLock
+import com.langlez.redis.distributedLock.LockKey
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -25,7 +27,19 @@ class WaveViewerTracker(
 
     fun join(sessionId: String, roomId: Long, memberId: Long) {
         addViewer(roomId, memberId)
+        trackSession(sessionId, roomId, memberId)
+    }
+
+    fun trackSession(sessionId: String, roomId: Long, memberId: Long) {
         sessionRooms[sessionId] = roomId to memberId
+    }
+
+    @DistributedLock(prefix = "lock:wave-join:", ttl = 5, retries = 20, wait = 100)
+    fun addViewerIfAllowed(@LockKey roomId: Long, memberId: Long, maxParticipants: Int): Boolean {
+        if (isViewer(roomId, memberId)) return true
+        if (viewerCount(roomId) >= maxParticipants) return false
+        addViewer(roomId, memberId)
+        return true
     }
 
     fun leave(sessionId: String) {

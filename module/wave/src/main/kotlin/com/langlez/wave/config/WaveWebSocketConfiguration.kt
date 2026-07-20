@@ -147,7 +147,7 @@ class WaveJwtChannelInterceptor(
             throw LanglezException(403, "wave.banned-user")
         }
 
-        if (!viewerTracker.isViewer(room.id, memberId) && viewerTracker.viewerCount(room.id) >= room.maxParticipants) {
+        if (!viewerTracker.addViewerIfAllowed(room.id, memberId, room.maxParticipants)) {
             throw LanglezException(403, "wave.room-full")
         }
     }
@@ -155,7 +155,7 @@ class WaveJwtChannelInterceptor(
     private fun trackJoin(accessor: StompHeaderAccessor, roomId: Long) {
         val memberId = (accessor.user as? WaveStompPrincipal)?.memberId ?: return
         val sessionId = accessor.sessionId ?: return
-        viewerTracker.join(sessionId, roomId, memberId)
+        viewerTracker.trackSession(sessionId, roomId, memberId)
     }
 
     private fun trackLeave(accessor: StompHeaderAccessor) {
