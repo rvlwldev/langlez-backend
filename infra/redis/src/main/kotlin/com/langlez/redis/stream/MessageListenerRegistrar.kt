@@ -4,6 +4,7 @@ import com.langlez.core.MessageListener
 import java.lang.reflect.Method
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import org.redisson.api.RedissonClient
 import org.redisson.api.stream.StreamCreateGroupArgs
@@ -26,7 +27,7 @@ class MessageListenerRegistrar(
 
     private val logger = LoggerFactory.getLogger(javaClass)
     private val running = AtomicBoolean(true)
-    private val threads = mutableListOf<Thread>()
+    private val executorService = Executors.newVirtualThreadPerTaskExecutor()
     private val consumerName = "consumer-${UUID.randomUUID()}"
 
     override fun afterSingletonsInstantiated() {
@@ -48,9 +49,11 @@ class MessageListenerRegistrar(
         runCatching { stream.createGroup(StreamCreateGroupArgs.name(listener.group).makeStream()) }
             .onFailure { if (it.message?.contains("BUSYGROUP") != true) throw it }
 
-        val thread = Thread.ofVirtual()
-            .name("msg-listener-${listener.topic}-${listener.group}")
-            .start {
+        executorService.submit {
+            val currentThread = Thread.currentThread()
+            val originalName = currentThread.name
+            currentThread.name = "msg-listener-${listener.topic}-${listener.group}"
+            try {
                 while (running.get()) {
                     try {
                         val messages = stream.readGroup(
@@ -75,14 +78,17 @@ class MessageListenerRegistrar(
                         }
                     }
                 }
+            } finally {
+                currentThread.name = originalName
             }
+        }
 
-        threads += thread
         logger.info("Registered message listener: topic=${listener.topic} group=${listener.group}")
     }
 
     override fun destroy() {
         running.set(false)
-        threads.forEach { it.interrupt() }
+        executorService.shutdownNow()
     }
 }
+

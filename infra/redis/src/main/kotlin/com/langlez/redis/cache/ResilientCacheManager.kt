@@ -8,6 +8,7 @@ import org.springframework.cache.caffeine.CaffeineCache
 import org.springframework.cache.caffeine.CaffeineCacheManager
 import org.springframework.data.redis.cache.RedisCacheManager
 import org.springframework.data.redis.connection.RedisConnectionFactory
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
 import org.springframework.scheduling.annotation.Scheduled
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -20,6 +21,7 @@ class ResilientCacheManager(
     private val redissonClient: RedissonClient,
 ) : CacheManager {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val serializer = GenericJackson2JsonRedisSerializer()
 
     private val caches = ConcurrentHashMap<String, Cache>()
     private val _isRedisAvailable = AtomicBoolean(true)
@@ -75,15 +77,29 @@ class ResilientCacheManager(
     }
 
     private fun migrateLocalToRedis() {
-        caches.keys.forEach { name ->
-            val localCache = caffeineCacheManager.getCache(name) as? CaffeineCache ?: return@forEach
-            val redisCache = redisCacheManager.getCache(name) ?: return@forEach
-
-            localCache.nativeCache.asMap()
-                .forEach { (key, value) -> runCatching { redisCache.put(key, value) } }
-
-            localCache.clear()
+        connectionFactory.connection.use { connection ->
+            caches.keys.forEach { name ->
+                val localCache = caffeineCacheManager.getCache(name) as? CaffeineCache ?: return@forEach
+                val map = localCache.nativeCache.asMap()
+                if (map.isNotEmpty()) {
+                    val batchMap = mutableMapOf<ByteArray, ByteArray>()
+                    map.forEach { (key, value) ->
+                        if (value != null) {
+                            val redisKey = "$name::$key".toByteArray(Charsets.UTF_8)
+                            val redisValue = serializer.serialize(value)
+                            if (redisValue != null) {
+                                batchMap[redisKey] = redisValue
+                            }
+                        }
+                    }
+                    if (batchMap.isNotEmpty()) {
+                        runCatching { connection.mSet(batchMap) }
+                    }
+                    localCache.clear()
+                }
+            }
         }
     }
 }
+
 
