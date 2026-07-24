@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Lazy
 import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -32,13 +31,13 @@ class WebSecurityConfiguration(
     private val memberIdArgumentResolver: MemberIdArgumentResolver,
     private val memberRoleArgumentResolver: MemberRoleArgumentResolver,
     private val objectMapper: ObjectMapper,
-    @param:Lazy private val oauth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
-    @param:Lazy private val oauth2SuccessHandler: AuthenticationSuccessHandler?,
+    private val oauth2UserService: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
+    private val oauth2SuccessHandler: AuthenticationSuccessHandler?,
     @param:Value($$"${app.cors.allowed-origins}") private val allowedOrigins: List<String>,
 ) : WebMvcConfigurer {
 
     @Bean
-    fun filterChain(http: HttpSecurity, filter: JwtAuthenticationFilter): SecurityFilterChain =
+    fun filterChain(http: HttpSecurity, filter: JwtAuthenticationFilter): SecurityFilterChain {
         http.cors { }
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
@@ -55,12 +54,18 @@ class WebSecurityConfiguration(
                 handler.authenticationEntryPoint { _, res, _ -> writeJson(res, HttpServletResponse.SC_UNAUTHORIZED, "auth.unauthorized") }
                 handler.accessDeniedHandler { _, res, _ -> writeJson(res, HttpServletResponse.SC_FORBIDDEN, "auth.forbidden") }
             }
-            .oauth2Login { oauth2 ->
-                oauth2UserService?.let { oauth2.userInfoEndpoint { it.userService(oauth2UserService) } }
-                oauth2SuccessHandler?.let { oauth2.successHandler(it) }
+
+        if (oauth2UserService != null && oauth2SuccessHandler != null) {
+            http.oauth2Login { oauth2 ->
+                oauth2.userInfoEndpoint { it.userService(oauth2UserService) }
+                oauth2.successHandler(oauth2SuccessHandler)
             }
-            .addFilterBefore(filter, UsernamePasswordAuthenticationFilter::class.java)
-            .build()
+        }
+
+        http.addFilterBefore(filter, UsernamePasswordAuthenticationFilter::class.java)
+
+        return http.build()
+    }
 
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
