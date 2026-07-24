@@ -15,16 +15,17 @@ class NotificationRepositoryImpl(
     override fun save(notification: Notification): Notification =
         notificationJpaRepository.save(notification)
 
+    override fun saveAll(notifications: List<Notification>): List<Notification> =
+        notificationJpaRepository.saveAll(notifications)
+
     override fun findByRecipient(recipientId: Long, cursor: Long?, size: Int): List<Notification> =
         notificationJpaRepository.findByRecipient(recipientId, cursor, PageRequest.of(0, size))
 
     @Transactional
-    override fun markAsRead(recipientId: Long, notificationId: Long) {
-        notificationJpaRepository.markAsRead(recipientId, notificationId)
-    }
+    override fun markAsRead(recipientId: Long, notificationId: Long): Boolean =
+        notificationJpaRepository.markAsRead(recipientId, notificationId) > 0
 
     @Transactional
-    override fun markAllAsRead(recipientId: Long) {
+    override fun markAllAsRead(recipientId: Long): Int =
         notificationJpaRepository.markAllAsRead(recipientId)
-    }
 }

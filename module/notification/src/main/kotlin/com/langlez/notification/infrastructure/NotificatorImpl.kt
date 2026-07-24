@@ -18,19 +18,14 @@ class NotificatorImpl(
     private val logger = LoggerFactory.getLogger(NotificatorImpl::class.java)
 
     override fun notify(memberId: Long, type: String, title: String, body: String, data: Map<String, String>) {
-        val member = memberRepository.findById(memberId) ?: run {
-            logger.warn("Recipient member not found for notification. memberId: {}", memberId)
-            return
-        }
+        notifyAll(listOf(memberId), type, title, body, data)
+    }
 
-        val fcmToken = member.fcmToken
-        if (!fcmToken.isNullOrBlank()) {
-            try {
-                fcmPushSender.send(fcmToken, title, body, data)
-            } catch (e: Exception) {
-                logger.warn("Failed to send FCM push notification in NotificatorImpl: {}", e.message)
-            }
-        }
+    fun notifyAll(memberIds: List<Long>, type: String, title: String, body: String, data: Map<String, String> = emptyMap()) {
+        if (memberIds.isEmpty()) return
+
+        val members = memberRepository.findByIds(memberIds)
+        if (members.isEmpty()) return
 
         val jsonData = if (data.isNotEmpty()) {
             try {
@@ -43,14 +38,23 @@ class NotificatorImpl(
             null
         }
 
-        notificationRepository.save(
+        for (member in members) {
+            val fcmToken = member.fcmToken
+            if (!fcmToken.isNullOrBlank()) {
+                fcmPushSender.send(fcmToken, title, body, data)
+            }
+        }
+
+        val notifications = members.map { member ->
             Notification(
-                recipientId = memberId,
+                recipientId = member.id,
                 type = type,
                 title = title,
                 body = body,
                 data = jsonData
             )
-        )
+        }
+
+        notificationRepository.saveAll(notifications)
     }
 }

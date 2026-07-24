@@ -57,11 +57,22 @@ class NotificationServiceTest : BehaviorSpec({
         val notificationId = 10L
 
         When("메서드가 실행되면") {
-            every { notificationRepository.markAsRead(memberId, notificationId) } just Runs
+            every { notificationRepository.markAsRead(memberId, notificationId) } returns true
 
             Then("repository의 markAsRead를 호출한다") {
                 service.markAsRead(memberId, notificationId)
                 verify(exactly = 1) { notificationRepository.markAsRead(memberId, notificationId) }
+            }
+        }
+
+        When("존재하지 않는 notificationId일 때") {
+            every { notificationRepository.markAsRead(memberId, notificationId) } returns false
+
+            Then("404 LanglezException 예외를 던진다") {
+                val ex = io.kotest.assertions.throwables.shouldThrow<com.langlez.core.LanglezException> {
+                    service.markAsRead(memberId, notificationId)
+                }
+                ex.status shouldBe 404
             }
         }
     }
@@ -70,7 +81,7 @@ class NotificationServiceTest : BehaviorSpec({
         val memberId = 1L
 
         When("메서드가 실행되면") {
-            every { notificationRepository.markAllAsRead(memberId) } just Runs
+            every { notificationRepository.markAllAsRead(memberId) } returns 5
 
             Then("repository의 markAllAsRead를 호출한다") {
                 service.markAllAsRead(memberId)
