@@ -11,7 +11,11 @@ import java.util.concurrent.ConcurrentHashMap
 class WaveViewerTracker(
     private val redissonClient: RedissonClient,
 ) {
-    // STOMP 세션이 어느 방의 시청자로 등록되었는지 기억해두었다가, DISCONNECT/UNSUBSCRIBE 시 해당 방에서 제거하기 위함.
+    /**
+     * STOMP 세션이 어느 방의 시청자로 등록되었는지 기억해두었다가, DISCONNECT/UNSUBSCRIBE 시 해당 방에서 제거하기 위함.
+     * Note: 현재 인스턴스 로컬 ConcurrentHashMap을 사용하므로 단일 인스턴스 환경을 전제로 함.
+     * 수평 확장(Multi-instance) 환경에서는 세션-방 매핑을 Redis(e.g., wave:session:{sessionId})에 저장하여 시청자 누수를 방지해야 한다.
+     */
     private val sessionRooms = ConcurrentHashMap<String, Pair<Long, Long>>() // sessionId -> (roomId, memberId)
 
     fun addViewer(roomId: Long, memberId: Long) {
@@ -24,11 +28,6 @@ class WaveViewerTracker(
 
     fun viewerCount(roomId: Long): Long =
         redissonClient.getSet<Long>(viewersKey(roomId)).size.toLong()
-
-    fun join(sessionId: String, roomId: Long, memberId: Long) {
-        addViewer(roomId, memberId)
-        trackSession(sessionId, roomId, memberId)
-    }
 
     fun trackSession(sessionId: String, roomId: Long, memberId: Long) {
         sessionRooms[sessionId] = roomId to memberId
@@ -44,7 +43,10 @@ class WaveViewerTracker(
 
     fun leave(sessionId: String) {
         val (roomId, memberId) = sessionRooms.remove(sessionId) ?: return
-        removeViewer(roomId, memberId)
+        val hasOtherSessionInRoom = sessionRooms.values.any { it.first == roomId && it.second == memberId }
+        if (!hasOtherSessionInRoom) {
+            removeViewer(roomId, memberId)
+        }
     }
 
     fun isViewer(roomId: Long, memberId: Long): Boolean =

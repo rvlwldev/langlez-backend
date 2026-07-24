@@ -5,6 +5,7 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.wave.application.WaveBroadcaster
 import com.langlez.wave.application.WaveChatBroadcastPayload
 import com.langlez.wave.application.WaveErrorPayload
+import com.langlez.wave.config.WaveStompPrincipal
 import com.langlez.wavechat.application.WaveChatService
 import org.redisson.api.RedissonClient
 import org.springframework.messaging.handler.annotation.DestinationVariable
@@ -38,10 +39,11 @@ class WaveWebSocketController(
         @Payload payload: WaveChatMessageRequest,
         principal: Principal
     ) {
-        val memberId = principal.name.toLong()
-        val member = memberRepository.findById(memberId) ?: return
+        val stompPrincipal = principal as? WaveStompPrincipal
+        val memberId = stompPrincipal?.memberId ?: principal.name.toLongOrNull() ?: return
+        val role = stompPrincipal?.role ?: memberRepository.findById(memberId)?.role ?: return
 
-        if (member.role == Member.Role.MEMBER) {
+        if (role == Member.Role.MEMBER) {
             val cooldownKey = "wave:chat-cooldown:$roomId:$memberId"
             val acquired = redissonClient.getBucket<String>(cooldownKey)
                 .setIfAbsent("1", Duration.ofSeconds(30))
