@@ -109,4 +109,17 @@ class AuthServiceTest : BehaviorSpec({
             }
         }
     }
+
+    Given("OAuth2 processLogin 요청 시") {
+        When("신규 회원 가입 중 이메일이 누락된 프로필이면") {
+            val profile = com.langlez.auth.domain.OAuth2UserProfile.by("google", "sub", mapOf("sub" to "g123"))
+            every { memberService.findByProvider("g123", Member.Provider.GOOGLE) } returns null
+
+            Then("400 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.processLogin(profile) }
+                ex.status shouldBe 400
+                ex.message shouldBe "auth.invalid-request"
+            }
+        }
+    }
 })
