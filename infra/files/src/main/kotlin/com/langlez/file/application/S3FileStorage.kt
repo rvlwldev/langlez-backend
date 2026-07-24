@@ -1,6 +1,8 @@
 package com.langlez.file.application
 
 import com.langlez.core.FileStorage
+import java.net.URI
+import java.net.URISyntaxException
 import java.time.Duration
 import java.util.UUID
 import org.springframework.beans.factory.annotation.Value
@@ -38,7 +40,16 @@ internal class S3FileStorage(
     }
 
     override fun delete(fileUrl: String) {
-        val key = java.net.URI(fileUrl).path.removePrefix("/")
+        val key = try {
+            val uri = URI(fileUrl)
+            val path = uri.path
+            require(!path.isNullOrBlank()) { "Invalid file URL: path is missing or empty" }
+            path.removePrefix("/")
+        } catch (e: URISyntaxException) {
+            throw IllegalArgumentException("Invalid file URL: $fileUrl", e)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid file URL: $fileUrl", e)
+        }
         val deleteRequest = DeleteObjectRequest.builder().bucket(bucket).key(key).build()
         s3Client.deleteObject(deleteRequest)
     }

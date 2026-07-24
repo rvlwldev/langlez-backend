@@ -68,5 +68,13 @@ class S3FileStorageTest : BehaviorSpec({
                 slot.captured.bucket() shouldContain bucket
             }
         }
+
+        When("잘못된 형식의 URL을 전달하면") {
+            Then("IllegalArgumentException이 발생한다") {
+                io.kotest.assertions.throwables.shouldThrow<IllegalArgumentException> {
+                    storage.delete("http://invalid url with spaces")
+                }
+            }
+        }
     }
 })

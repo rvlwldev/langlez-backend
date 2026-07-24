@@ -20,10 +20,9 @@ class S3Configuration {
             @Value($$"${cloud.aws.credentials.secret-key}") secretKey: String,
             @Value($$"${cloud.aws.region.static}") region: String,
     ): S3Client {
-        val credentials = AwsBasicCredentials.create(accessKey, secretKey)
         return S3Client.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .credentialsProvider(createCredentialsProvider(accessKey, secretKey))
                 .build()
     }
 
@@ -33,10 +32,14 @@ class S3Configuration {
             @Value($$"${cloud.aws.credentials.secret-key}") secretKey: String,
             @Value($$"${cloud.aws.region.static}") region: String,
     ): S3Presigner {
-        val credentials = AwsBasicCredentials.create(accessKey, secretKey)
         return S3Presigner.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .credentialsProvider(createCredentialsProvider(accessKey, secretKey))
                 .build()
+    }
+
+    private fun createCredentialsProvider(accessKey: String, secretKey: String): StaticCredentialsProvider {
+        val credentials = AwsBasicCredentials.create(accessKey, secretKey)
+        return StaticCredentialsProvider.create(credentials)
     }
 }
