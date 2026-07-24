@@ -44,11 +44,13 @@ class AuthService(
         val member = memberService.findByProvider(providerId, providerType)
             ?.also { memberService.updateLastAccess(it.id) }
             ?: run {
-                memberService.findByEmail(profile.email)?.let {
+                val email = profile.email
+                    ?: throw LanglezException(400, "auth.invalid-request")
+                memberService.findByEmail(email)?.let {
                     throw LanglezException(409, "auth.email-conflict")
                 }
                 val providerCmd = MemberCommand.Provider(providerId, providerType, profile.displayName)
-                val createCmd = MemberCommand.Create(profile.email, null, profile.displayName)
+                val createCmd = MemberCommand.Create(email, null, profile.displayName)
                 memberService.createMember(providerCmd, createCmd)
             }
 
