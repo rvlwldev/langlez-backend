@@ -48,42 +48,67 @@ class NotificatorImplTest : BehaviorSpec({
 
         When("수신자의 fcmToken이 존재할 때") {
             val member = createMember(memberId, "fcm-token-123")
-            every { memberRepository.findById(memberId) } returns member
+            every { memberRepository.findByIds(listOf(memberId)) } returns listOf(member)
             every { fcmPushSender.send(any(), any(), any(), any()) } just Runs
-            every { notificationRepository.save(any()) } answers { firstArg() }
+            every { notificationRepository.saveAll(any<List<Notification>>()) } answers { firstArg() }
 
-            Then("FcmPushSender.send와 NotificationRepository.save 모두 호출된다") {
+            Then("FcmPushSender.send와 NotificationRepository.saveAll 모두 호출된다") {
                 notificator.notify(memberId, type, title, body, data)
 
                 verify(exactly = 1) { fcmPushSender.send("fcm-token-123", title, body, data) }
-                verify(exactly = 1) { notificationRepository.save(any()) }
+                verify(exactly = 1) { notificationRepository.saveAll(any<List<Notification>>()) }
             }
         }
 
         When("수신자의 fcmToken이 존재하지 않을 때") {
             val member = createMember(memberId, null)
-            every { memberRepository.findById(memberId) } returns member
-            every { notificationRepository.save(any()) } answers { firstArg() }
+            every { memberRepository.findByIds(listOf(memberId)) } returns listOf(member)
+            every { notificationRepository.saveAll(any<List<Notification>>()) } answers { firstArg() }
 
-            Then("FcmPushSender.send는 호출되지 않고 NotificationRepository.save만 호출된다") {
+            Then("FcmPushSender.send는 호출되지 않고 NotificationRepository.saveAll만 호출된다") {
                 notificator.notify(memberId, type, title, body, data)
 
                 verify(exactly = 0) { fcmPushSender.send(any(), any(), any(), any()) }
-                verify(exactly = 1) { notificationRepository.save(any()) }
+                verify(exactly = 1) { notificationRepository.saveAll(any<List<Notification>>()) }
             }
         }
 
-        When("FcmPushSender.send가 예외를 던질 때") {
+        When("FcmPushSender.send 호출 시") {
             val member = createMember(memberId, "fcm-token-123")
-            every { memberRepository.findById(memberId) } returns member
-            every { fcmPushSender.send(any(), any(), any(), any()) } throws RuntimeException("FCM error")
-            every { notificationRepository.save(any()) } answers { firstArg() }
+            every { memberRepository.findByIds(listOf(memberId)) } returns listOf(member)
+            every { fcmPushSender.send(any(), any(), any(), any()) } just Runs
+            every { notificationRepository.saveAll(any<List<Notification>>()) } answers { firstArg() }
 
-            Then("예외가 전파되지 않고 NotificationRepository.save는 여전히 호출된다") {
+            Then("fcmPushSender.send에 try-catch가 없어도 비동기로 호출된다") {
                 notificator.notify(memberId, type, title, body, data)
 
                 verify(exactly = 1) { fcmPushSender.send("fcm-token-123", title, body, data) }
-                verify(exactly = 1) { notificationRepository.save(any()) }
+                verify(exactly = 1) { notificationRepository.saveAll(any<List<Notification>>()) }
+            }
+        }
+    }
+
+    Given("notifyAll 호출 시") {
+        val memberIds = listOf(1L, 2L)
+        val type = "test.type"
+        val title = "Test Title"
+        val body = "Test Body"
+        val data = mapOf("key" to "value")
+
+        When("다중 수신자 배치를 처리할 때") {
+            val m1 = createMember(1L, "token-1")
+            val m2 = createMember(2L, "token-2")
+            every { memberRepository.findByIds(memberIds) } returns listOf(m1, m2)
+            every { fcmPushSender.send(any(), any(), any(), any()) } just Runs
+            every { notificationRepository.saveAll(any<List<Notification>>()) } answers { firstArg() }
+
+            Then("1회 DB 조회 및 1회 배치 saveAll로 저장된다") {
+                notificator.notifyAll(memberIds, type, title, body, data)
+
+                verify(exactly = 1) { memberRepository.findByIds(memberIds) }
+                verify(exactly = 1) { fcmPushSender.send("token-1", title, body, data) }
+                verify(exactly = 1) { fcmPushSender.send("token-2", title, body, data) }
+                verify(exactly = 1) { notificationRepository.saveAll(any<List<Notification>>()) }
             }
         }
     }

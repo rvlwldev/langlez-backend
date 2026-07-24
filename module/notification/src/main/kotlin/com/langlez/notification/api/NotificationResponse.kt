@@ -9,6 +9,7 @@ class NotificationResponse {
         val title: String,
         val body: String,
         val read: Boolean,
+        val data: String? = null,
         val createdAt: Instant
     )
 

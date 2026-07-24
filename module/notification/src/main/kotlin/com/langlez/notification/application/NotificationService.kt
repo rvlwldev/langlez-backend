@@ -1,5 +1,6 @@
 package com.langlez.notification.application
 
+import com.langlez.core.LanglezException
 import com.langlez.notification.api.NotificationResponse
 import com.langlez.notification.domain.NotificationRepository
 import org.springframework.stereotype.Service
@@ -21,6 +22,7 @@ class NotificationService(
                 title = it.title,
                 body = it.body,
                 read = it.read,
+                data = it.data,
                 createdAt = it.createdAt
             )
         }
@@ -30,12 +32,15 @@ class NotificationService(
 
     @Transactional
     fun markAsRead(memberId: Long, notificationId: Long) {
-        notificationRepository.markAsRead(memberId, notificationId)
+        val updated = notificationRepository.markAsRead(memberId, notificationId)
+        if (!updated) {
+            throw LanglezException(404, "notification.not-found")
+        }
     }
 
     @Transactional
-    fun markAllAsRead(memberId: Long) {
-        notificationRepository.markAllAsRead(memberId)
+    fun markAllAsRead(memberId: Long): Int {
+        return notificationRepository.markAllAsRead(memberId)
     }
 
     companion object {
