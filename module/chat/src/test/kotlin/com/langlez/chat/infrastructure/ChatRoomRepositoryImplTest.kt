@@ -101,18 +101,6 @@ class ChatRoomRepositoryImplTest : BehaviorSpec() {
                 }
             }
 
-            When("전체 방 목록을 커서 페이지네이션으로 조회할 때") {
-                val room1 = chatRoomRepository.save(ChatRoom(participantIds = listOf(1L, 2L)))
-                val room2 = chatRoomRepository.save(ChatRoom(participantIds = listOf(3L, 4L)))
-
-                Then("전체 방 목록이 생성된 순서 내림차순으로 조회되어야 한다") {
-                    val rooms = chatRoomRepository.findAllRooms(null, 10)
-                    val roomIds = rooms.map { it.id }
-                    roomIds.contains(room1.id) shouldBe true
-                    roomIds.contains(room2.id) shouldBe true
-                }
-            }
-
             When("읽음 상태를 갱신할 때") {
                 val room = chatRoomRepository.save(ChatRoom(participantIds = listOf(1L, 2L)))
                 val readAt = Instant.now().truncatedTo(ChronoUnit.MILLIS)

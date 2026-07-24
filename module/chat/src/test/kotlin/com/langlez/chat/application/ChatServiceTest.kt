@@ -181,7 +181,7 @@ class ChatServiceTest : BehaviorSpec({
             val target = createMember(2L, "target")
             every { chatRoomRepository.findByParticipant(memberId, null, 20) } returns listOf(room)
             every { memberRepository.findByIds(listOf(1L, 2L)) } returns listOf(createMember(1L), target)
-            every { chatMessageRepository.countUnread(roomId, memberId, any()) } returns 5
+            every { chatMessageRepository.countUnreadBatch(listOf(room), memberId) } returns mapOf(roomId to 5L)
 
             Then("정확한 unreadCount가 포함된 방 목록을 반환한다") {
                 val result = service.getRooms(memberId, null, 20)

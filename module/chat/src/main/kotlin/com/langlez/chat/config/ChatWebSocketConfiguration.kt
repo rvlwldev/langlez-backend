@@ -108,12 +108,24 @@ class JwtChannelInterceptor(
         val memberId = (accessor.user as? StompPrincipal)?.memberId
             ?: throw LanglezException(401, "auth.invalid-token")
 
+        val sessionAttributes = accessor.sessionAttributes
+        @Suppress("UNCHECKED_CAST")
+        val authorizedRooms = sessionAttributes?.getOrPut("AUTHORIZED_ROOMS") {
+            java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        } as? MutableSet<String>
+
+        if (authorizedRooms?.contains(roomId) == true) {
+            return
+        }
+
         val room = chatRoomRepository.findById(roomId)
             ?: throw LanglezException(404, "chat.room-not-found")
 
         if (!room.hasParticipant(memberId)) {
             throw LanglezException(403, "chat.room-forbidden")
         }
+
+        authorizedRooms?.add(roomId)
     }
 }
 

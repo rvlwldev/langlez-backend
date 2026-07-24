@@ -205,6 +205,7 @@ class ChatService(
 
         val otherIds = rooms.flatMap { it.participantIds }.distinct()
         val membersMap = memberRepository.findByIds(otherIds).associateBy { it.id }
+        val unreadMap = chatMessageRepository.countUnreadBatch(rooms, memberId)
 
         val summaries = rooms.map { room ->
             val targetId = room.participantIds.firstOrNull { it != memberId } ?: memberId
@@ -212,8 +213,7 @@ class ChatService(
             val targetUsername = target?.username ?: "unknown"
             val targetNickname = target?.nickname ?: "Unknown"
 
-            val lastReadAt = room.readStatus[memberId] ?: Instant.EPOCH
-            val unreadCount = chatMessageRepository.countUnread(room.id!!, memberId, lastReadAt)
+            val unreadCount = unreadMap[room.id!!] ?: 0L
 
             ChatResponse.RoomSummary(
                 id = room.id!!,
@@ -226,7 +226,12 @@ class ChatService(
             )
         }
 
-        val nextCursor = if (rooms.size == boundedSize) rooms.lastOrNull()?.id else null
+        val nextCursor = if (rooms.size == boundedSize) {
+            rooms.lastOrNull()?.let { r ->
+                val timeStr = r.lastMessageAt?.toEpochMilli()?.toString() ?: "null"
+                "${timeStr}_${r.id}"
+            }
+        } else null
         return ChatResponse.RoomCursorList(nextCursor, summaries)
     }
 
@@ -293,7 +298,11 @@ class ChatService(
             )
         }
 
-        val nextCursor = if (messages.size == boundedSize) messages.lastOrNull()?.id else null
+        val nextCursor = if (messages.size == boundedSize) {
+            messages.lastOrNull()?.let { m ->
+                "${m.createdAt.toEpochMilli()}_${m.id}"
+            }
+        } else null
         return ChatResponse.MessageCursorList(nextCursor, summaries)
     }
 
