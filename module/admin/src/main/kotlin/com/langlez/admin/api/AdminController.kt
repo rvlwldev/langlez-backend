@@ -36,7 +36,7 @@ class AdminController(
         model: Model
     ): String {
         val users = adminService.getUsers(cursor, size)
-        val nextCursor = if (users.size == size) users.last().id else null
+        val nextCursor = if (users.size == size) users.lastOrNull()?.id else null
         model.addAttribute("users", users)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)
@@ -61,7 +61,7 @@ class AdminController(
         model: Model
     ): String {
         val chats = adminService.getAllChats(cursor, size)
-        val nextCursor = if (chats.size == size) chats.last().roomId else null
+        val nextCursor = if (chats.size == size) chats.lastOrNull()?.roomId else null
         model.addAttribute("chats", chats)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)
@@ -107,7 +107,7 @@ class AdminController(
         model: Model
     ): String {
         val attachments = adminService.getAttachments(cursor, size, sourceType, fileType)
-        val nextCursor = if (attachments.size == size) attachments.last().id else null
+        val nextCursor = if (attachments.size == size) attachments.lastOrNull()?.id else null
         model.addAttribute("attachments", attachments)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)
@@ -123,7 +123,7 @@ class AdminController(
         model: Model
     ): String {
         val posts = adminService.getPosts(cursor, size)
-        val nextCursor = if (posts.size == size) posts.last().id else null
+        val nextCursor = if (posts.size == size) posts.lastOrNull()?.id else null
         model.addAttribute("posts", posts)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)
@@ -138,7 +138,7 @@ class AdminController(
         model: Model
     ): String {
         val comments = adminService.getPostComments(postId, cursor, size)
-        val nextCursor = if (comments.size == size) comments.last().id else null
+        val nextCursor = if (comments.size == size) comments.lastOrNull()?.id else null
         model.addAttribute("postId", postId)
         model.addAttribute("comments", comments)
         model.addAttribute("nextCursor", nextCursor)
@@ -154,7 +154,7 @@ class AdminController(
         model: Model
     ): String {
         val reports = adminService.getReports(cursor, size, sourceType)
-        val nextCursor = if (reports.size == size) reports.last().id else null
+        val nextCursor = if (reports.size == size) reports.lastOrNull()?.id else null
         model.addAttribute("reports", reports)
         model.addAttribute("nextCursor", nextCursor)
         model.addAttribute("size", size)

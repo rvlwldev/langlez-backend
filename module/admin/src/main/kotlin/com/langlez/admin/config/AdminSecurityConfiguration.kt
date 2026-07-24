@@ -44,8 +44,6 @@ class AdminSecurityConfiguration {
                     .requestMatchers(
                         "/admin/login",
                         "/admin/static/**",
-                        "/admin/*.css",
-                        "/admin/admin.css",
                         "/css/**",
                         "/js/**",
                         "/images/**"

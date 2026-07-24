@@ -89,8 +89,7 @@ class AdminServiceTest : BehaviorSpec({
         val m2 = createMember(2L, "user2", "nick2")
 
         every { memberRepository.findAll(null, 2) } returns listOf(m2, m1)
-        every { memberPresenceTracker.isOnline(1L) } returns false
-        every { memberPresenceTracker.isOnline(2L) } returns true
+        every { memberPresenceTracker.areOnline(listOf(2L, 1L)) } returns mapOf(2L to true, 1L to false)
 
         When("목록을 조회하면") {
             val result = adminService.getUsers(null, 2)

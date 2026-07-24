@@ -25,6 +25,15 @@ class MemberPresenceTrackerImpl(private val redissonClient: RedissonClient) : Me
         return redissonClient.keys.getKeysStream(options).count()
     }
 
+    override fun areOnline(memberIds: Collection<Long>): Map<Long, Boolean> {
+        if (memberIds.isEmpty()) return emptyMap()
+        val keyToId = memberIds.associateBy { getRedisKey(it) }
+        val buckets = redissonClient.getBuckets().get<String>(*keyToId.keys.toTypedArray())
+        return keyToId.entries.associate { (key, id) ->
+            id to (buckets[key] != null)
+        }
+    }
+
     private fun getRedisKey(memberId: Long): String {
         return "presence:member:$memberId"
     }

@@ -34,14 +34,15 @@ class AdminService(
 
     fun getUsers(cursor: Long?, size: Int): List<AdminUserRow> {
         val members = memberRepository.findAll(cursor, size)
+        val memberIds = members.map { it.id }
+        val onlineMap = memberPresenceTracker.areOnline(memberIds)
         return members.map { member ->
-            val online = memberPresenceTracker.isOnline(member.id)
             AdminUserRow(
                 id = member.id,
                 username = member.username,
                 nickname = member.nickname,
                 createdAt = member.createdAt,
-                online = online
+                online = onlineMap[member.id] ?: false
             )
         }
     }
@@ -55,12 +56,13 @@ class AdminService(
         val recipientIds = rooms.map { it.getRecipientId(member.id) }.distinct()
         val recipientsMap = memberRepository.findByIds(recipientIds).associateBy { it.id }
 
-        return rooms.map { room ->
+        return rooms.mapNotNull { room ->
+            val roomId = room.id ?: return@mapNotNull null
             val recipientId = room.getRecipientId(member.id)
             val recipient = recipientsMap[recipientId]
             val participantUsernames = listOf(username, recipient?.username ?: "Unknown")
             AdminChatRoomRow(
-                roomId = room.id!!,
+                roomId = roomId,
                 participantUsernames = participantUsernames,
                 lastMessagePreview = room.lastMessagePreview,
                 lastMessageAt = room.lastMessageAt
@@ -75,12 +77,13 @@ class AdminService(
         val allParticipantIds = rooms.flatMap { it.participantIds }.distinct()
         val membersMap = memberRepository.findByIds(allParticipantIds).associateBy { it.id }
 
-        return rooms.map { room ->
+        return rooms.mapNotNull { room ->
+            val roomId = room.id ?: return@mapNotNull null
             val participantUsernames = room.participantIds.map { id ->
                 membersMap[id]?.username ?: "Unknown"
             }
             AdminChatRoomRow(
-                roomId = room.id!!,
+                roomId = roomId,
                 participantUsernames = participantUsernames,
                 lastMessagePreview = room.lastMessagePreview,
                 lastMessageAt = room.lastMessageAt
