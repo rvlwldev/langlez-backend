@@ -16,27 +16,26 @@ class AttachmentEventListener(
 
     @MessageListener(topic = "topic-echo_post", group = "attachment-service")
     fun onEchoAttachmentsUploaded(payload: String) {
-        val event = runCatching { mapper.readValue(payload, EchoAttachmentsUploadedEvent::class.java) }
-            .getOrElse { logger.warn("Failed to parse echo attachment event: {}", it.message); return }
+        val attachments = runCatching {
+            val event = mapper.readValue(payload, EchoAttachmentsUploadedEvent::class.java)
+            event.attachments.map {
+                Attachment(
+                    uploaderId = event.uploaderId,
+                    sourceType = Attachment.SourceType.ECHO,
+                    sourceId = event.postId,
+                    fileType = Attachment.FileType.valueOf(it.fileType),
+                    storageKey = it.storageKey,
+                )
+            }
+        }.getOrElse { logger.warn("Failed to parse echo attachment event: {}", it.message); return }
 
-        val attachments = event.attachments.map {
-            Attachment(
-                uploaderId = event.uploaderId,
-                sourceType = Attachment.SourceType.ECHO,
-                sourceId = event.postId,
-                fileType = Attachment.FileType.valueOf(it.fileType),
-                storageKey = it.storageKey,
-            )
-        }
         attachmentRepository.saveAll(attachments)
     }
 
     @MessageListener(topic = "topic-chat_message", group = "attachment-service")
     fun onChatAttachmentUploaded(payload: String) {
-        val event = runCatching { mapper.readValue(payload, ChatAttachmentUploadedEvent::class.java) }
-            .getOrElse { logger.warn("Failed to parse chat attachment event: {}", it.message); return }
-
-        attachmentRepository.saveAll(
+        val attachments = runCatching {
+            val event = mapper.readValue(payload, ChatAttachmentUploadedEvent::class.java)
             listOf(
                 Attachment(
                     uploaderId = event.uploaderId,
@@ -45,7 +44,9 @@ class AttachmentEventListener(
                     fileType = Attachment.FileType.valueOf(event.fileType),
                     storageKey = event.storageKey,
                 ),
-            ),
-        )
+            )
+        }.getOrElse { logger.warn("Failed to parse chat attachment event: {}", it.message); return }
+
+        attachmentRepository.saveAll(attachments)
     }
 }

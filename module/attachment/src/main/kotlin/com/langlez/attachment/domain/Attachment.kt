@@ -15,9 +15,9 @@ import java.time.Instant
 @Table(
     name = "attachments",
     indexes = [
-        Index(name = "IDX_ATTACHMENT_SOURCE", columnList = "source_type, created_at, id"),
-        Index(name = "IDX_ATTACHMENT_UPLOADER", columnList = "uploader_id, created_at, id"),
-        Index(name = "IDX_ATTACHMENT_FILE_TYPE", columnList = "file_type, created_at, id"),
+        Index(name = "IDX_ATTACHMENT_SOURCE", columnList = "source_type, id"),
+        Index(name = "IDX_ATTACHMENT_UPLOADER", columnList = "uploader_id, id"),
+        Index(name = "IDX_ATTACHMENT_FILE_TYPE", columnList = "file_type, id"),
     ],
 )
 class Attachment(
