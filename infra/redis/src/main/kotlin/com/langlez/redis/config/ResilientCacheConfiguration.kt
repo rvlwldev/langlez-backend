@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
 import org.springframework.data.redis.cache.RedisCacheConfiguration
 import org.springframework.data.redis.cache.RedisCacheManager
+import org.springframework.data.redis.cache.RedisCacheWriter
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
 import org.springframework.data.redis.serializer.RedisSerializationContext
@@ -37,16 +38,23 @@ class ResilientCacheConfiguration {
     fun redisCacheManager(connectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper): RedisCacheManager {
         val serializer = RedisSerializationContext.SerializationPair
             .fromSerializer(GenericJackson2JsonRedisSerializer(objectMapper))
-        val ttl = Duration.ofMinutes(10).plusSeconds(Random.nextLong(60))
 
         val config = RedisCacheConfiguration
             .defaultCacheConfig()
             .disableCachingNullValues()
             .serializeValuesWith(serializer)
-            .entryTtl(ttl)
+            .entryTtl(Duration.ofMinutes(10))
+
+        val defaultWriter = RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory)
+        val jitteredWriter = object : RedisCacheWriter by defaultWriter {
+            override fun put(name: String, key: ByteArray, value: ByteArray, ttl: Duration?) {
+                val jitteredTtl = Duration.ofMinutes(10).plusSeconds(Random.nextLong(0, 60))
+                defaultWriter.put(name, key, value, jitteredTtl)
+            }
+        }
 
         return RedisCacheManager
-            .builder(connectionFactory)
+            .builder(jitteredWriter)
             .cacheDefaults(config)
             .transactionAware()
             .build()

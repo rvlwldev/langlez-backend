@@ -71,29 +71,27 @@ class RedisLockService(private val redissonClient: RedissonClient) {
 
         return try {
             val result = action()
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-                    override fun afterCompletion(status: Int) {
-                        releaseLock()
-                    }
-                })
-                isRegisteredToSync = true
-            }
+            isRegisteredToSync = registerReleaseOnTxCompletion(releaseLock)
             result
         } catch (e: Throwable) {
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-                    override fun afterCompletion(status: Int) {
-                        releaseLock()
-                    }
-                })
-                isRegisteredToSync = true
-            }
+            isRegisteredToSync = registerReleaseOnTxCompletion(releaseLock)
             throw e
         } finally {
             if (!isRegisteredToSync) {
                 releaseLock()
             }
         }
+    }
+
+    private fun registerReleaseOnTxCompletion(releaseLock: () -> Unit): Boolean {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCompletion(status: Int) {
+                    releaseLock()
+                }
+            })
+            return true
+        }
+        return false
     }
 }
