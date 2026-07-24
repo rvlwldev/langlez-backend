@@ -119,6 +119,16 @@ class ChatMessageRepositoryImpl(
         return rooms.associate { room -> (room.id ?: "") to (resultMap[room.id] ?: 0L) }
     }
 
+    override fun findByRoomSince(roomId: String, since: Instant): List<ChatMessage> {
+        val query = Query()
+        query.addCriteria(
+            Criteria.where("roomId").`is`(roomId)
+                .and("createdAt").gt(since)
+        )
+        query.with(Sort.by(Sort.Direction.ASC, "createdAt"))
+        return mongoTemplate.find(query, ChatMessage::class.java)
+    }
+
     override fun markDeleted(messageId: String, deletedAt: Instant) {
         val query = Query(Criteria.where("id").`is`(messageId))
         val update = Update().set("deletedAt", deletedAt)

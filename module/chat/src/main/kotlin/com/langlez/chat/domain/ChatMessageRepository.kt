@@ -9,6 +9,7 @@ interface ChatMessageRepository {
     fun findByRoom(roomId: String, cursor: String?, size: Int): List<ChatMessage>
     fun countUnread(roomId: String, memberId: Long, after: Instant): Long
     fun countUnreadBatch(rooms: List<ChatRoom>, memberId: Long): Map<String, Long>
+    fun findByRoomSince(roomId: String, since: Instant): List<ChatMessage>
     fun markDeleted(messageId: String, deletedAt: Instant)
     fun findLastMessage(roomId: String): ChatMessage?
 }
