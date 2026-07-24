@@ -15,9 +15,9 @@ import java.time.Instant
 @Table(
     name = "reports",
     indexes = [
-        Index(name = "IDX_REPORT_SOURCE", columnList = "source_type, source_id, created_at"),
-        Index(name = "IDX_REPORT_REPORTED_USER", columnList = "reported_user_id, created_at"),
-        Index(name = "IDX_REPORT_REPORTER", columnList = "reporter_id, created_at"),
+        Index(name = "IDX_REPORT_SOURCE", columnList = "source_type, id"),
+        Index(name = "IDX_REPORT_REPORTED_USER", columnList = "reported_user_id, id"),
+        Index(name = "IDX_REPORT_REPORTER", columnList = "reporter_id, id"),
     ],
 )
 class Report(
@@ -31,7 +31,7 @@ class Report(
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0
+    var id: Long = 0
 
     enum class SourceType { ECHO_POST, CHAT_USER }
 }
