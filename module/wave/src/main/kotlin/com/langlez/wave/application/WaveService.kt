@@ -12,6 +12,9 @@ import com.langlez.wave.infrastructure.WaveViewerTracker
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.util.concurrent.CompletableFuture
 
 @Service
 @Transactional
@@ -42,16 +45,39 @@ class WaveService(
 
         val followerIds = relationshipRepository.findFollowers(memberId, null, FOLLOWER_NOTIFY_PAGE_SIZE)
             .map { it.followerId }
-        followerIds.forEach { followerId ->
-            notificator.notify(
-                followerId,
-                "wave.live-started",
-                "${broadcaster.nickname}님이 라이브를 시작했어요",
-                "지금 바로 들어와보세요!"
-            )
+        if (followerIds.isNotEmpty()) {
+            val broadcasterNickname = broadcaster.nickname
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                    override fun afterCommit() {
+                        CompletableFuture.runAsync {
+                            sendFollowerNotifications(followerIds, broadcasterNickname)
+                        }
+                    }
+                })
+            } else {
+                CompletableFuture.runAsync {
+                    sendFollowerNotifications(followerIds, broadcasterNickname)
+                }
+            }
         }
 
         return room
+    }
+
+    private fun sendFollowerNotifications(followerIds: List<Long>, broadcasterNickname: String) {
+        followerIds.forEach { followerId ->
+            try {
+                notificator.notify(
+                    followerId,
+                    "wave.live-started",
+                    "${broadcasterNickname}님이 라이브를 시작했어요",
+                    "지금 바로 들어와보세요!"
+                )
+            } catch (e: Exception) {
+                logger.error("Failed to send wave live notification to follower $followerId", e)
+            }
+        }
     }
 
     @Transactional(readOnly = true)
@@ -79,6 +105,7 @@ class WaveService(
         return waveRoomRepository.save(room)
     }
 
+    @Transactional(readOnly = true)
     fun muteMember(memberId: Long, roomId: Long, targetMemberId: Long) {
         val room = getRoom(roomId)
         if (room.broadcasterId != memberId) {
@@ -90,6 +117,7 @@ class WaveService(
         broadcaster.sendMuteToUser(targetMemberId, WaveMutePayload(roomId))
     }
 
+    @Transactional(readOnly = true)
     fun kickMember(memberId: Long, roomId: Long, targetMemberId: Long) {
         val room = getRoom(roomId)
         if (room.broadcasterId != memberId) {
@@ -126,7 +154,7 @@ class WaveService(
 
     companion object {
         private val logger = LoggerFactory.getLogger(WaveService::class.java)
-        private const val MAX_PAGE_SIZE = 100
+        const val MAX_PAGE_SIZE = 100
         private const val FOLLOWER_NOTIFY_PAGE_SIZE = 1000
     }
 }

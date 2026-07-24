@@ -65,9 +65,10 @@ class WaveController(
         @RequestParam(required = false) cursor: Long?,
         @RequestParam(defaultValue = "20") size: Int
     ): WaveResponse.RoomCursorList {
-        val rooms = service.getActiveRooms(cursor, size)
+        val boundedSize = size.coerceIn(1, WaveService.MAX_PAGE_SIZE)
+        val rooms = service.getActiveRooms(cursor, boundedSize)
         val summaries = rooms.map { service.toRoomSummary(it) }
-        val nextCursor = if (rooms.size == size) rooms.lastOrNull()?.id else null
+        val nextCursor = if (rooms.size == boundedSize) rooms.lastOrNull()?.id else null
         return WaveResponse.RoomCursorList(nextCursor, summaries)
     }
 
