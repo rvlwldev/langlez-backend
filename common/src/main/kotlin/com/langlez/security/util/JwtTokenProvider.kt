@@ -15,7 +15,7 @@ import java.util.Date
 import javax.crypto.SecretKey
 
 @Component
-class JwtParser(
+class JwtTokenProvider(
     @param:Value($$"${jwt.secret}") private val secret: String,
     @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTTL: Long,
     @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTTL: Long,
@@ -23,12 +23,14 @@ class JwtParser(
 
     private val key: SecretKey by lazy { Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret)) }
 
-    fun parseClaims(token: String): Claims = try {
+    private val parser: io.jsonwebtoken.JwtParser by lazy {
         Jwts.parser()
             .verifyWith(key)
             .build()
-            .parseSignedClaims(token)
-            .payload
+    }
+
+    fun parseClaims(token: String): Claims = try {
+        parser.parseSignedClaims(token).payload
     } catch (e: Exception) {
         when (e) {
             is ExpiredJwtException -> throw LanglezException(401, "auth.token-expired")
@@ -63,16 +65,26 @@ class JwtParser(
             .compact()
     }
 
-    fun extractId(token: String): Long = parseClaims(token).subject.toLong()
+    fun extractId(claims: Claims): Long = claims.subject.toLong()
 
-    fun extractRole(token: String): String = parseClaims(token).get("role", String::class.java)
+    fun extractRole(claims: Claims): String = claims.get("role", String::class.java)
 
-    fun extractTokenType(token: String): String = parseClaims(token).get("type", String::class.java)
+    fun extractTokenType(claims: Claims): String = claims.get("type", String::class.java)
 
-    fun extractRemainingValiditySeconds(token: String): Long {
-        val claims = parseClaims(token)
+    fun extractRemainingValiditySeconds(claims: Claims): Long {
         val expirationInstant = claims.expiration.toInstant()
         val now = Instant.now()
         return Duration.between(now, expirationInstant).seconds
     }
+
+    fun extractId(token: String): Long = extractId(parseClaims(token))
+
+    fun extractRole(token: String): String = extractRole(parseClaims(token))
+
+    fun extractTokenType(token: String): String = extractTokenType(parseClaims(token))
+
+    fun extractRemainingValiditySeconds(token: String): Long = extractRemainingValiditySeconds(parseClaims(token))
 }
+
+@Deprecated("Use JwtTokenProvider instead", ReplaceWith("JwtTokenProvider"))
+typealias JwtParser = JwtTokenProvider
