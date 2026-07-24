@@ -14,7 +14,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 @AutoConfiguration
 @EnableMongoRepositories(
     basePackages = ["com.langlez"],
-    excludeFilters = [Filter(type = FilterType.REGEX, pattern = [".*\\.jpa\\..*"])],
+    includeFilters = [Filter(type = FilterType.REGEX, pattern = [".*\\.infrastructure\\.mongo.*"])],
 )
 @EnableMongoAuditing
 class MongoConfiguration {
