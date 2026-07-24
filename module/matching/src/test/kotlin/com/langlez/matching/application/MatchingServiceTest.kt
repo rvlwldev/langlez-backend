@@ -4,6 +4,7 @@ import com.langlez.chat.application.ChatService
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.core.LanglezException
 import com.langlez.matching.api.MatchingResponse
+import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -16,6 +17,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import java.time.Instant
+import java.time.LocalDate
 
 class MatchingServiceTest : BehaviorSpec({
 
@@ -96,6 +98,7 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.saveJoinedAt(memberId, any()) } just runs
             every { queueRepository.score(memberId) } returns 1000.0
             every { queueRepository.findJoinedAt(memberId) } returns Instant.now()
+            every { queueRepository.findFilter(memberId) } returns null
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns emptyList()
 
             Then("WAITING 상태를 반환하고 채팅방을 만들지 않는다") {
@@ -106,11 +109,46 @@ class MatchingServiceTest : BehaviorSpec({
                 verify(exactly = 0) { chatService.getOrCreateRoom(any(), any()) }
             }
         }
+
+        When("조건 필터와 함께 정상 참가하면") {
+            val filter = MatchingQueueFilter(minAge = 20, maxAge = 30, languageLevel = Profile.LanguageLevel.ADVANCED)
+            every { queueRepository.isQueued(memberId) } returns false
+            every { profileRepository.findProfile(memberId) } returns profile(memberId, Profile.LanguageLevel.ADVANCED)
+            every { queueRepository.add(memberId, 2000.0) } just runs
+            every { queueRepository.saveJoinedAt(memberId, any()) } just runs
+            every { queueRepository.saveFilter(memberId, filter) } just runs
+            every { queueRepository.score(memberId) } returns 2000.0
+            every { queueRepository.findJoinedAt(memberId) } returns Instant.now()
+            every { queueRepository.findFilter(memberId) } returns filter
+            every { queueRepository.candidatesInRange(1800.0, 2200.0) } returns emptyList()
+
+            Then("필터를 레포지토리에 저장하고 대기 상태를 반환한다") {
+                val result = service.joinQueue(memberId, filter)
+                result.status shouldBe MatchingResponse.QueueStatus.Status.WAITING
+                verify { queueRepository.saveFilter(memberId, filter) }
+            }
+        }
+    }
+
+    Given("leaveQueue 호출 시") {
+        val memberId = 1L
+        every { queueRepository.remove(memberId) } returns true
+        every { queueRepository.removeJoinedAt(memberId) } just runs
+        every { queueRepository.removeFilter(memberId) } just runs
+
+        When("퇴장하면") {
+            service.leaveQueue(memberId)
+
+            Then("큐, joinedAt, filter 모두 제거된다") {
+                verify { queueRepository.remove(memberId) }
+                verify { queueRepository.removeJoinedAt(memberId) }
+                verify { queueRepository.removeFilter(memberId) }
+            }
+        }
     }
 
     Given("attemptMatch 호출 시 (매칭 시도 로직)") {
         val memberId = 1L
-        // 실제 wall-clock에 가까운 시각을 사용해 tolerance가 기본값(200)으로 계산되게 한다.
         val now = Instant.now()
 
         beforeEach {
@@ -147,10 +185,14 @@ class MatchingServiceTest : BehaviorSpec({
                 profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie"))
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.score(2L) } returns 1000.0
+            every { queueRepository.findFilter(memberId) } returns null
+            every { queueRepository.findFilter(2L) } returns null
             every { queueRepository.remove(2L) } returns true
             every { queueRepository.removeJoinedAt(2L) } just runs
+            every { queueRepository.removeFilter(2L) } just runs
             every { queueRepository.remove(memberId) } returns true
             every { queueRepository.removeJoinedAt(memberId) } just runs
+            every { queueRepository.removeFilter(memberId) } just runs
             every { memberRepository.findById(memberId) } returns member(memberId)
             every { memberRepository.findById(2L) } returns member(2L)
             every { chatService.getOrCreateRoom(memberId, "user2") } returns ChatRoom(id = "room1", participantIds = listOf(1L, 2L))
@@ -165,12 +207,53 @@ class MatchingServiceTest : BehaviorSpec({
                 verify { matchBroadcaster.broadcastMatched(2L, "room1", "user1") }
                 verify { queueRepository.remove(memberId) }
                 verify { queueRepository.remove(2L) }
+                verify { queueRepository.removeFilter(memberId) }
+                verify { queueRepository.removeFilter(2L) }
+            }
+        }
+
+        When("내 필터 조건에 상대방 프로필이 부합하지 않으면") {
+            every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
+            every { relationshipRepository.findBlock(memberId, 2L) } returns null
+            every { relationshipRepository.findBlock(2L, memberId) } returns null
+            every { queueRepository.findFilter(memberId) } returns MatchingQueueFilter(minAge = 25)
+            every { queueRepository.findFilter(2L) } returns null
+
+            val candidateProfile = profile(2L, Profile.LanguageLevel.INTERMEDIATE)
+            candidateProfile.birthDay = LocalDate.now().minusYears(20)
+            every { profileRepository.findProfile(2L) } returns candidateProfile
+
+            Then("매칭되지 않고 null을 반환한다") {
+                service.attemptMatch(memberId) shouldBe null
+                verify(exactly = 0) { chatService.getOrCreateRoom(any(), any()) }
+            }
+        }
+
+        When("상대방 필터 조건에 내 프로필이 부합하지 않으면") {
+            every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
+            every { relationshipRepository.findBlock(memberId, 2L) } returns null
+            every { relationshipRepository.findBlock(2L, memberId) } returns null
+
+            val myProfile = profile(memberId, Profile.LanguageLevel.INTERMEDIATE)
+            myProfile.birthDay = LocalDate.now().minusYears(20)
+            every { profileRepository.findProfile(memberId) } returns myProfile
+            every { queueRepository.findFilter(memberId) } returns null
+
+            val candidateProfile = profile(2L, Profile.LanguageLevel.INTERMEDIATE)
+            candidateProfile.birthDay = LocalDate.now().minusYears(30)
+            every { profileRepository.findProfile(2L) } returns candidateProfile
+            every { queueRepository.findFilter(2L) } returns MatchingQueueFilter(minAge = 25)
+
+            Then("상대방 조건 불만족으로 매칭되지 않고 null을 반환한다") {
+                service.attemptMatch(memberId) shouldBe null
+                verify(exactly = 0) { chatService.getOrCreateRoom(any(), any()) }
             }
         }
 
         When("공통 관심사가 더 많은 후보가 여럿 중에 있으면") {
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L, 3L)
             every { relationshipRepository.findBlock(any(), any()) } returns null
+            every { queueRepository.findFilter(any()) } returns null
             // candidate 2: 공통 관심사 1개("movie")
             every { profileRepository.findProfile(2L) } returns
                 profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie"))
@@ -182,8 +265,10 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.score(3L) } returns 1000.0
             every { queueRepository.remove(3L) } returns true
             every { queueRepository.removeJoinedAt(3L) } just runs
+            every { queueRepository.removeFilter(3L) } just runs
             every { queueRepository.remove(memberId) } returns true
             every { queueRepository.removeJoinedAt(memberId) } just runs
+            every { queueRepository.removeFilter(memberId) } just runs
             every { memberRepository.findById(memberId) } returns member(memberId)
             every { memberRepository.findById(3L) } returns member(3L)
             every { chatService.getOrCreateRoom(memberId, "user3") } returns ChatRoom(id = "room2", participantIds = listOf(1L, 3L))
@@ -198,3 +283,5 @@ class MatchingServiceTest : BehaviorSpec({
         }
     }
 })
+
+

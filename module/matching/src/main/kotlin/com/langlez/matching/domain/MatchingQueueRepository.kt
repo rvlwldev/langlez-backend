@@ -29,4 +29,11 @@ interface MatchingQueueRepository {
     fun findJoinedAt(memberId: Long): Instant?
 
     fun removeJoinedAt(memberId: Long)
+
+    fun saveFilter(memberId: Long, filter: MatchingQueueFilter)
+
+    fun findFilter(memberId: Long): MatchingQueueFilter?
+
+    fun removeFilter(memberId: Long)
 }
+

@@ -1,5 +1,7 @@
 package com.langlez.matching.infrastructure
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import org.redisson.api.RScoredSortedSet
 import org.redisson.api.RedissonClient
@@ -9,6 +11,7 @@ import java.time.Instant
 @Repository
 class MatchingQueueRepositoryImpl(
     private val redissonClient: RedissonClient,
+    private val objectMapper: ObjectMapper,
 ) : MatchingQueueRepository {
 
     private fun queue(): RScoredSortedSet<Long> = redissonClient.getScoredSortedSet(QUEUE_KEY)
@@ -39,8 +42,24 @@ class MatchingQueueRepositoryImpl(
         redissonClient.getBucket<Long>(joinedAtKey(memberId)).delete()
     }
 
+    override fun saveFilter(memberId: Long, filter: MatchingQueueFilter) {
+        val json = objectMapper.writeValueAsString(filter)
+        redissonClient.getBucket<String>(filterKey(memberId)).set(json)
+    }
+
+    override fun findFilter(memberId: Long): MatchingQueueFilter? {
+        val json = redissonClient.getBucket<String>(filterKey(memberId)).get() ?: return null
+        return objectMapper.readValue(json, MatchingQueueFilter::class.java)
+    }
+
+    override fun removeFilter(memberId: Long) {
+        redissonClient.getBucket<String>(filterKey(memberId)).delete()
+    }
+
     companion object {
         const val QUEUE_KEY = "matching:queue"
         private fun joinedAtKey(memberId: Long) = "matching:joined-at:$memberId"
+        private fun filterKey(memberId: Long) = "matching:filter:$memberId"
     }
 }
+

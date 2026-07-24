@@ -16,8 +16,12 @@ class MatchingController(
 ) {
 
     @PostMapping("/queue")
-    fun joinQueue(@MemberID memberId: Long): MatchingResponse.QueueStatus =
-        matchingService.joinQueue(memberId)
+    fun joinQueue(
+        @MemberID memberId: Long,
+        @RequestBody(required = false) filter: MatchingRequest.QueueFilter? = null,
+    ): MatchingResponse.QueueStatus =
+        matchingService.joinQueue(memberId, filter?.toDomain())
+
 
     @DeleteMapping("/queue")
     @ResponseStatus(NO_CONTENT)

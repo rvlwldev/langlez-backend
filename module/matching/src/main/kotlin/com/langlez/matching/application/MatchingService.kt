@@ -3,13 +3,17 @@ package com.langlez.matching.application
 import com.langlez.chat.application.ChatService
 import com.langlez.core.LanglezException
 import com.langlez.matching.api.MatchingResponse
+import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.MemberRepository
+import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.relationship.domain.RelationshipRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.LocalDate
+import java.time.Period
 
 /**
  * PLAN.md Phase 5 실시간 매칭 큐.
@@ -27,7 +31,7 @@ class MatchingService(
     private val matchBroadcaster: MatchBroadcaster,
 ) {
 
-    fun joinQueue(memberId: Long): MatchingResponse.QueueStatus {
+    fun joinQueue(memberId: Long, filter: MatchingQueueFilter? = null): MatchingResponse.QueueStatus {
         if (queueRepository.isQueued(memberId)) {
             throw LanglezException(409, "matching.already-queued")
         }
@@ -39,6 +43,9 @@ class MatchingService(
 
         queueRepository.add(memberId, MatchingScoreCalculator.baseScore(languageLevel))
         queueRepository.saveJoinedAt(memberId, Instant.now())
+        if (filter != null && filter.isPresent()) {
+            queueRepository.saveFilter(memberId, filter)
+        }
 
         return attemptMatch(memberId) ?: MatchingResponse.QueueStatus(MatchingResponse.QueueStatus.Status.WAITING)
     }
@@ -46,6 +53,7 @@ class MatchingService(
     fun leaveQueue(memberId: Long) {
         queueRepository.remove(memberId)
         queueRepository.removeJoinedAt(memberId)
+        queueRepository.removeFilter(memberId)
     }
 
     /**
@@ -62,10 +70,15 @@ class MatchingService(
         if (candidateIds.isEmpty()) return null
 
         val myProfile = profileRepository.findProfile(memberId) ?: return null
+        val myFilter = queueRepository.findFilter(memberId)
 
         val ranked = candidateIds
             .filterNot { candidateId -> isBlockedEitherWay(memberId, candidateId) }
             .mapNotNull { candidateId -> profileRepository.findProfile(candidateId)?.let { candidateId to it } }
+            .filter { (candidateId, candidateProfile) ->
+                val candidateFilter = queueRepository.findFilter(candidateId)
+                matchesFilter(myFilter, candidateProfile) && matchesFilter(candidateFilter, myProfile)
+            }
             .map { (candidateId, candidateProfile) ->
                 val commonInterests = candidateProfile.interests.intersect(myProfile.interests).size
                 val candidateJoinedAt = queueRepository.findJoinedAt(candidateId) ?: Instant.now()
@@ -78,7 +91,6 @@ class MatchingService(
             val partnerScore = queueRepository.score(partnerId) ?: continue
             // ZSET.remove의 원자적 반환값을 CAS 가드로 사용: 다른 스레드가 먼저 채갔다면 false
             if (!queueRepository.remove(partnerId)) continue
-            queueRepository.removeJoinedAt(partnerId)
 
             if (!queueRepository.remove(memberId)) {
                 // 그 사이 내가 다른 스레드에 의해 매칭되어 사라졌다면, 잡았던 partner를 원상복구한다
@@ -86,12 +98,33 @@ class MatchingService(
                 queueRepository.saveJoinedAt(partnerId, partnerJoinedAt)
                 return null
             }
+            queueRepository.removeJoinedAt(partnerId)
+            queueRepository.removeFilter(partnerId)
             queueRepository.removeJoinedAt(memberId)
+            queueRepository.removeFilter(memberId)
 
             return connect(memberId, partnerId)
         }
         return null
     }
+
+    private fun matchesFilter(filter: MatchingQueueFilter?, targetProfile: Profile): Boolean {
+        if (filter == null || !filter.isPresent()) return true
+
+        if (filter.languageLevel != null && targetProfile.languageLevel != filter.languageLevel) {
+            return false
+        }
+
+        if (filter.minAge != null || filter.maxAge != null) {
+            val age = ageOf(targetProfile.birthDay) ?: return false
+            if (filter.minAge != null && age < filter.minAge) return false
+            if (filter.maxAge != null && age > filter.maxAge) return false
+        }
+
+        return true
+    }
+
+    private fun ageOf(birthDay: LocalDate?): Int? = birthDay?.let { Period.between(it, LocalDate.now()).years }
 
     private fun isBlockedEitherWay(memberId: Long, otherId: Long): Boolean =
         relationshipRepository.findBlock(memberId, otherId) != null ||
@@ -109,3 +142,4 @@ class MatchingService(
         return MatchingResponse.QueueStatus(MatchingResponse.QueueStatus.Status.MATCHED, room.id)
     }
 }
+

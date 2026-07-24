@@ -1,6 +1,7 @@
 package com.langlez.matching.application
 
 import com.langlez.matching.api.MatchingResponse
+import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -19,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.containers.MySQLContainer
+import java.time.LocalDate
 
 /** Redis ZSET("matching:queue") 기반 실시간 매칭이 실제 컨테이너 환경에서도 동작하는지 검증한다. */
 @SpringBootTest(
@@ -84,6 +86,7 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
         username: String,
         languageLevel: Profile.LanguageLevel,
         interests: Set<String>,
+        birthDay: LocalDate? = null,
     ): Member =
         // member 저장과 profile 저장을 같은 트랜잭션(같은 영속성 컨텍스트)에서 수행해야
         // Profile의 @MapsId 연관관계가 detached entity 오류 없이 정상적으로 저장된다.
@@ -100,7 +103,7 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
                 )
             )
             profileRepository.saveProfile(
-                Profile(id = member.id, member = member, languageLevel = languageLevel, interests = interests.toMutableSet())
+                Profile(id = member.id, member = member, languageLevel = languageLevel, interests = interests.toMutableSet(), birthDay = birthDay)
             )
             member
         }!!
@@ -131,5 +134,32 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
                 }
             }
         }
+
+        Given("조건 필터가 지정된 유저들이 큐에 참가할 때") {
+            val charlie = createMemberWithProfile("charlie", Profile.LanguageLevel.INTERMEDIATE, setOf("game"), birthDay = LocalDate.now().minusYears(20))
+            val david = createMemberWithProfile("david", Profile.LanguageLevel.INTERMEDIATE, setOf("game"), birthDay = LocalDate.now().minusYears(30))
+
+            When("charlie가 25세 이상 조건으로 큐에 참가하면") {
+                val charlieFilter = MatchingQueueFilter(minAge = 25)
+                val charlieResult = matchingService.joinQueue(charlie.id, charlieFilter)
+
+                Then("대기 상태가 된다") {
+                    charlieResult.status shouldBe MatchingResponse.QueueStatus.Status.WAITING
+                    queueRepository.findFilter(charlie.id) shouldBe charlieFilter
+                }
+
+                When("35세 이상 조건(불만족)을 가진 david가 참가하면") {
+                    val strictDavidFilter = MatchingQueueFilter(minAge = 35)
+                    val davidResult = matchingService.joinQueue(david.id, strictDavidFilter)
+
+                    Then("양방향 필터 조건 미달(charlie가 david 필터 미달)로 매칭되지 않는다") {
+                        davidResult.status shouldBe MatchingResponse.QueueStatus.Status.WAITING
+                        queueRepository.isQueued(charlie.id) shouldBe true
+                        queueRepository.isQueued(david.id) shouldBe true
+                    }
+                }
+            }
+        }
     }
 }
+
