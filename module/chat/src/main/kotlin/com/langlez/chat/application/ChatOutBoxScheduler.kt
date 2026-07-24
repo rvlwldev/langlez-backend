@@ -34,8 +34,12 @@ internal class ChatOutBoxScheduler(
     @DistributedLock(prefix = "lock:chat-outbox-archive")
     fun archiveEvents() {
         transaction.execute {
-            repo.findAllCompleted().also { repo.deleteAll(it) }
-                .map { ChatOutBoxHistory(it) }.also { repo.saveAllHistory(it) }
+            val completedEvents = repo.findAllCompleted()
+            if (completedEvents.isNotEmpty()) {
+                repo.deleteAll(completedEvents)
+                val historyList = completedEvents.map { ChatOutBoxHistory(it) }
+                repo.saveAllHistory(historyList)
+            }
         }
     }
 }

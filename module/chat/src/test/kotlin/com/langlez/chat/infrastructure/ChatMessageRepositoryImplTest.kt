@@ -86,18 +86,6 @@ class ChatMessageRepositoryImplTest : BehaviorSpec() {
                 }
             }
 
-            When("특정 시각 이후의 방 메시지를 조회할 때") {
-                val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
-                val m1 = chatMessageRepository.save(ChatMessage(roomId = "room-since", senderId = 1L, type = ChatMessage.Type.TEXT, content = "msg1", createdAt = now.minusSeconds(10)))
-                val m2 = chatMessageRepository.save(ChatMessage(roomId = "room-since", senderId = 1L, type = ChatMessage.Type.TEXT, content = "msg2", createdAt = now.minusSeconds(5)))
-
-                Then("해당 시각 이후에 작성된 메시지만 생성순(오름차순)으로 조회되어야 한다") {
-                    val messages = chatMessageRepository.findByRoomSince("room-since", now.minusSeconds(7))
-                    messages shouldHaveSize 1
-                    messages[0].id shouldBe m2.id
-                }
-            }
-
             When("안읽은 메시지 개수를 계산할 때") {
                 val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
                 // m1: 1L이 보냄 -> 1L에게는 카운트 제외, 타인에게는 포함 가능

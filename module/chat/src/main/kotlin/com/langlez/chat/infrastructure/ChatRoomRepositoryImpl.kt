@@ -31,16 +31,42 @@ class ChatRoomRepositoryImpl(
         query.addCriteria(Criteria.where("participantIds").`in`(memberId))
 
         if (cursor != null) {
-            val cursorRoom = mongoTemplate.findById(cursor, ChatRoom::class.java)
-            if (cursorRoom != null) {
-                val cursorTime = cursorRoom.lastMessageAt
+            var cursorTime: Instant? = null
+            var cursorId: String = cursor
+            var parsed = false
+
+            val parts = cursor.split("_", limit = 2)
+            if (parts.size == 2) {
+                cursorId = parts[1]
+                if (parts[0] == "null") {
+                    cursorTime = null
+                    parsed = true
+                } else {
+                    val epoch = parts[0].toLongOrNull()
+                    if (epoch != null) {
+                        cursorTime = Instant.ofEpochMilli(epoch)
+                        parsed = true
+                    }
+                }
+            }
+
+            if (!parsed) {
+                val cursorRoom = mongoTemplate.findById(cursor, ChatRoom::class.java)
+                if (cursorRoom != null) {
+                    cursorTime = cursorRoom.lastMessageAt
+                    cursorId = cursorRoom.id ?: cursor
+                    parsed = true
+                }
+            }
+
+            if (parsed) {
                 if (cursorTime != null) {
                     query.addCriteria(
                         Criteria().orOperator(
                             Criteria.where("lastMessageAt").lt(cursorTime),
                             Criteria().andOperator(
                                 Criteria.where("lastMessageAt").`is`(cursorTime),
-                                Criteria.where("id").lt(cursor)
+                                Criteria.where("id").lt(cursorId)
                             ),
                             Criteria.where("lastMessageAt").`is`(null)
                         )
@@ -49,7 +75,7 @@ class ChatRoomRepositoryImpl(
                     query.addCriteria(
                         Criteria().andOperator(
                             Criteria.where("lastMessageAt").`is`(null),
-                            Criteria.where("id").lt(cursor)
+                            Criteria.where("id").lt(cursorId)
                         )
                     )
                 }
@@ -57,30 +83,6 @@ class ChatRoomRepositoryImpl(
         }
 
         query.with(Sort.by(Sort.Direction.DESC, "lastMessageAt", "id"))
-        query.limit(size)
-        return mongoTemplate.find(query, ChatRoom::class.java)
-    }
-
-    override fun findAllRooms(cursor: String?, size: Int): List<ChatRoom> {
-        val query = Query()
-
-        if (cursor != null) {
-            val cursorRoom = mongoTemplate.findById(cursor, ChatRoom::class.java)
-            if (cursorRoom != null) {
-                val cursorTime = cursorRoom.createdAt
-                query.addCriteria(
-                    Criteria().orOperator(
-                        Criteria.where("createdAt").lt(cursorTime),
-                        Criteria().andOperator(
-                            Criteria.where("createdAt").`is`(cursorTime),
-                            Criteria.where("id").lt(cursor)
-                        )
-                    )
-                )
-            }
-        }
-
-        query.with(Sort.by(Sort.Direction.DESC, "createdAt", "id"))
         query.limit(size)
         return mongoTemplate.find(query, ChatRoom::class.java)
     }

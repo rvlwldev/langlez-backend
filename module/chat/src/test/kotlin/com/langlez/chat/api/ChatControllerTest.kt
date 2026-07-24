@@ -14,11 +14,10 @@ import java.time.Instant
 
 class ChatControllerTest : BehaviorSpec({
     val service = mockk<ChatService>()
-    val memberRepo = mockk<MemberRepository>()
-    val controller = ChatController(service, memberRepo)
+    val controller = ChatController(service)
 
     afterEach {
-        clearMocks(service, memberRepo)
+        clearMocks(service)
     }
 
     fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(

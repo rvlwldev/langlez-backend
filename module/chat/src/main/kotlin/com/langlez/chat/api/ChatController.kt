@@ -3,7 +3,6 @@ package com.langlez.chat.api
 import com.langlez.chat.application.ChatService
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.MemberRepository
 import com.langlez.security.web.MemberID
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
@@ -13,7 +12,6 @@ import java.util.UUID
 @RequestMapping("/api/v1/chats")
 class ChatController(
     private val service: ChatService,
-    private val memberRepo: MemberRepository,
 ) {
 
     @PostMapping("/rooms/@{username}")
