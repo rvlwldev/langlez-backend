@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
@@ -56,8 +57,10 @@ class ReportEventListenerTest : BehaviorSpec({
         When("잘못된 형식의 payload가 전달되면") {
             val invalidPayload = "invalid json"
 
-            Then("예외를 발생시키지 않고 무시한다") {
-                listener.onEchoPostReported(invalidPayload)
+            Then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    listener.onEchoPostReported(invalidPayload)
+                }
 
                 verify(exactly = 0) { reportRepository.save(any()) }
             }
@@ -95,8 +98,10 @@ class ReportEventListenerTest : BehaviorSpec({
         When("잘못된 형식의 payload가 전달되면") {
             val invalidPayload = "invalid json"
 
-            Then("예외를 발생시키지 않고 무시한다") {
-                listener.onChatUserReported(invalidPayload)
+            Then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    listener.onChatUserReported(invalidPayload)
+                }
 
                 verify(exactly = 0) { reportRepository.save(any()) }
             }

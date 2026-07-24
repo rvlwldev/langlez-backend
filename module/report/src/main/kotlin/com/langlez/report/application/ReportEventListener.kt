@@ -21,7 +21,7 @@ class ReportEventListener(
         val event = runCatching { mapper.readValue(payload, EchoReportPayload::class.java) }
             .getOrElse {
                 logger.warn("Failed to parse echo report event: {}", it.message)
-                return
+                throw IllegalArgumentException("Failed to parse echo report event payload", it)
             }
 
         reportRepository.save(
@@ -42,7 +42,7 @@ class ReportEventListener(
         val event = runCatching { mapper.readValue(payload, ChatReportPayload::class.java) }
             .getOrElse {
                 logger.warn("Failed to parse chat report event: {}", it.message)
-                return
+                throw IllegalArgumentException("Failed to parse chat report event payload", it)
             }
 
         reportRepository.save(
