@@ -13,10 +13,11 @@ class ProfileImageLocker(
 ) {
     @DistributedLock(prefix = "lock:profile-image:", ttl = 5, retries = 20, wait = 100, transactional = true)
     fun confirmAdditionalImage(@LockKey memberId: Long, fileUrl: String): ProfileImage {
-        if (repo.countImages(memberId) >= MAX_IMAGES) {
+        val count = repo.countImages(memberId)
+        if (count >= MAX_IMAGES) {
             throw LanglezException(400, "profile.image.limit-exceeded")
         }
-        val sequence = repo.countImages(memberId) + 1
+        val sequence = count + 1
         return repo.saveImage(ProfileImage(memberId, fileUrl, sequence, 0L, false))
     }
 

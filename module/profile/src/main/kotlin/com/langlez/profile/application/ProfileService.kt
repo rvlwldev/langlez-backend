@@ -9,14 +9,12 @@ import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 
 @Service
 class ProfileService(
     private val repo: ProfileRepository,
     private val storage: FileStorage,
-    private val transaction: TransactionTemplate,
     private val profileImageLocker: ProfileImageLocker,
 ) {
 
@@ -24,7 +22,7 @@ class ProfileService(
     fun getProfile(username: String): Profile =
         repo.findProfileByUsername(username) ?: throw LanglezException(404, "profile.not-found")
 
-    @Transactional(readOnly = true)
+    @Transactional
     fun getProfileDetail(visitorId: Long, username: String): ProfileResponse.Detail {
         increaseVisitCount(visitorId, username)
         val profile = repo.findProfileByUsername(username)
@@ -45,32 +43,31 @@ class ProfileService(
         return storage.generateUploadUrl(filename, contentType, IMAGE_DIRECTORY)
     }
 
+    @Transactional
     fun confirmRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
-        transaction.execute { replaceRepresentImage(memberId, fileUrl) }
-            ?: throw LanglezException(500, "profile.image.confirm-failed")
+        replaceRepresentImage(memberId, fileUrl)
 
     fun confirmAdditionalImage(memberId: Long, fileUrl: String): ProfileImage =
         profileImageLocker.confirmAdditionalImage(memberId, fileUrl)
 
-    fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage =
-        transaction.execute {
-            val target = repo.findImageByUrl(memberId, fileUrl)
-                ?: throw LanglezException(404, "profile.image.not-found")
-            repo.findRepresentImage(memberId)?.apply {
-                represent = false
-                repo.saveImage(this)
-            }
-            target.represent = true
-            repo.saveImage(target)
-        } ?: throw LanglezException(500, "profile.image.change-failed")
-
-    fun deleteImage(memberId: Long, fileUrl: String) {
-        transaction.execute {
-            val image = repo.findImageByUrl(memberId, fileUrl)
-                ?: throw LanglezException(404, "profile.image.not-found")
-            image.deletedAt = Instant.now()
-            repo.saveImage(image)
+    @Transactional
+    fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage {
+        val target = repo.findImageByUrl(memberId, fileUrl)
+            ?: throw LanglezException(404, "profile.image.not-found")
+        repo.findRepresentImage(memberId)?.apply {
+            represent = false
+            repo.saveImage(this)
         }
+        target.represent = true
+        return repo.saveImage(target)
+    }
+
+    @Transactional
+    fun deleteImage(memberId: Long, fileUrl: String) {
+        val image = repo.findImageByUrl(memberId, fileUrl)
+            ?: throw LanglezException(404, "profile.image.not-found")
+        image.deletedAt = Instant.now()
+        repo.saveImage(image)
     }
 
     @Transactional
