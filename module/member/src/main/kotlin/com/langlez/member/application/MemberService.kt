@@ -7,6 +7,7 @@ import com.langlez.member.application.MemberCommand.Provider
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.infrastructure.outbox.MemberOutBoxRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -20,11 +21,11 @@ class MemberService(
 ) {
 
     @Transactional
-    @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [Exception::class])
+    @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
     fun createMember(providerCmd: Provider, command: Create): Member {
         val member = Member(
             email = command.email,
-            username = command.username,
+            username = command.username ?: Member.generateRandomUsername(),
             nickname = command.nickname,
             provider = providerCmd.type,
             providerId = providerCmd.id,
@@ -53,7 +54,11 @@ class MemberService(
             throw LanglezException(409, "member.username.duplicated")
 
         member.changeUsername(newUsername)
-        val saved = repo.save(member)
+        val saved = try {
+            repo.save(member)
+        } catch (e: DataIntegrityViolationException) {
+            throw LanglezException(409, "member.username.duplicated", e)
+        }
         outbox.save("MEMBER", saved.id.toString(), "member-username-changed", MemberEvent.UsernameChanged(saved.id, newUsername))
         return saved
     }

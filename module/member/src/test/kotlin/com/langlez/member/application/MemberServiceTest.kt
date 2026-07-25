@@ -8,6 +8,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
+import org.springframework.dao.DataIntegrityViolationException
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -102,6 +103,21 @@ class MemberServiceTest : BehaviorSpec({
             val other = createMember(id = 2L, username = "taken_user")
             every { repo.findById(1L) } returns member
             every { repo.findByUsername("taken_user") } returns other
+
+            Then("CONFLICT 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.updateUsername(1L, "taken_user")
+                }
+                ex.status shouldBe 409
+                ex.message shouldBe "member.username.duplicated"
+            }
+        }
+
+        When("저장 중 DB 제약 위반(경쟁 조건)이 발생하면") {
+            val member = createMember()
+            every { repo.findById(1L) } returns member
+            every { repo.findByUsername("taken_user") } returns null
+            every { repo.save(any()) } throws DataIntegrityViolationException("Duplicate entry")
 
             Then("CONFLICT 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> {
