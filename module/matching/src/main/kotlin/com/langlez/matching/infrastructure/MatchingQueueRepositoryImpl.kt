@@ -3,6 +3,8 @@ package com.langlez.matching.infrastructure
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
+import com.langlez.matching.domain.QueueMemberMeta
+import org.redisson.api.RMap
 import org.redisson.api.RScoredSortedSet
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Repository
@@ -15,6 +17,7 @@ class MatchingQueueRepositoryImpl(
 ) : MatchingQueueRepository {
 
     private fun queue(): RScoredSortedSet<Long> = redissonClient.getScoredSortedSet(QUEUE_KEY)
+    private fun metaMap(): RMap<String, String> = redissonClient.getMap(META_KEY)
 
     override fun isQueued(memberId: Long): Boolean = queue().contains(memberId)
 
@@ -32,34 +35,67 @@ class MatchingQueueRepositoryImpl(
     override fun allMembers(): List<Long> = queue().readAll().toList()
 
     override fun saveJoinedAt(memberId: Long, at: Instant) {
-        redissonClient.getBucket<Long>(joinedAtKey(memberId)).set(at.toEpochMilli())
+        val current = getMeta(memberId) ?: QueueMemberMeta(joinedAt = at)
+        val updated = current.copy(joinedAt = at)
+        saveMeta(memberId, updated)
     }
 
-    override fun findJoinedAt(memberId: Long): Instant? =
-        redissonClient.getBucket<Long>(joinedAtKey(memberId)).get()?.let { Instant.ofEpochMilli(it) }
+    override fun findJoinedAt(memberId: Long): Instant? = getMeta(memberId)?.joinedAt
 
     override fun removeJoinedAt(memberId: Long) {
-        redissonClient.getBucket<Long>(joinedAtKey(memberId)).delete()
+        val current = getMeta(memberId) ?: return
+        if (current.filter == null) {
+            metaMap().fastRemove(memberId.toString())
+        } else {
+            saveMeta(memberId, current.copy(joinedAt = Instant.EPOCH))
+        }
     }
 
     override fun saveFilter(memberId: Long, filter: MatchingQueueFilter) {
-        val json = objectMapper.writeValueAsString(filter)
-        redissonClient.getBucket<String>(filterKey(memberId)).set(json)
+        val current = getMeta(memberId) ?: QueueMemberMeta(joinedAt = Instant.now())
+        val updated = current.copy(filter = filter)
+        saveMeta(memberId, updated)
     }
 
-    override fun findFilter(memberId: Long): MatchingQueueFilter? {
-        val json = redissonClient.getBucket<String>(filterKey(memberId)).get() ?: return null
-        return objectMapper.readValue(json, MatchingQueueFilter::class.java)
-    }
+    override fun findFilter(memberId: Long): MatchingQueueFilter? = getMeta(memberId)?.filter
 
     override fun removeFilter(memberId: Long) {
-        redissonClient.getBucket<String>(filterKey(memberId)).delete()
+        metaMap().fastRemove(memberId.toString())
+    }
+
+    override fun findMetaInBatch(memberIds: List<Long>): Map<Long, QueueMemberMeta> {
+        if (memberIds.isEmpty()) return emptyMap()
+        val rawMap = metaMap().getAll(memberIds.map { it.toString() }.toSet())
+        val result = mutableMapOf<Long, QueueMemberMeta>()
+        for ((keyStr, json) in rawMap) {
+            if (json != null) {
+                val id = keyStr.toLongOrNull() ?: continue
+                try {
+                    result[id] = objectMapper.readValue(json, QueueMemberMeta::class.java)
+                } catch (_: Exception) {}
+            }
+        }
+        return result
+    }
+
+    private fun getMeta(memberId: Long): QueueMemberMeta? {
+        val json = metaMap().get(memberId.toString()) ?: return null
+        return try {
+            objectMapper.readValue(json, QueueMemberMeta::class.java)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun saveMeta(memberId: Long, meta: QueueMemberMeta) {
+        val json = objectMapper.writeValueAsString(meta)
+        metaMap().fastPut(memberId.toString(), json)
     }
 
     companion object {
         const val QUEUE_KEY = "matching:queue"
-        private fun joinedAtKey(memberId: Long) = "matching:joined-at:$memberId"
-        private fun filterKey(memberId: Long) = "matching:filter:$memberId"
+        const val META_KEY = "matching:queue:meta"
     }
 }
+
 

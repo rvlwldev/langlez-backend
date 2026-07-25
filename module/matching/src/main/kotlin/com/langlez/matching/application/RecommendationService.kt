@@ -23,7 +23,6 @@ import java.time.Period
  * 고급 필터(성별/나이대/언어레벨)는 유료 전용 — MEMBER role이 지정하면 403.
  */
 @Service
-@Transactional
 class RecommendationService(
     private val profileRepository: ProfileRepository,
     private val memberRepository: MemberRepository,
@@ -41,7 +40,7 @@ class RecommendationService(
         all.filter(predicate).forEach { myProfile -> refreshFor(myProfile, all, ttl) }
     }
 
-    private fun refreshFor(myProfile: Profile, all: List<Profile>, ttl: Duration) {
+    fun refreshFor(myProfile: Profile, all: List<Profile>, ttl: Duration) {
         val myId = myProfile.id
         val blockedIds = relationshipRepository.findBlocks(myId, null, EXCLUSION_SCAN_SIZE).map { it.blockedId }.toSet()
         val matchedIds = chatRoomRepository.findByParticipant(myId, null, EXCLUSION_SCAN_SIZE)
@@ -60,6 +59,7 @@ class RecommendationService(
         recommendationRepository.save(myId, usernames, ttl)
     }
 
+    @Transactional(readOnly = true)
     fun getRecommendations(
         memberId: Long,
         role: String,
@@ -70,13 +70,13 @@ class RecommendationService(
         }
 
         val usernames = recommendationRepository.find(memberId) ?: emptyList()
-        val summaries = if (!filter.isPresent()) {
-            usernames.mapNotNull { username -> memberRepository.findByUsername(username) }
-                .map { MatchingResponse.MemberSummary(it.username, it.nickname) }
-        } else {
-            usernames.mapNotNull { username -> profileRepository.findProfileByUsername(username) }
-                .filter { matchesFilter(it, filter) }
-                .map { MatchingResponse.MemberSummary(it.member.username, it.member.nickname) }
+        val summaries = usernames.mapNotNull { username ->
+            val member = memberRepository.findByUsername(username) ?: return@mapNotNull null
+            if (filter.isPresent()) {
+                val profile = profileRepository.findProfile(member.id) ?: return@mapNotNull null
+                if (!matchesFilter(profile, filter)) return@mapNotNull null
+            }
+            MatchingResponse.MemberSummary(member.username, member.nickname)
         }
         return MatchingResponse.RecommendationList(summaries)
     }
@@ -99,3 +99,4 @@ class RecommendationService(
         private const val EXCLUSION_SCAN_SIZE = 1000
     }
 }
+

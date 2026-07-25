@@ -43,9 +43,7 @@ class MatchingService(
 
         queueRepository.add(memberId, MatchingScoreCalculator.baseScore(languageLevel))
         queueRepository.saveJoinedAt(memberId, Instant.now())
-        if (filter != null && filter.isPresent()) {
-            queueRepository.saveFilter(memberId, filter)
-        }
+        filter?.takeIf { it.isPresent() }?.let { queueRepository.saveFilter(memberId, it) }
 
         return attemptMatch(memberId) ?: MatchingResponse.QueueStatus(MatchingResponse.QueueStatus.Status.WAITING)
     }
@@ -62,26 +60,33 @@ class MatchingService(
      */
     fun attemptMatch(memberId: Long): MatchingResponse.QueueStatus? {
         val myScore = queueRepository.score(memberId) ?: return null
-        val joinedAt = queueRepository.findJoinedAt(memberId) ?: Instant.now()
-        val tolerance = MatchingScoreCalculator.tolerance(joinedAt)
+        val myMetaMap = queueRepository.findMetaInBatch(listOf(memberId))
+        val myJoinedAt = myMetaMap[memberId]?.joinedAt ?: queueRepository.findJoinedAt(memberId) ?: Instant.now()
+        val tolerance = MatchingScoreCalculator.tolerance(myJoinedAt)
 
         val candidateIds = queueRepository.candidatesInRange(myScore - tolerance, myScore + tolerance)
             .filter { it != memberId }
         if (candidateIds.isEmpty()) return null
 
         val myProfile = profileRepository.findProfile(memberId) ?: return null
-        val myFilter = queueRepository.findFilter(memberId)
+        val myFilter = myMetaMap[memberId]?.filter ?: queueRepository.findFilter(memberId)
+
+        val candidateMetaMap = queueRepository.findMetaInBatch(candidateIds)
 
         val ranked = candidateIds
-            .filterNot { candidateId -> isBlockedEitherWay(memberId, candidateId) }
-            .mapNotNull { candidateId -> profileRepository.findProfile(candidateId)?.let { candidateId to it } }
-            .filter { (candidateId, candidateProfile) ->
-                val candidateFilter = queueRepository.findFilter(candidateId)
-                matchesFilter(myFilter, candidateProfile) && matchesFilter(candidateFilter, myProfile)
+            .mapNotNull { candidateId ->
+                val candidateProfile = profileRepository.findProfile(candidateId) ?: return@mapNotNull null
+                val candidateFilter = candidateMetaMap[candidateId]?.filter ?: queueRepository.findFilter(candidateId)
+                if (matchesFilter(myFilter, candidateProfile) && matchesFilter(candidateFilter, myProfile)) {
+                    candidateId to candidateProfile
+                } else null
             }
+            .filterNot { (candidateId, _) -> isBlockedEitherWay(memberId, candidateId) }
             .map { (candidateId, candidateProfile) ->
                 val commonInterests = candidateProfile.interests.intersect(myProfile.interests).size
-                val candidateJoinedAt = queueRepository.findJoinedAt(candidateId) ?: Instant.now()
+                val candidateJoinedAt = candidateMetaMap[candidateId]?.joinedAt
+                    ?: queueRepository.findJoinedAt(candidateId)
+                    ?: Instant.now()
                 Triple(candidateId, commonInterests, candidateJoinedAt)
             }
             // 공통 관심사 많은 순 우선, 동점이면 대기시간이 긴(joinedAt이 이른) 사람 우선
@@ -89,6 +94,8 @@ class MatchingService(
 
         for ((partnerId, _, partnerJoinedAt) in ranked) {
             val partnerScore = queueRepository.score(partnerId) ?: continue
+            val partnerFilter = candidateMetaMap[partnerId]?.filter ?: queueRepository.findFilter(partnerId)
+
             // ZSET.remove의 원자적 반환값을 CAS 가드로 사용: 다른 스레드가 먼저 채갔다면 false
             if (!queueRepository.remove(partnerId)) continue
 
@@ -96,14 +103,28 @@ class MatchingService(
                 // 그 사이 내가 다른 스레드에 의해 매칭되어 사라졌다면, 잡았던 partner를 원상복구한다
                 queueRepository.add(partnerId, partnerScore)
                 queueRepository.saveJoinedAt(partnerId, partnerJoinedAt)
+                partnerFilter?.let { queueRepository.saveFilter(partnerId, it) }
                 return null
             }
-            queueRepository.removeJoinedAt(partnerId)
-            queueRepository.removeFilter(partnerId)
-            queueRepository.removeJoinedAt(memberId)
-            queueRepository.removeFilter(memberId)
 
-            return connect(memberId, partnerId)
+            try {
+                val result = connect(memberId, partnerId)
+                queueRepository.removeJoinedAt(partnerId)
+                queueRepository.removeFilter(partnerId)
+                queueRepository.removeJoinedAt(memberId)
+                queueRepository.removeFilter(memberId)
+                return result
+            } catch (e: Exception) {
+                // connect 실패 시 두 사람 모두 큐로 복구 (보상 로직)
+                queueRepository.add(partnerId, partnerScore)
+                queueRepository.saveJoinedAt(partnerId, partnerJoinedAt)
+                partnerFilter?.let { queueRepository.saveFilter(partnerId, it) }
+
+                queueRepository.add(memberId, myScore)
+                queueRepository.saveJoinedAt(memberId, myJoinedAt)
+                myFilter?.let { queueRepository.saveFilter(memberId, it) }
+                throw e
+            }
         }
         return null
     }
@@ -135,11 +156,13 @@ class MatchingService(
         val partner = memberRepository.findById(partnerId) ?: throw LanglezException(404, "member.not-found")
 
         val room = chatService.getOrCreateRoom(memberId, partner.username)
+        val roomId = requireNotNull(room.id) { "Room ID must not be null" }
 
-        matchBroadcaster.broadcastMatched(memberId, room.id!!, partner.username)
-        matchBroadcaster.broadcastMatched(partnerId, room.id!!, me.username)
+        matchBroadcaster.broadcastMatched(memberId, roomId, partner.username)
+        matchBroadcaster.broadcastMatched(partnerId, roomId, me.username)
 
-        return MatchingResponse.QueueStatus(MatchingResponse.QueueStatus.Status.MATCHED, room.id)
+        return MatchingResponse.QueueStatus(MatchingResponse.QueueStatus.Status.MATCHED, roomId)
     }
 }
+
 

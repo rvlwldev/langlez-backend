@@ -37,6 +37,10 @@ class MatchingServiceTest : BehaviorSpec({
         matchBroadcaster,
     )
 
+    beforeEach {
+        every { queueRepository.findMetaInBatch(any()) } returns emptyMap()
+    }
+
     afterEach {
         clearMocks(
             queueRepository, profileRepository, memberRepository,
@@ -170,6 +174,9 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
             every { relationshipRepository.findBlock(memberId, 2L) } returns Block(memberId, 2L)
             every { relationshipRepository.findBlock(2L, memberId) } returns null
+            every { profileRepository.findProfile(2L) } returns profile(2L, Profile.LanguageLevel.INTERMEDIATE)
+            every { queueRepository.findFilter(memberId) } returns null
+            every { queueRepository.findFilter(2L) } returns null
 
             Then("매칭시키지 않고 null을 반환한다") {
                 service.attemptMatch(memberId) shouldBe null
@@ -281,7 +288,34 @@ class MatchingServiceTest : BehaviorSpec({
                 verify(exactly = 0) { queueRepository.remove(2L) }
             }
         }
+
+        When("connect 실패 시 (DB/네트워크 예외 발생)") {
+            every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
+            every { relationshipRepository.findBlock(memberId, 2L) } returns null
+            every { relationshipRepository.findBlock(2L, memberId) } returns null
+            every { profileRepository.findProfile(2L) } returns profile(2L)
+            every { queueRepository.findJoinedAt(2L) } returns now
+            every { queueRepository.score(2L) } returns 1000.0
+            every { queueRepository.findFilter(memberId) } returns null
+            every { queueRepository.findFilter(2L) } returns null
+            every { queueRepository.remove(2L) } returns true
+            every { queueRepository.remove(memberId) } returns true
+            every { queueRepository.add(2L, 1000.0) } just runs
+            every { queueRepository.add(memberId, 1000.0) } just runs
+            every { queueRepository.saveJoinedAt(2L, any()) } just runs
+            every { queueRepository.saveJoinedAt(memberId, any()) } just runs
+            every { memberRepository.findById(memberId) } returns member(memberId)
+            every { memberRepository.findById(2L) } returns member(2L)
+            every { chatService.getOrCreateRoom(memberId, "user2") } throws RuntimeException("DB Connection Failed")
+
+            Then("예외가 던져지고 두 사용자 모두 큐로 복구된다") {
+                shouldThrow<RuntimeException> { service.attemptMatch(memberId) }
+                verify { queueRepository.add(2L, 1000.0) }
+                verify { queueRepository.add(memberId, 1000.0) }
+            }
+        }
     }
 })
+
 
 
