@@ -16,18 +16,15 @@ server:
   port: 8080
 
 spring:
-  profiles:
-    active: local
   threads:
     virtual:
       enabled: true
-  
-  # Data Sources
+
+  # Data Sources — 로컬 개발용 값 (운영은 application-production.yml의 환경 변수로 대체됨)
   datasource:
     url: jdbc:mysql://localhost:3306/langlez_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    # username/password는 application-local.yml 또는 환경 변수(DB_USERNAME, DB_PASSWORD)로 설정
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    username: admin
+    password: admin
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   data:
@@ -60,14 +57,14 @@ spring:
       client:
         registration:
           google:
-            # client-id/secret은 application-local.yml 또는 환경 변수(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)로 설정
-            client-id: ${GOOGLE_CLIENT_ID}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
+            # 로컬 개발용 dummy 값 (운영은 application-production.yml의 환경 변수로 대체됨)
+            client-id: google-dummy-id.apps.googleusercontent.com
+            client-secret: google-dummy-secret
             scope: profile, email
           apple:
-            # client-id/secret은 application-local.yml 또는 환경 변수(APPLE_CLIENT_ID, APPLE_CLIENT_SECRET)로 설정
-            client-id: ${APPLE_CLIENT_ID}
-            client-secret: ${APPLE_CLIENT_SECRET}
+            # 로컬 개발용 dummy 값 (운영은 application-production.yml의 환경 변수로 대체됨)
+            client-id: apple-dummy-id
+            client-secret: apple-dummy-secret
             scope: name, email
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/apple"
@@ -94,8 +91,8 @@ logging:
     org.hibernate.orm.jdbc.bind: OFF
 
 jwt:
-  # secret은 application-local.yml 또는 환경 변수(JWT_SECRET_KEY)로 설정
-  secret: ${JWT_SECRET_KEY}
+  # 로컬 개발용 dummy 시크릿 (운영은 application-production.yml의 JWT_SECRET_KEY 환경 변수로 대체됨)
+  secret: "c2lsdmVyLWJ1bGxldC1sYW5nbGV6LXByb2plY3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ="
   access-token-ttl-secs: 3600
   refresh-token-ttl-secs: 1209600
 
