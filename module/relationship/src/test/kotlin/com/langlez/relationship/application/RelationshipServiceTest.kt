@@ -41,6 +41,7 @@ class RelationshipServiceTest : BehaviorSpec({
         When("정상적으로 팔로우하면") {
             every { repo.findBlock(followingId, followerId) } returns null
             every { repo.findBlock(followerId, followingId) } returns null
+            every { repo.findFollow(followerId, followingId) } returns null
             every { repo.saveFollow(any()) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
             every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
@@ -53,6 +54,17 @@ class RelationshipServiceTest : BehaviorSpec({
                         match<RelationshipEvent.Follow> { it.followerId == followerId && it.followingId == followingId }
                     )
                 }
+            }
+        }
+
+        When("이미 팔로우한 상태이면") {
+            every { repo.findBlock(followingId, followerId) } returns null
+            every { repo.findBlock(followerId, followingId) } returns null
+            every { repo.findFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
+
+            Then("아무 동작 없이 정상 반환한다 (멱등성)") {
+                shouldNotThrowAny { service.follow(followerId, followingId) }
+                verify(exactly = 0) { repo.saveFollow(any()) }
             }
         }
 
@@ -126,6 +138,7 @@ class RelationshipServiceTest : BehaviorSpec({
         val blockedId = 2L
 
         When("정상적으로 차단하면") {
+            every { repo.findBlock(blockerId, blockedId) } returns null
             every { repo.saveBlock(any()) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
             every { repo.deleteFollow(blockerId, blockedId) } just runs
             every { repo.deleteFollow(blockedId, blockerId) } just runs
@@ -142,6 +155,25 @@ class RelationshipServiceTest : BehaviorSpec({
                         match<RelationshipEvent.Block> { it.blockerId == blockerId && it.blockedId == blockedId }
                     )
                 }
+            }
+        }
+
+        When("자기 자신을 차단하면") {
+            Then("BAD_REQUEST 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.block(1L, 1L)
+                }
+                ex.status shouldBe 400
+                ex.message shouldBe "social.block.self"
+            }
+        }
+
+        When("이미 차단한 상태이면") {
+            every { repo.findBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
+
+            Then("아무 동작 없이 정상 반환한다 (멱등성)") {
+                shouldNotThrowAny { service.block(blockerId, blockedId) }
+                verify(exactly = 0) { repo.saveBlock(any()) }
             }
         }
     }
