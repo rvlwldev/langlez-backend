@@ -35,6 +35,11 @@ class MemberRepositoryImpl(
     @Cacheable(cacheNames = ["member_username"], key = "#username")
     override fun findByUsername(username: String): Member? = jpa.findByUsername(username)
 
+    override fun findByUsernames(usernames: List<String>): List<Member> {
+        if (usernames.isEmpty()) return emptyList()
+        return jpa.findAllByUsernameIn(usernames)
+    }
+
     @Cacheable(cacheNames = ["member_provider"], key = "#id + ':' + #type")
     override fun findByProvider(id: String, type: Member.Provider): Member? =
         jpa.findByProviderIdAndProvider(id, type)

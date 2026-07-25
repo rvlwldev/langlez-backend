@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface MemberJpaRepository : JpaRepository<Member, Long> {
     fun findByEmail(email: String): Member?
     fun findByUsername(username: String): Member?
+    fun findAllByUsernameIn(usernames: List<String>): List<Member>
     fun findByProviderIdAndProvider(providerId: String, provider: Member.Provider): Member?
     fun findByIdLessThanOrderByIdDesc(id: Long, pageable: Pageable): List<Member>
     fun findAllByOrderByIdDesc(pageable: Pageable): List<Member>

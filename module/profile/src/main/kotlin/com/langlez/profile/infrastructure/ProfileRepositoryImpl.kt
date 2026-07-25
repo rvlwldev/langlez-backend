@@ -32,6 +32,11 @@ class ProfileRepositoryImpl(
     @Cacheable(cacheNames = ["profile"], key = "#id")
     override fun findProfile(id: Long): Profile? = profileJpa.findByIdOrNull(id)
 
+    override fun findProfiles(ids: List<Long>): List<Profile> {
+        if (ids.isEmpty()) return emptyList()
+        return profileJpa.findAllById(ids)
+    }
+
     override fun findProfileByUsername(username: String): Profile? =
         dsl.selectFrom(profile)
             .innerJoin(profile.member).fetchJoin()

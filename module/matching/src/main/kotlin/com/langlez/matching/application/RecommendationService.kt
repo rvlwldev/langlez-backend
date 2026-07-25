@@ -70,10 +70,21 @@ class RecommendationService(
         }
 
         val usernames = recommendationRepository.find(memberId) ?: emptyList()
+        if (usernames.isEmpty()) return MatchingResponse.RecommendationList(emptyList())
+
+        // 추천 인원수만큼 단건 조회하면 N+1이 되므로 회원/프로필 모두 한 번에 읽는다.
+        val membersByUsername = memberRepository.findByUsernames(usernames).associateBy { it.username }
+        val profilesById = if (filter.isPresent()) {
+            profileRepository.findProfiles(membersByUsername.values.map { it.id }).associateBy { it.id }
+        } else {
+            emptyMap()
+        }
+
+        // 추천 순서를 보존하기 위해 저장된 username 순서로 순회한다.
         val summaries = usernames.mapNotNull { username ->
-            val member = memberRepository.findByUsername(username) ?: return@mapNotNull null
+            val member = membersByUsername[username] ?: return@mapNotNull null
             if (filter.isPresent()) {
-                val profile = profileRepository.findProfile(member.id) ?: return@mapNotNull null
+                val profile = profilesById[member.id] ?: return@mapNotNull null
                 if (!matchesFilter(profile, filter)) return@mapNotNull null
             }
             MatchingResponse.MemberSummary(member.username, member.nickname)
