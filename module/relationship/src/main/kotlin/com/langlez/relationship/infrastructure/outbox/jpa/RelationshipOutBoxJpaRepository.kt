@@ -8,5 +8,6 @@ interface RelationshipOutBoxJpaRepository : JpaRepository<RelationshipOutBox, Lo
         statuses: List<RelationshipOutBox.Status>,
         pageable: org.springframework.data.domain.Pageable,
     ): List<RelationshipOutBox>
+    fun findAllByStatus(status: RelationshipOutBox.Status, pageable: org.springframework.data.domain.Pageable): List<RelationshipOutBox>
     fun findAllByStatus(status: RelationshipOutBox.Status): List<RelationshipOutBox>
 }

@@ -24,6 +24,7 @@ class RelationshipService(
             throw LanglezException(403, "social.follow.blocked")
         if (repo.findBlock(followerId, followingId) != null)
             throw LanglezException(403, "social.follow.blocked")
+        if (repo.findFollow(followerId, followingId) != null) return
 
         val follow = repo.saveFollow(Follow(followerId, followingId))
         val event = RelationshipEvent.Follow(followerId, followingId)
@@ -40,6 +41,10 @@ class RelationshipService(
     }
 
     fun block(blockerId: Long, blockedId: Long) {
+        if (blockerId == blockedId)
+            throw LanglezException(400, "social.block.self")
+        if (repo.findBlock(blockerId, blockedId) != null) return
+
         val block = repo.saveBlock(Block(blockerId, blockedId))
 
         repo.deleteFollow(blockerId, blockedId)

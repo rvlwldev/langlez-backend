@@ -19,6 +19,8 @@ class RelationshipOutBoxRepositoryImpl(
     override fun save(aggregateType: String, aggregateId: String, eventName: String, payload: Any?): RelationshipOutBox =
         jpa.save(RelationshipOutBox(aggregateType, aggregateId, eventName, mapper.writeValueAsString(payload)))
 
+    override fun save(outbox: RelationshipOutBox): RelationshipOutBox = jpa.save(outbox)
+
     override fun findToDispatch(limit: Int): List<RelationshipOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
             listOf(RelationshipOutBox.Status.READY, RelationshipOutBox.Status.PROCESSING),
@@ -27,6 +29,9 @@ class RelationshipOutBoxRepositoryImpl(
 
     override fun findAllCompleted(): List<RelationshipOutBox> =
         jpa.findAllByStatus(RelationshipOutBox.Status.COMPLETE)
+
+    override fun findCompleted(limit: Int): List<RelationshipOutBox> =
+        jpa.findAllByStatus(RelationshipOutBox.Status.COMPLETE, PageRequest.of(0, limit))
 
     override fun saveAll(outboxes: List<RelationshipOutBox>): List<RelationshipOutBox> = jpa.saveAll(outboxes)
 
