@@ -29,6 +29,11 @@ class EchoServiceTest : BehaviorSpec({
     val echoOutBoxRepository = mockk<com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository>(relaxed = true)
     val redissonClient = mockk<RedissonClient>()
 
+    // OutBoxRepository가 제네릭 인터페이스라 relaxed mock이 반환 타입을 상위 타입(AbstractOutBox)으로
+    // 추론해 ClassCastException이 난다. 구체 타입을 명시적으로 stub 해 준다.
+    every { echoOutBoxRepository.save(any(), any(), any(), any()) } returns
+        com.langlez.echo.infrastructure.outbox.EchoOutBox("ECHO", "0", "stub", "{}")
+
     val service = EchoService(
         postRepository,
         memberRepo,

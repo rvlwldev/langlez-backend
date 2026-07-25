@@ -3,6 +3,7 @@ package com.langlez.chat.infrastructure.outbox
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.infrastructure.outbox.jpa.ChatOutBoxHistoryJpaRepository
 import com.langlez.chat.infrastructure.outbox.jpa.ChatOutBoxJpaRepository
+import com.langlez.mysql.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
@@ -21,12 +22,15 @@ class ChatOutBoxRepositoryImpl(
 
     override fun findToDispatch(limit: Int): List<ChatOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
-            listOf(ChatOutBox.Status.READY, ChatOutBox.Status.PROCESSING),
+            listOf(OutBoxStatus.READY, OutBoxStatus.PROCESSING),
             PageRequest.of(0, limit),
         )
 
-    override fun findAllCompleted(): List<ChatOutBox> =
-        jpa.findAllByStatus(ChatOutBox.Status.COMPLETE)
+    override fun findCompletedOrFailed(limit: Int): List<ChatOutBox> =
+        jpa.findAllByStatusIn(
+            listOf(OutBoxStatus.COMPLETE, OutBoxStatus.FAILED),
+            PageRequest.of(0, limit),
+        )
 
     override fun saveAll(outboxes: List<ChatOutBox>): List<ChatOutBox> = jpa.saveAll(outboxes)
 

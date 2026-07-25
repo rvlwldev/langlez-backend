@@ -1,23 +1,23 @@
 package com.langlez.echo.infrastructure.outbox
 
-import jakarta.persistence.Column
+import com.langlez.mysql.outbox.AbstractOutBoxHistory
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
 import java.time.Instant
 
 @Entity
 @Table(name = "echo_event_outbox_history")
 class EchoOutBoxHistory(
-    @Id val id: Long,
-    val aggregateType: String,
-    val aggregateId: String,
-    val eventName: String,
-    @Column(columnDefinition = "TEXT") val payload: String,
-    val attempts: Int,
-    val createdAt: Instant,
-    val processedAt: Instant = Instant.now(),
-) {
+    id: Long,
+    aggregateType: String,
+    aggregateId: String,
+    eventName: String,
+    payload: String,
+    attempts: Int,
+    createdAt: Instant,
+    processedAt: Instant = Instant.now(),
+) : AbstractOutBoxHistory(id, aggregateType, aggregateId, eventName, payload, attempts, createdAt, processedAt) {
+
     constructor(o: EchoOutBox) : this(
         id = o.id,
         aggregateType = o.aggregateType,

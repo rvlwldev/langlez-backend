@@ -16,6 +16,11 @@ class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
+
+    // OutBoxRepository가 제네릭 인터페이스라 relaxed mock이 반환 타입을 상위 타입(AbstractOutBox)으로
+    // 추론해 ClassCastException이 난다. 구체 타입을 명시적으로 stub 해 준다.
+    every { outbox.save(any(), any(), any(), any()) } returns
+        com.langlez.member.infrastructure.outbox.MemberOutBox("MEMBER", "0", "stub", "{}")
     val memberPresenceTracker = mockk<com.langlez.core.MemberPresenceTracker>()
     val service = MemberService(repo, outbox, memberPresenceTracker)
 

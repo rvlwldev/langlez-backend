@@ -1,13 +1,5 @@
 package com.langlez.chat.infrastructure.outbox
 
-interface ChatOutBoxRepository {
+import com.langlez.mysql.outbox.OutBoxRepository
 
-    fun save(aggregateType: String, aggregateId: String, eventName: String, payload: Any?): ChatOutBox
-
-    fun findToDispatch(limit: Int): List<ChatOutBox>
-    fun findAllCompleted(): List<ChatOutBox>
-
-    fun saveAll(outboxes: List<ChatOutBox>): List<ChatOutBox>
-    fun deleteAll(outboxes: List<ChatOutBox>)
-    fun saveAllHistory(history: List<ChatOutBoxHistory>)
-}
+interface ChatOutBoxRepository : OutBoxRepository<ChatOutBox, ChatOutBoxHistory>

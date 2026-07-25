@@ -3,6 +3,7 @@ package com.langlez.member.infrastructure.outbox
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.member.infrastructure.outbox.jpa.MemberOutBoxHistoryJpaRepository
 import com.langlez.member.infrastructure.outbox.jpa.MemberOutBoxJpaRepository
+import com.langlez.mysql.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
@@ -21,12 +22,15 @@ class MemberOutBoxRepositoryImpl(
 
     override fun findToDispatch(limit: Int): List<MemberOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
-            listOf(MemberOutBox.Status.READY, MemberOutBox.Status.PROCESSING),
+            listOf(OutBoxStatus.READY, OutBoxStatus.PROCESSING),
             PageRequest.of(0, limit),
         )
 
-    override fun findAllCompleted(): List<MemberOutBox> =
-        jpa.findAllByStatus(MemberOutBox.Status.COMPLETE)
+    override fun findCompletedOrFailed(limit: Int): List<MemberOutBox> =
+        jpa.findAllByStatusIn(
+            listOf(OutBoxStatus.COMPLETE, OutBoxStatus.FAILED),
+            PageRequest.of(0, limit),
+        )
 
     override fun saveAll(outboxes: List<MemberOutBox>): List<MemberOutBox> = jpa.saveAll(outboxes)
 

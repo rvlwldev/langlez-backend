@@ -1,15 +1,5 @@
 package com.langlez.relationship.infrastructure.outbox
 
-interface RelationshipOutBoxRepository {
+import com.langlez.mysql.outbox.OutBoxRepository
 
-    fun save(aggregateType: String, aggregateId: String, eventName: String, payload: Any?): RelationshipOutBox
-    fun save(outbox: RelationshipOutBox): RelationshipOutBox
-
-    fun findToDispatch(limit: Int): List<RelationshipOutBox>
-    fun findAllCompleted(): List<RelationshipOutBox>
-    fun findCompleted(limit: Int): List<RelationshipOutBox>
-
-    fun saveAll(outboxes: List<RelationshipOutBox>): List<RelationshipOutBox>
-    fun deleteAll(outboxes: List<RelationshipOutBox>)
-    fun saveAllHistory(history: List<RelationshipOutBoxHistory>)
-}
+interface RelationshipOutBoxRepository : OutBoxRepository<RelationshipOutBox, RelationshipOutBoxHistory>

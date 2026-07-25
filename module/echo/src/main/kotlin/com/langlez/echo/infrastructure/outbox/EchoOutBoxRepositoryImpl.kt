@@ -3,6 +3,7 @@ package com.langlez.echo.infrastructure.outbox
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.echo.infrastructure.outbox.jpa.EchoOutBoxHistoryJpaRepository
 import com.langlez.echo.infrastructure.outbox.jpa.EchoOutBoxJpaRepository
+import com.langlez.mysql.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
@@ -21,17 +22,14 @@ class EchoOutBoxRepositoryImpl(
 
     override fun findToDispatch(limit: Int): List<EchoOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
-            listOf(EchoOutBox.Status.READY, EchoOutBox.Status.PROCESSING),
+            listOf(OutBoxStatus.READY, OutBoxStatus.PROCESSING),
             PageRequest.of(0, limit),
         )
 
-    override fun findAllCompleted(): List<EchoOutBox> =
-        jpa.findAllByStatus(EchoOutBox.Status.COMPLETE)
-
     override fun findCompletedOrFailed(limit: Int): List<EchoOutBox> =
         jpa.findAllByStatusIn(
-            listOf(EchoOutBox.Status.COMPLETE, EchoOutBox.Status.FAILED),
-            PageRequest.of(0, limit)
+            listOf(OutBoxStatus.COMPLETE, OutBoxStatus.FAILED),
+            PageRequest.of(0, limit),
         )
 
     override fun saveAll(outboxes: List<EchoOutBox>): List<EchoOutBox> = jpa.saveAll(outboxes)

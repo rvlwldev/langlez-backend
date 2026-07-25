@@ -1,8 +1,10 @@
 package com.langlez.member.application
 
 import com.langlez.core.MessageQueue
+import com.langlez.member.infrastructure.outbox.MemberOutBox
 import com.langlez.member.infrastructure.outbox.MemberOutBoxHistory
 import com.langlez.member.infrastructure.outbox.MemberOutBoxRepository
+import com.langlez.mysql.outbox.AbstractOutBoxScheduler
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -10,32 +12,18 @@ import org.springframework.transaction.support.TransactionTemplate
 
 @Component
 internal class MemberOutBoxScheduler(
-    private val repo: MemberOutBoxRepository,
-    private val messageQueue: MessageQueue,
-    private val transaction: TransactionTemplate,
-) {
+    repo: MemberOutBoxRepository,
+    messageQueue: MessageQueue,
+    transaction: TransactionTemplate,
+) : AbstractOutBoxScheduler<MemberOutBox, MemberOutBoxHistory>(repo, messageQueue, transaction) {
+
+    override fun toHistory(outbox: MemberOutBox) = MemberOutBoxHistory(outbox)
+
     @Scheduled(fixedDelay = 5000)
-    @DistributedLock(prefix = "lock:member-outbox", ttl = 3, wait = 0, retries = 0, throwOnFailure = false)
-    fun dispatchEvents() {
-        val events = repo.findToDispatch(500)
-        if (events.isEmpty()) return
-
-        events.forEach { event ->
-            event.dispatch()
-            runCatching {
-                messageQueue.publish("topic-${event.aggregateType.lowercase()}", event.aggregateId, event.payload)
-            }.onSuccess { event.complete() }.onFailure { event.fail() }
-        }
-
-        transaction.execute { repo.saveAll(events) }
-    }
+    @DistributedLock(prefix = "lock:member-outbox", ttl = 30, wait = 0, retries = 0, throwOnFailure = false)
+    override fun dispatchEvents() = super.dispatchEvents()
 
     @Scheduled(cron = "0 0 0 * * *")
     @DistributedLock(prefix = "lock:member-outbox-archive")
-    fun archiveEvents() {
-        transaction.execute {
-            repo.findAllCompleted().also { repo.deleteAll(it) }
-                .map { MemberOutBoxHistory(it) }.also { repo.saveAllHistory(it) }
-        }
-    }
+    override fun archiveEvents() = super.archiveEvents()
 }
