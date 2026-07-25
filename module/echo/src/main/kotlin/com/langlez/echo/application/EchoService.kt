@@ -9,6 +9,7 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.RelationshipRepository
 import org.redisson.api.RedissonClient
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -27,6 +28,7 @@ class EchoService(
     private val commentRepository: CommentRepository,
     private val echoOutBoxRepository: EchoOutBoxRepository,
     private val redissonClient: RedissonClient,
+    private val writer: EchoWriter,
 ) {
 
     fun createPost(
@@ -135,11 +137,13 @@ class EchoService(
         if (postRepository.findLike(memberId, postId) != null) return
 
         try {
-            postRepository.saveLike(PostLike(postId = postId, memberId = memberId))
-            postRepository.incrementLikeCount(postId)
-        } catch (e: Exception) {
-            // UNQ_POST_LIKE violation absorbed for concurrent requests
+            writer.saveLike(postId, memberId)
+        } catch (e: DataIntegrityViolationException) {
+            // 동시 요청으로 이미 좋아요한 경우 — 멱등하게 무시. REQUIRES_NEW로 격리돼 있어
+            // 이 트랜잭션은 rollback-only로 오염되지 않는다.
+            return
         }
+        postRepository.incrementLikeCount(postId)
     }
 
     fun unlikePost(memberId: Long, postId: Long) {
@@ -183,6 +187,9 @@ class EchoService(
         if (!bucket.trySet("1", 30, TimeUnit.DAYS)) {
             throw LanglezException(400, "echo.report.already-reported")
         }
+        // DB 트랜잭션이 롤백되면 신고가 실제로 반영되지 않았으므로, 이 키도 함께 되돌려
+        // 30일간 재신고가 막히는 일이 없게 한다.
+        runAfterRollback { bucket.delete() }
 
         postRepository.incrementReportCount(postId)
         postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
@@ -329,6 +336,18 @@ class EchoService(
             })
         } else {
             action()
+        }
+    }
+
+    private fun runAfterRollback(action: () -> Unit) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCompletion(status: Int) {
+                    if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                        action()
+                    }
+                }
+            })
         }
     }
 

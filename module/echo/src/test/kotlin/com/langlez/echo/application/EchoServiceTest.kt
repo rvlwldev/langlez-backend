@@ -28,6 +28,7 @@ class EchoServiceTest : BehaviorSpec({
     val commentRepository = mockk<CommentRepository>()
     val echoOutBoxRepository = mockk<com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository>(relaxed = true)
     val redissonClient = mockk<RedissonClient>()
+    val writer = mockk<EchoWriter>()
 
     // OutBoxRepository가 제네릭 인터페이스라 relaxed mock이 반환 타입을 상위 타입(AbstractOutBox)으로
     // 추론해 ClassCastException이 난다. 구체 타입을 명시적으로 stub 해 준다.
@@ -43,6 +44,7 @@ class EchoServiceTest : BehaviorSpec({
         commentRepository,
         echoOutBoxRepository,
         redissonClient,
+        writer,
     )
 
     Given("게시물 작성 시") {
@@ -157,12 +159,12 @@ class EchoServiceTest : BehaviorSpec({
 
         When("처음 좋아요를 누르면") {
             every { postRepository.findLike(memberId, postId) } returns null
-            every { postRepository.saveLike(any()) } answers { firstArg() }
+            every { writer.saveLike(postId, memberId) } returns PostLike(postId = postId, memberId = memberId)
 
             service.likePost(memberId, postId)
 
             Then("좋아요 정보가 저장되고 카운트가 증가해야 한다") {
-                verify(exactly = 1) { postRepository.saveLike(any()) }
+                verify(exactly = 1) { writer.saveLike(postId, memberId) }
                 verify(exactly = 1) { postRepository.incrementLikeCount(postId) }
             }
         }
@@ -173,7 +175,7 @@ class EchoServiceTest : BehaviorSpec({
             service.likePost(memberId, postId)
 
             Then("추가 저장 없이 무시된다") {
-                verify(exactly = 1) { postRepository.saveLike(any()) }
+                verify(exactly = 1) { writer.saveLike(postId, memberId) }
                 verify(exactly = 1) { postRepository.incrementLikeCount(postId) }
             }
         }

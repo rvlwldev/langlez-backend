@@ -19,10 +19,11 @@ class RelationshipServiceTest : BehaviorSpec({
     val repo = mockk<RelationshipRepository>()
     val memberRepo = mockk<MemberRepository>()
     val outbox = mockk<RelationshipOutBoxRepository>(relaxed = true)
+    val writer = mockk<RelationshipWriter>()
 
-    val service = RelationshipService(repo, memberRepo, outbox)
+    val service = RelationshipService(repo, memberRepo, outbox, writer)
 
-    afterEach { clearMocks(repo, memberRepo, outbox, answers = false) }
+    afterEach { clearMocks(repo, memberRepo, outbox, writer, answers = false) }
 
     fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
         id = id,
@@ -42,12 +43,12 @@ class RelationshipServiceTest : BehaviorSpec({
             every { repo.findBlock(followingId, followerId) } returns null
             every { repo.findBlock(followerId, followingId) } returns null
             every { repo.findFollow(followerId, followingId) } returns null
-            every { repo.saveFollow(any()) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
+            every { writer.saveFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
             every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("팔로우가 저장되고 이벤트가 발행된다") {
                 service.follow(followerId, followingId)
-                verify { repo.saveFollow(match { it.followerId == followerId && it.followedId == followingId }) }
+                verify { writer.saveFollow(followerId, followingId) }
                 verify {
                     outbox.save(
                         "RELATIONSHIP", "10", "MEMBER_FOLLOW",
@@ -64,7 +65,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
             Then("아무 동작 없이 정상 반환한다 (멱등성)") {
                 shouldNotThrowAny { service.follow(followerId, followingId) }
-                verify(exactly = 0) { repo.saveFollow(any()) }
+                verify(exactly = 0) { writer.saveFollow(any(), any()) }
             }
         }
 
@@ -139,14 +140,14 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("정상적으로 차단하면") {
             every { repo.findBlock(blockerId, blockedId) } returns null
-            every { repo.saveBlock(any()) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
+            every { writer.saveBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
             every { repo.deleteFollow(blockerId, blockedId) } just runs
             every { repo.deleteFollow(blockedId, blockerId) } just runs
             every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
 
             Then("차단 저장, 양방향 팔로우 삭제, 이벤트 발행이 모두 수행된다") {
                 service.block(blockerId, blockedId)
-                verify { repo.saveBlock(match { it.blockerId == blockerId && it.blockedId == blockedId }) }
+                verify { writer.saveBlock(blockerId, blockedId) }
                 verify { repo.deleteFollow(blockerId, blockedId) }
                 verify { repo.deleteFollow(blockedId, blockerId) }
                 verify {
@@ -173,7 +174,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
             Then("아무 동작 없이 정상 반환한다 (멱등성)") {
                 shouldNotThrowAny { service.block(blockerId, blockedId) }
-                verify(exactly = 0) { repo.saveBlock(any()) }
+                verify(exactly = 0) { writer.saveBlock(any(), any()) }
             }
         }
     }

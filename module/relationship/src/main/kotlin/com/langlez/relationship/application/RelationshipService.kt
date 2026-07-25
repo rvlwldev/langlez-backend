@@ -2,8 +2,6 @@ package com.langlez.relationship.application
 
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.MemberRepository
-import com.langlez.relationship.domain.Block
-import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
 import org.springframework.dao.DataIntegrityViolationException
@@ -16,6 +14,7 @@ class RelationshipService(
     private val repo: RelationshipRepository,
     private val memberRepo: MemberRepository,
     private val outbox: RelationshipOutBoxRepository,
+    private val writer: RelationshipWriter,
 ) {
 
     fun follow(followerId: Long, followingId: Long) {
@@ -28,9 +27,10 @@ class RelationshipService(
         if (repo.findFollow(followerId, followingId) != null) return
 
         val follow = try {
-            repo.saveFollow(Follow(followerId, followingId))
+            writer.saveFollow(followerId, followingId)
         } catch (e: DataIntegrityViolationException) {
-            // 동시 요청으로 이미 팔로우된 경우 — 멱등하게 무시
+            // 동시 요청으로 이미 팔로우된 경우 — 멱등하게 무시. REQUIRES_NEW로 격리돼 있어
+            // 이 트랜잭션은 rollback-only로 오염되지 않는다.
             return
         }
         val event = RelationshipEvent.Follow(followerId, followingId)
@@ -52,7 +52,7 @@ class RelationshipService(
         if (repo.findBlock(blockerId, blockedId) != null) return
 
         val block = try {
-            repo.saveBlock(Block(blockerId, blockedId))
+            writer.saveBlock(blockerId, blockedId)
         } catch (e: DataIntegrityViolationException) {
             // 동시 요청으로 이미 차단된 경우 — 멱등하게 무시
             return
