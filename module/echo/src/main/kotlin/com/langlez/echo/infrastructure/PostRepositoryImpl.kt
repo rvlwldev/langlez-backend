@@ -1,5 +1,6 @@
 package com.langlez.echo.infrastructure
 
+import com.langlez.core.LanglezException
 import com.langlez.echo.domain.*
 import com.langlez.echo.infrastructure.jpa.*
 import org.springframework.data.domain.PageRequest
@@ -25,7 +26,9 @@ class PostRepositoryImpl(
     }
 
     override fun findRecommendedFeed(excludeAuthorIds: List<Long>, cursor: Long?, size: Int): List<Post> {
-        val cursorLikeCount = cursor?.let { postJpa.findByIdOrNull(it)?.likeCount }
+        val cursorLikeCount = cursor?.let {
+            postJpa.findByIdOrNull(it)?.likeCount ?: throw LanglezException(400, "echo.feed.invalid-cursor")
+        }
         val pageable = PageRequest.of(0, size)
         return if (excludeAuthorIds.isEmpty()) {
             postJpa.findRecommendedFeedWithoutExcludes(cursor, cursorLikeCount, pageable)

@@ -178,8 +178,9 @@ class EchoService(
             throw LanglezException(400, "echo.report.cannot-report-own-post")
         }
 
+        // 체크 후 별도 저장이면 동시 요청이 둘 다 통과할 수 있으므로, trySet 자체를 원자적 게이트로 사용한다.
         val bucket = redissonClient.getBucket<String>("echo:report:$postId:$reporterId")
-        if (bucket.isExists) {
+        if (!bucket.trySet("1", 30, TimeUnit.DAYS)) {
             throw LanglezException(400, "echo.report.already-reported")
         }
 
@@ -197,10 +198,6 @@ class EchoService(
                 reason = reason,
             ),
         )
-
-        runAfterCommit {
-            bucket.trySet("1", 30, TimeUnit.DAYS)
-        }
     }
 
     @Transactional(readOnly = true)

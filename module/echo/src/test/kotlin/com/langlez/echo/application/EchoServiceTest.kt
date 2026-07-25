@@ -331,7 +331,7 @@ class EchoServiceTest : BehaviorSpec({
         }
 
         When("동일 유저가 이미 신고한 게시물을 다시 신고하면") {
-            every { bucket.isExists } returns true
+            every { bucket.trySet("1", any<Long>(), any<TimeUnit>()) } returns false
 
             Then("400 예외가 발생해야 한다") {
                 val ex = shouldThrow<LanglezException> {
