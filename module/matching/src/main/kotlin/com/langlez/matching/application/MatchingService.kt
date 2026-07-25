@@ -72,10 +72,11 @@ class MatchingService(
         val myFilter = myMetaMap[memberId]?.filter ?: queueRepository.findFilter(memberId)
 
         val candidateMetaMap = queueRepository.findMetaInBatch(candidateIds)
+        val candidateProfileMap = profileRepository.findProfiles(candidateIds).associateBy { it.id }
 
         val ranked = candidateIds
             .mapNotNull { candidateId ->
-                val candidateProfile = profileRepository.findProfile(candidateId) ?: return@mapNotNull null
+                val candidateProfile = candidateProfileMap[candidateId] ?: return@mapNotNull null
                 val candidateFilter = candidateMetaMap[candidateId]?.filter ?: queueRepository.findFilter(candidateId)
                 if (matchesFilter(myFilter, candidateProfile) && matchesFilter(candidateFilter, myProfile)) {
                     candidateId to candidateProfile

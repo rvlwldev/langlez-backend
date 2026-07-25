@@ -17,8 +17,13 @@ class MatchingScheduler(
     @Scheduled(fixedDelay = 5000)
     @DistributedLock(prefix = "lock:matching-scheduler", ttl = 10, wait = 0, retries = 0, throwOnFailure = false)
     fun rematchWaitingMembers() {
-        queueRepository.allMembers().forEach { memberId ->
+        // 대기열이 커져도 한 사이클이 무한정 길어지지 않도록 상한을 두고, 특정 대기자가 계속 밀리지 않도록 매 사이클 무작위로 섞는다.
+        queueRepository.allMembers().shuffled().take(BATCH_SIZE).forEach { memberId ->
             matchingService.attemptMatch(memberId)
         }
+    }
+
+    companion object {
+        private const val BATCH_SIZE = 200
     }
 }

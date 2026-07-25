@@ -174,7 +174,7 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
             every { relationshipRepository.findBlock(memberId, 2L) } returns Block(memberId, 2L)
             every { relationshipRepository.findBlock(2L, memberId) } returns null
-            every { profileRepository.findProfile(2L) } returns profile(2L, Profile.LanguageLevel.INTERMEDIATE)
+            every { profileRepository.findProfiles(listOf(2L)) } returns listOf(profile(2L, Profile.LanguageLevel.INTERMEDIATE))
             every { queueRepository.findFilter(memberId) } returns null
             every { queueRepository.findFilter(2L) } returns null
 
@@ -188,8 +188,8 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
             every { relationshipRepository.findBlock(memberId, 2L) } returns null
             every { relationshipRepository.findBlock(2L, memberId) } returns null
-            every { profileRepository.findProfile(2L) } returns
-                profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie"))
+            every { profileRepository.findProfiles(listOf(2L)) } returns
+                listOf(profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie")))
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.score(2L) } returns 1000.0
             every { queueRepository.findFilter(memberId) } returns null
@@ -228,7 +228,7 @@ class MatchingServiceTest : BehaviorSpec({
 
             val candidateProfile = profile(2L, Profile.LanguageLevel.INTERMEDIATE)
             candidateProfile.birthDay = LocalDate.now().minusYears(20)
-            every { profileRepository.findProfile(2L) } returns candidateProfile
+            every { profileRepository.findProfiles(listOf(2L)) } returns listOf(candidateProfile)
 
             Then("매칭되지 않고 null을 반환한다") {
                 service.attemptMatch(memberId) shouldBe null
@@ -248,7 +248,7 @@ class MatchingServiceTest : BehaviorSpec({
 
             val candidateProfile = profile(2L, Profile.LanguageLevel.INTERMEDIATE)
             candidateProfile.birthDay = LocalDate.now().minusYears(30)
-            every { profileRepository.findProfile(2L) } returns candidateProfile
+            every { profileRepository.findProfiles(listOf(2L)) } returns listOf(candidateProfile)
             every { queueRepository.findFilter(2L) } returns MatchingQueueFilter(minAge = 25)
 
             Then("상대방 조건 불만족으로 매칭되지 않고 null을 반환한다") {
@@ -261,12 +261,11 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L, 3L)
             every { relationshipRepository.findBlock(any(), any()) } returns null
             every { queueRepository.findFilter(any()) } returns null
-            // candidate 2: 공통 관심사 1개("movie")
-            every { profileRepository.findProfile(2L) } returns
-                profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie"))
-            // candidate 3: 공통 관심사 2개("movie", "music") - 더 많음
-            every { profileRepository.findProfile(3L) } returns
-                profile(3L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie", "music"))
+            // candidate 2: 공통 관심사 1개("movie"), candidate 3: 공통 관심사 2개("movie", "music") - 더 많음
+            every { profileRepository.findProfiles(listOf(2L, 3L)) } returns listOf(
+                profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie")),
+                profile(3L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie", "music")),
+            )
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.findJoinedAt(3L) } returns now
             every { queueRepository.score(3L) } returns 1000.0
@@ -293,7 +292,7 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.candidatesInRange(800.0, 1200.0) } returns listOf(2L)
             every { relationshipRepository.findBlock(memberId, 2L) } returns null
             every { relationshipRepository.findBlock(2L, memberId) } returns null
-            every { profileRepository.findProfile(2L) } returns profile(2L)
+            every { profileRepository.findProfiles(listOf(2L)) } returns listOf(profile(2L))
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.score(2L) } returns 1000.0
             every { queueRepository.findFilter(memberId) } returns null
