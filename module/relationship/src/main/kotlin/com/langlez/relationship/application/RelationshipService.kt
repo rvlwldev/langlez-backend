@@ -6,6 +6,7 @@ import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -26,7 +27,12 @@ class RelationshipService(
             throw LanglezException(403, "social.follow.blocked")
         if (repo.findFollow(followerId, followingId) != null) return
 
-        val follow = repo.saveFollow(Follow(followerId, followingId))
+        val follow = try {
+            repo.saveFollow(Follow(followerId, followingId))
+        } catch (e: DataIntegrityViolationException) {
+            // 동시 요청으로 이미 팔로우된 경우 — 멱등하게 무시
+            return
+        }
         val event = RelationshipEvent.Follow(followerId, followingId)
         outbox.save("RELATIONSHIP", follow.id.toString(), "MEMBER_FOLLOW", event)
     }
@@ -45,7 +51,12 @@ class RelationshipService(
             throw LanglezException(400, "social.block.self")
         if (repo.findBlock(blockerId, blockedId) != null) return
 
-        val block = repo.saveBlock(Block(blockerId, blockedId))
+        val block = try {
+            repo.saveBlock(Block(blockerId, blockedId))
+        } catch (e: DataIntegrityViolationException) {
+            // 동시 요청으로 이미 차단된 경우 — 멱등하게 무시
+            return
+        }
 
         repo.deleteFollow(blockerId, blockedId)
         repo.deleteFollow(blockedId, blockerId)
@@ -62,6 +73,11 @@ class RelationshipService(
         val event = RelationshipEvent.Unblock(blockerId, blockedId)
         outbox.save("RELATIONSHIP", block.id.toString(), "MEMBER_UNBLOCK", event)
     }
+
+    @Transactional(readOnly = true)
+    fun resolveUsername(username: String): Long =
+        memberRepo.findByUsername(username)?.id
+            ?: throw LanglezException(404, "member.not-found")
 
     @Transactional(readOnly = true)
     fun getFollowings(followerId: Long, cursor: Long?, size: Int): RelationshipResult.CursorList {

@@ -1,8 +1,6 @@
 package com.langlez.relationship.api
 
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -15,26 +13,14 @@ import com.langlez.relationship.application.RelationshipResult
 class RelationshipControllerTest : BehaviorSpec({
 
     val service = mockk<RelationshipService>()
-    val memberRepo = mockk<MemberRepository>()
 
-    val controller = RelationshipController(service, memberRepo)
+    val controller = RelationshipController(service)
 
-    afterEach { clearMocks(service, memberRepo, answers = false) }
-
-    fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
-        id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = nickname,
-        provider = Member.Provider.GOOGLE,
-        providerId = "p$id",
-        providerDisplayName = nickname
-    )
+    afterEach { clearMocks(service, answers = false) }
 
     Given("팔로우 요청 시") {
         When("username으로 팔로우하면") {
-            val target = createMember(2L, "target_user")
-            every { memberRepo.findByUsername("target_user") } returns target
+            every { service.resolveUsername("target_user") } returns 2L
             every { service.follow(1L, 2L) } just runs
 
             Then("username이 ID로 변환되어 서비스가 호출된다") {
@@ -44,7 +30,7 @@ class RelationshipControllerTest : BehaviorSpec({
         }
 
         When("존재하지 않는 username이면") {
-            every { memberRepo.findByUsername("ghost") } returns null
+            every { service.resolveUsername("ghost") } throws LanglezException(404, "member.not-found")
 
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {

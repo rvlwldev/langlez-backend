@@ -1,7 +1,5 @@
 package com.langlez.relationship.api
 
-import com.langlez.core.LanglezException
-import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
 import com.langlez.security.web.MemberID
 import org.springframework.http.HttpStatus
@@ -11,7 +9,6 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/relationship")
 class RelationshipController(
     private val service: RelationshipService,
-    private val memberRepo: MemberRepository
 ) {
 
     @PostMapping("/follow/@{followingUsername}")
@@ -66,7 +63,5 @@ class RelationshipController(
     ): RelationshipResponse.CursorList =
         RelationshipResponse.CursorList.from(service.getBlocks(blockerId, cursor, size))
 
-    private fun resolveUsername(username: String): Long =
-        memberRepo.findByUsername(username)?.id
-            ?: throw LanglezException(404, "member.not-found")
+    private fun resolveUsername(username: String): Long = service.resolveUsername(username)
 }
