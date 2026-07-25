@@ -6,7 +6,6 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
     implementation(project(":common"))
     implementation(project(":module:member"))
     implementation(project(":module:chat"))

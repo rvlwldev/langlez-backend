@@ -7,7 +7,6 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
     implementation(project(":common"))
     implementation(project(":infra:mongo"))
     implementation(project(":infra:mysql"))

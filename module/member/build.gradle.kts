@@ -8,7 +8,6 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
     implementation(project(":common"))
     implementation(project(":infra:mysql"))
     implementation(project(":infra:redis"))
