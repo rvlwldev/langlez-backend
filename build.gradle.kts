@@ -28,8 +28,11 @@ allprojects {
 subprojects {
     plugins.withId("java") {
         configure<JavaPluginExtension> {
-            sourceCompatibility = JavaVersion.VERSION_21
-            targetCompatibility = JavaVersion.VERSION_21
+            // 머신에 JDK가 여러 개 설치돼 있어도 항상 21로 컴파일/실행하도록 고정한다.
+            // (미지정 시 Gradle 실행 JVM을 그대로 써서 KSP가 다른 JDK에서 깨진다)
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(21))
+            }
         }
     }
 

@@ -103,7 +103,6 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
     private fun createMember(role: Member.Role): Member {
         val member = Member(
             email = "wave-${System.nanoTime()}@example.com",
-            username = null,
             nickname = "Wave User",
             provider = Member.Provider.GOOGLE,
             providerId = "wave-${System.nanoTime()}",
