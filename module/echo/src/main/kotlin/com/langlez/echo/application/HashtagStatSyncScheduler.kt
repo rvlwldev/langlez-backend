@@ -24,23 +24,26 @@ class HashtagStatSyncScheduler(
         if (dailyCounts.isEmpty()) return
 
         transactionTemplate.execute {
-            dailyCounts.forEach { count ->
-                val stat = hashtagDailyStatRepository.findByHashtagAndStatDate(count.hashtag, today)
+            val hashtags = dailyCounts.map { it.hashtag }
+            val existingMap = hashtagDailyStatRepository.findAllByStatDateAndHashtagIn(today, hashtags)
+                .associateBy { it.hashtag }
+
+            val toSave = dailyCounts.map { count ->
+                val stat = existingMap[count.hashtag]
                 if (stat != null) {
                     stat.postCount = count.postCount
                     stat.searchCount = count.searchCount
-                    hashtagDailyStatRepository.save(stat)
+                    stat
                 } else {
-                    hashtagDailyStatRepository.save(
-                        HashtagDailyStat(
-                            hashtag = count.hashtag,
-                            statDate = today,
-                            postCount = count.postCount,
-                            searchCount = count.searchCount
-                        )
+                    HashtagDailyStat(
+                        hashtag = count.hashtag,
+                        statDate = today,
+                        postCount = count.postCount,
+                        searchCount = count.searchCount
                     )
                 }
             }
+            hashtagDailyStatRepository.saveAll(toSave)
         }
     }
 }

@@ -11,13 +11,16 @@ import com.langlez.relationship.domain.RelationshipRepository
 import org.redisson.api.RedissonClient
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 @Service
 @Transactional
 class EchoService(
     private val postRepository: PostRepository,
-    private val memberRepo: MemberRepository,
+    private val memberRepository: MemberRepository,
     private val relationshipRepository: RelationshipRepository,
     private val hashtagTrendRepository: HashtagTrendRepository,
     private val dailyRateLimiter: DailyRateLimiter,
@@ -31,18 +34,18 @@ class EchoService(
         content: String,
         media: List<Pair<String, PostMedia.Type>>
     ): EchoResponse.PostDto {
-        val author = memberRepo.findById(authorId) ?: throw LanglezException(404, "member.not-found")
-        if (author.role == Member.Role.MEMBER) {
-            if (!dailyRateLimiter.tryConsume("echo:post:$authorId", 1)) {
-                throw LanglezException(429, "echo.post.daily-limit-exceeded")
-            }
-        }
-
         if (content.length > Post.MAX_CONTENT_LENGTH) {
             throw LanglezException(400, "echo.content.too-long")
         }
         if (media.size > Post.MAX_MEDIA_COUNT) {
             throw LanglezException(400, "echo.media.too-many")
+        }
+
+        val author = memberRepository.findById(authorId) ?: throw LanglezException(404, "member.not-found")
+        if (author.role == Member.Role.MEMBER) {
+            if (!dailyRateLimiter.tryConsume("echo:post:$authorId", 1)) {
+                throw LanglezException(429, "echo.post.daily-limit-exceeded")
+            }
         }
 
         val post = postRepository.save(Post(authorId = authorId, content = content))
@@ -75,18 +78,45 @@ class EchoService(
         }
 
         val regex = Regex("#([가-힣a-zA-Z0-9_]+)")
-        val tags = regex.findAll(content)
+        val tagNames = regex.findAll(content)
             .map { it.groupValues[1] }
             .distinct()
-            .map { name ->
-                val tag = postRepository.findHashtagByName(name) ?: postRepository.saveHashtag(Hashtag(name = name))
-                hashtagTrendRepository.recordPostUsage(name)
-                tag
-            }
             .toList()
 
-        tags.forEach { tag ->
-            postRepository.savePostHashtag(PostHashtag(postId = post.id, hashtagId = tag.id))
+        if (tagNames.isNotEmpty()) {
+            val existingMap = postRepository.findHashtagsByNames(tagNames)
+                .associateBy { it.name }
+                .toMutableMap()
+            val missingNames = tagNames.filter { !existingMap.containsKey(it) }
+
+            if (missingNames.isNotEmpty()) {
+                val newHashtags = missingNames.map { Hashtag(name = it) }
+                try {
+                    val savedNew = postRepository.saveHashtagsAll(newHashtags)
+                    savedNew.forEach { existingMap[it.name] = it }
+                } catch (e: Exception) {
+                    missingNames.forEach { name ->
+                        if (!existingMap.containsKey(name)) {
+                            val tag = try {
+                                postRepository.saveHashtag(Hashtag(name = name))
+                            } catch (ex: Exception) {
+                                postRepository.findHashtagByName(name) ?: throw ex
+                            }
+                            existingMap[name] = tag
+                        }
+                    }
+                }
+            }
+
+            val tags = tagNames.mapNotNull { existingMap[it] }
+            val postHashtags = tags.map { PostHashtag(postId = post.id, hashtagId = it.id) }
+            postRepository.savePostHashtagsAll(postHashtags)
+
+            runAfterCommit {
+                tagNames.forEach { name ->
+                    hashtagTrendRepository.recordPostUsage(name)
+                }
+            }
         }
 
         return EchoResponse.PostDto(
@@ -101,16 +131,20 @@ class EchoService(
     }
 
     fun likePost(memberId: Long, postId: Long) {
-        val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
         if (postRepository.findLike(memberId, postId) != null) return
 
-        postRepository.saveLike(PostLike(postId = postId, memberId = memberId))
-        postRepository.incrementLikeCount(postId)
+        try {
+            postRepository.saveLike(PostLike(postId = postId, memberId = memberId))
+            postRepository.incrementLikeCount(postId)
+        } catch (e: Exception) {
+            // UNQ_POST_LIKE violation absorbed for concurrent requests
+        }
     }
 
     fun unlikePost(memberId: Long, postId: Long) {
-        val post = postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
-        val like = postRepository.findLike(memberId, postId) ?: return
+        postRepository.findById(postId) ?: throw LanglezException(404, "echo.post.not-found")
+        postRepository.findLike(memberId, postId) ?: return
 
         postRepository.deleteLike(memberId, postId)
         postRepository.decrementLikeCount(postId)
@@ -148,7 +182,6 @@ class EchoService(
         if (bucket.isExists) {
             throw LanglezException(400, "echo.report.already-reported")
         }
-        bucket.set("1", Duration.ofDays(30))
 
         postRepository.incrementReportCount(postId)
         postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD)
@@ -164,12 +197,16 @@ class EchoService(
                 reason = reason,
             ),
         )
+
+        runAfterCommit {
+            bucket.trySet("1", 30, TimeUnit.DAYS)
+        }
     }
 
     @Transactional(readOnly = true)
     fun getFollowingFeed(memberId: Long, cursor: Long?, size: Int): EchoResponse.CursorList {
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        val follows = relationshipRepository.findFollowings(memberId, null, 1000)
+        val follows = relationshipRepository.findFollowings(memberId, null, MAX_FOLLOWINGS_FETCH_SIZE)
         val followedIds = follows.map { it.followedId }
         val posts = postRepository.findFollowingFeed(followedIds, cursor, boundedSize)
         return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
@@ -178,7 +215,7 @@ class EchoService(
     @Transactional(readOnly = true)
     fun getRecommendedFeed(memberId: Long, cursor: Long?, size: Int): EchoResponse.CursorList {
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        val follows = relationshipRepository.findFollowings(memberId, null, 1000)
+        val follows = relationshipRepository.findFollowings(memberId, null, MAX_FOLLOWINGS_FETCH_SIZE)
         val excludeAuthorIds = listOf(memberId) + follows.map { it.followedId }
         val posts = postRepository.findRecommendedFeed(excludeAuthorIds, cursor, boundedSize)
         return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
@@ -188,23 +225,18 @@ class EchoService(
     fun searchByHashtag(tag: String, cursor: Long?, size: Int): EchoResponse.CursorList {
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
         val posts = postRepository.findByHashtag(tag, cursor, boundedSize)
-        hashtagTrendRepository.recordSearch(tag)
+        runAfterCommit {
+            hashtagTrendRepository.recordSearch(tag)
+        }
         return buildCursorList(posts, posts.size == boundedSize, posts.lastOrNull()?.id)
     }
 
     @Transactional(readOnly = true)
     fun getTrendingHashtags(days: Int, limit: Int): List<EchoResponse.TrendingHashtag> {
-        if (days != 1 && days != 7 && days != 30) {
-            throw LanglezException(400, "echo.trending.invalid-days")
-        }
+        val boundedDays = days.coerceIn(1, MAX_TRENDING_DAYS)
         val boundedLimit = limit.coerceIn(1, MAX_TRENDING_LIMIT)
-        val trending = hashtagTrendRepository.getTrending(days, boundedLimit)
+        val trending = hashtagTrendRepository.getTrending(boundedDays, boundedLimit)
         return trending.map { EchoResponse.TrendingHashtag(it.hashtag, it.count) }
-    }
-
-    companion object {
-        private const val MAX_PAGE_SIZE = 100
-        private const val MAX_TRENDING_LIMIT = 50
     }
 
     private fun buildCursorList(
@@ -213,14 +245,14 @@ class EchoService(
         lastEntityId: Long?
     ): EchoResponse.CursorList {
         val authorIds = posts.map { it.authorId }.distinct()
-        val members = memberRepo.findByIds(authorIds)
+        val memberMap = memberRepository.findByIds(authorIds).associateBy { it.id }
 
         val postIds = posts.map { it.id }
         val mediaList = postRepository.findMediaByPostIds(postIds)
         val mediaMap = mediaList.groupBy { it.postId }
 
         val postDtos = posts.map { post ->
-            val author = members.find { it.id == post.authorId }
+            val author = memberMap[post.authorId]
             val username = author?.username ?: "unknown"
             val nickname = author?.nickname ?: "Unknown"
 
@@ -251,7 +283,7 @@ class EchoService(
         if (content.length > Comment.MAX_CONTENT_LENGTH) {
             throw LanglezException(400, "echo.comment.too-long")
         }
-        val author = memberRepo.findById(authorId) ?: throw LanglezException(404, "member.not-found")
+        val author = memberRepository.findById(authorId) ?: throw LanglezException(404, "member.not-found")
         val comment = commentRepository.save(Comment(postId = postId, authorId = authorId, content = content))
         return EchoResponse.CommentDto(
             commentId = comment.id,
@@ -271,10 +303,10 @@ class EchoService(
         val boundedSize = size.coerceIn(1, 100)
         val comments = commentRepository.findByPost(postId, cursor, boundedSize)
         val authorIds = comments.map { it.authorId }.distinct()
-        val members = memberRepo.findByIds(authorIds)
+        val memberMap = memberRepository.findByIds(authorIds).associateBy { it.id }
 
         val commentDtos = comments.map { comment ->
-            val author = members.find { it.id == comment.authorId }
+            val author = memberMap[comment.authorId]
             val username = author?.username ?: "unknown"
             val nickname = author?.nickname ?: "Unknown"
 
@@ -289,5 +321,24 @@ class EchoService(
 
         val nextCursor = if (comments.size == boundedSize) comments.lastOrNull()?.id else null
         return EchoResponse.CommentCursorList(nextCursor, commentDtos)
+    }
+
+    private fun runAfterCommit(action: () -> Unit) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    action()
+                }
+            })
+        } else {
+            action()
+        }
+    }
+
+    companion object {
+        private const val MAX_PAGE_SIZE = 100
+        private const val MAX_TRENDING_LIMIT = 50
+        private const val MAX_TRENDING_DAYS = 31
+        private const val MAX_FOLLOWINGS_FETCH_SIZE = 1000
     }
 }

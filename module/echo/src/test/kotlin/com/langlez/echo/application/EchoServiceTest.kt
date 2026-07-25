@@ -16,6 +16,7 @@ import io.mockk.*
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 class EchoServiceTest : BehaviorSpec({
 
@@ -57,12 +58,13 @@ class EchoServiceTest : BehaviorSpec({
             Post(id = 100L, authorId = post.authorId, content = post.content, createdAt = post.createdAt)
         }
         every { postRepository.saveMediaAll(any()) } answers { firstArg() }
-        every { postRepository.findHashtagByName("날씨") } returns null
-        every { postRepository.findHashtagByName("주말") } returns null
+        every { postRepository.findHashtagsByNames(any()) } returns emptyList()
+        every { postRepository.saveHashtagsAll(any()) } answers { firstArg() }
         every { postRepository.saveHashtag(any()) } answers {
             val hashtag = firstArg<Hashtag>()
             Hashtag(id = 50L, name = hashtag.name, createdAt = hashtag.createdAt)
         }
+        every { postRepository.savePostHashtagsAll(any()) } answers { firstArg() }
         every { postRepository.savePostHashtag(any()) } answers { firstArg() }
 
         When("정상적인 본문과 미디어를 전달하면") {
@@ -79,8 +81,8 @@ class EchoServiceTest : BehaviorSpec({
             }
 
             Then("해쉬태그가 파싱되어 저장되고 사용이 기록되어야 한다") {
-                verify(exactly = 2) { postRepository.saveHashtag(any()) }
-                verify(exactly = 2) { postRepository.savePostHashtag(any()) }
+                verify(exactly = 1) { postRepository.saveHashtagsAll(any()) }
+                verify(exactly = 1) { postRepository.savePostHashtagsAll(any()) }
                 verify { hashtagTrendRepository.recordPostUsage("날씨") }
                 verify { hashtagTrendRepository.recordPostUsage("주말") }
             }
@@ -299,11 +301,12 @@ class EchoServiceTest : BehaviorSpec({
 
         When("정상 신고 시") {
             every { bucket.isExists } returns false
+            every { bucket.trySet("1", any<Long>(), any<TimeUnit>()) } returns true
 
             service.reportPost(1L, postId, "spam")
 
             Then("outbox 이벤트 저장 및 레디스 키 세팅이 수행되어야 한다") {
-                verify(exactly = 1) { bucket.set("1", any<Duration>()) }
+                verify(exactly = 1) { bucket.trySet("1", any<Long>(), any<TimeUnit>()) }
                 verify(exactly = 1) { postRepository.incrementReportCount(postId) }
                 verify(exactly = 1) { postRepository.blindIfThresholdReached(postId, Post.BLIND_THRESHOLD) }
                 verify(exactly = 1) {
@@ -418,13 +421,13 @@ class EchoServiceTest : BehaviorSpec({
         every { hashtagTrendRepository.getTrending(7, any()) } returns trendingHashtags
         every { hashtagTrendRepository.getTrending(7, 50) } returns trendingHashtags
 
-        When("days가 1, 7, 30이 아닌 값(예: 5)이면") {
-            Then("400 예외(echo.trending.invalid-days)가 발생해야 한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.getTrendingHashtags(5, 10)
-                }
-                ex.status shouldBe 400
-                ex.message shouldBe "echo.trending.invalid-days"
+        When("days가 범위 내 임의의 값(예: 5)이면") {
+            every { hashtagTrendRepository.getTrending(5, 10) } returns trendingHashtags
+            val result = service.getTrendingHashtags(5, 10)
+
+            Then("정상적으로 hashtagTrendRepository.getTrending이 5일 범위로 호출된다") {
+                result.size shouldBe 1
+                verify { hashtagTrendRepository.getTrending(5, 10) }
             }
         }
 

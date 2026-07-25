@@ -38,7 +38,7 @@ class HashtagTrendRepositoryImpl(
             val dateStr = today.minusDays(i.toLong()).format(DateTimeFormatter.ofPattern("yyyyMMdd"))
             val key = "echo:hashtag:post:$dateStr"
             val set = redisson.getScoredSortedSet<String>(key)
-            val entries = set.entryRange(0, -1)
+            val entries = if (limit > 0) set.entryRangeReversed(0, limit - 1) else emptyList()
             for (entry in entries) {
                 scores[entry.value] = (scores[entry.value] ?: 0.0) + entry.score
             }
@@ -56,8 +56,8 @@ class HashtagTrendRepositoryImpl(
         val postSet = redisson.getScoredSortedSet<String>(postKey)
         val searchSet = redisson.getScoredSortedSet<String>(searchKey)
 
-        val postEntries = postSet.entryRange(0, -1)
-        val searchEntries = searchSet.entryRange(0, -1)
+        val postEntries = postSet.entryRangeReversed(0, DEFAULT_SNAPSHOT_LIMIT - 1)
+        val searchEntries = searchSet.entryRangeReversed(0, DEFAULT_SNAPSHOT_LIMIT - 1)
 
         val postMap = postEntries.associate { it.value to it.score.toLong() }
         val searchMap = searchEntries.associate { it.value to it.score.toLong() }
@@ -74,5 +74,6 @@ class HashtagTrendRepositoryImpl(
 
     companion object {
         private const val MAX_TRENDING_DAYS = 31
+        private const val DEFAULT_SNAPSHOT_LIMIT = 1000
     }
 }
