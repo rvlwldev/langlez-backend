@@ -34,6 +34,7 @@ class ProfileRepositoryImpl(
 
     override fun findProfileByUsername(username: String): Profile? =
         dsl.selectFrom(profile)
+            .innerJoin(profile.member).fetchJoin()
             .where(profile.member.username.eq(username))
             .fetchOne()
 
@@ -44,29 +45,35 @@ class ProfileRepositoryImpl(
 
     override fun increaseVisitCount(visitorId: Long, username: String) {
         redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").add(visitorId)
+        redisson.getSet<String>(DIRTY_USERNAMES_KEY).add(username)
     }
 
     override fun getVisitCountDelta(username: String): Long =
         redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").count()
 
     override fun beginVisitCountFlush(): Map<String, Long> {
-        val keys = redisson.keys.getKeysByPattern("$HLL_PREFIX*").toList()
-        if (keys.isEmpty()) return emptyMap()
+        val usernames = redisson.getSet<String>(DIRTY_USERNAMES_KEY).readAll()
+        if (usernames.isEmpty()) return emptyMap()
 
         val result = mutableMapOf<String, Long>()
-        for (key in keys) {
-            val flushingKey = if (key.endsWith(FLUSHING_SUFFIX)) key else "$key$FLUSHING_SUFFIX"
-            if (flushingKey != key) {
-                try {
-                    // 원자적 RENAME: 새 PFADD는 원래 키 이름으로 다시 생성되므로 유실되지 않는다
-                    redisson.getBucket<Any>(key).rename(flushingKey)
-                } catch (e: Exception) {
-                    // RENAME 대상 키가 존재하지 않는 경우(레이스 컨디션 등) 예외 없이 건너뛴다
+        for (username in usernames) {
+            val key = "$HLL_PREFIX$username"
+            val flushingKey = "$key$FLUSHING_SUFFIX"
+            if (redisson.getBucket<Any>(key).isExists) {
+                if (redisson.getBucket<Any>(flushingKey).isExists) {
+                    redisson.getHyperLogLog<Long>(flushingKey).mergeWith(key)
+                    redisson.getBucket<Any>(key).delete()
+                } else {
+                    try {
+                        // 원자적 RENAME: 새 PFADD는 원래 키 이름으로 다시 생성되므로 유실되지 않는다
+                        redisson.getBucket<Any>(key).rename(flushingKey)
+                    } catch (e: Exception) {
+                        // RENAME 대상 키가 존재하지 않는 경우 건너띤다
+                    }
                 }
             }
             val count = redisson.getHyperLogLog<Long>(flushingKey).count()
             if (count > 0) {
-                val username = flushingKey.removePrefix(HLL_PREFIX).removeSuffix(FLUSHING_SUFFIX)
                 result[username] = count
             }
         }
@@ -74,9 +81,15 @@ class ProfileRepositoryImpl(
     }
 
     override fun commitVisitCountFlush(usernames: Collection<String>) {
+        if (usernames.isEmpty()) return
         val flushingKeys = usernames.map { "$HLL_PREFIX$it$FLUSHING_SUFFIX" }
-        if (flushingKeys.isNotEmpty()) {
-            redisson.keys.delete(*flushingKeys.toTypedArray())
+        redisson.keys.delete(*flushingKeys.toTypedArray())
+        val dirtySet = redisson.getSet<String>(DIRTY_USERNAMES_KEY)
+        for (username in usernames) {
+            val key = "$HLL_PREFIX$username"
+            if (!redisson.getBucket<Any>(key).isExists) {
+                dirtySet.remove(username)
+            }
         }
     }
 
@@ -90,5 +103,6 @@ class ProfileRepositoryImpl(
     companion object {
         private const val HLL_PREFIX = "profile:visit:"
         private const val FLUSHING_SUFFIX = ":flushing"
+        private const val DIRTY_USERNAMES_KEY = "profile:visit:dirty_usernames"
     }
 }

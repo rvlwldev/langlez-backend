@@ -19,12 +19,11 @@ class ProfileServiceTest : BehaviorSpec({
 
     val repo = mockk<ProfileRepository>()
     val storage = mockk<FileStorage>()
-    val transaction = mockk<TransactionTemplate>()
     val profileImageLocker = mockk<ProfileImageLocker>()
 
-    val service = ProfileService(repo, storage, transaction, profileImageLocker)
+    val service = ProfileService(repo, storage, profileImageLocker)
 
-    afterEach { clearMocks(repo, storage, transaction, profileImageLocker, answers = false) }
+    afterEach { clearMocks(repo, storage, profileImageLocker, answers = false) }
 
     fun member(id: Long) = Member(
         id = id,
@@ -40,13 +39,6 @@ class ProfileServiceTest : BehaviorSpec({
 
     fun image(memberId: Long, url: String, represent: Boolean = false, sequence: Long = 1) =
         ProfileImage(memberId, url, sequence, 0L, represent)
-
-    // TransactionTemplate.execute()가 람다를 바로 실행하도록 설정
-    fun setupTransaction() {
-        every { transaction.execute(any<TransactionCallback<ProfileImage>>()) } answers {
-            firstArg<TransactionCallback<ProfileImage>>().doInTransaction(mockk())
-        }
-    }
 
     Given("프로필 이미지 업로드 URL 발급 시") {
 
@@ -89,7 +81,6 @@ class ProfileServiceTest : BehaviorSpec({
     Given("대표 사진 업로드 확정 시") {
 
         When("기존 대표 사진이 없을 때 새 URL로 확정하면") {
-            setupTransaction()
             val newImage = image(1L, "https://cdn/profiles/new.jpg", represent = true)
             every { repo.findRepresentImage(1L) } returns null
             every { repo.countImages(1L) } returns 0L
@@ -104,7 +95,6 @@ class ProfileServiceTest : BehaviorSpec({
         }
 
         When("기존 대표 사진이 있을 때 새 URL로 확정하면") {
-            setupTransaction()
             val oldRepresent = image(1L, "https://cdn/profiles/old.jpg", represent = true)
             val newImage = image(1L, "https://cdn/profiles/new.jpg", represent = true, sequence = 2)
             every { repo.findRepresentImage(1L) } returns oldRepresent
@@ -140,7 +130,6 @@ class ProfileServiceTest : BehaviorSpec({
     Given("대표 사진 변경 시") {
 
         When("등록된 사진 URL로 대표 변경 요청하면") {
-            setupTransaction()
             val target = image(1L, "https://cdn/profiles/existing.jpg", represent = false, sequence = 2)
             val oldRepresent = image(1L, "https://cdn/profiles/current.jpg", represent = true, sequence = 1)
             val newRepresent = image(1L, "https://cdn/profiles/existing.jpg", represent = true, sequence = 3)
