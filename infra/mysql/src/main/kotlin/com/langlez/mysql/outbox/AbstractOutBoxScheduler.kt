@@ -39,7 +39,13 @@ abstract class AbstractOutBoxScheduler<T : AbstractOutBox, H : AbstractOutBoxHis
         if (events.isEmpty()) return
 
         events.forEach { event ->
-            event.dispatch()
+            try {
+                event.dispatch()
+            } catch (e: IllegalStateException) {
+                // 잘못된 상태 전이(poison row)로 하나가 실패해도 배치 전체가 멈추지 않게 건너뛴다.
+                log.error("Outbox event in unexpected state, skipping. id={}, status={}", event.id, event.status, e)
+                return@forEach
+            }
             runCatching {
                 messageQueue.publish("topic-${event.aggregateType.lowercase()}", event.aggregateId, event.payload)
             }.onSuccess {
