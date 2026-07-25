@@ -1,5 +1,6 @@
 package com.langlez.matching.api
 
+import com.langlez.core.LanglezException
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.profile.domain.Profile
 
@@ -21,13 +22,19 @@ class MatchingRequest {
         val maxAge: Int? = null,
         val languageLevel: Profile.LanguageLevel? = null,
     ) {
-        fun isPresent(): Boolean = minAge != null || maxAge != null || languageLevel != null
-
-        fun toDomain(): MatchingQueueFilter = MatchingQueueFilter(
-            minAge = minAge,
-            maxAge = maxAge,
-            languageLevel = languageLevel,
-        )
+        fun toDomain(): MatchingQueueFilter {
+            if (minAge != null && minAge < 0) throw LanglezException(400, "matching.filter.invalid-age")
+            if (maxAge != null && maxAge < 0) throw LanglezException(400, "matching.filter.invalid-age")
+            if (minAge != null && maxAge != null && minAge > maxAge) {
+                throw LanglezException(400, "matching.filter.invalid-age-range")
+            }
+            return MatchingQueueFilter(
+                minAge = minAge,
+                maxAge = maxAge,
+                languageLevel = languageLevel,
+            )
+        }
     }
 }
+
 

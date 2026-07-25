@@ -35,5 +35,16 @@ interface MatchingQueueRepository {
     fun findFilter(memberId: Long): MatchingQueueFilter?
 
     fun removeFilter(memberId: Long)
+
+    /** 배치로 여러 멤버의 metadata(joinedAt + filter)를 일괄 조회한다. */
+    fun findMetaInBatch(memberIds: List<Long>): Map<Long, QueueMemberMeta> =
+        memberIds.mapNotNull { id ->
+            val joinedAt = findJoinedAt(id)
+            val filter = findFilter(id)
+            if (joinedAt != null || filter != null) {
+                id to QueueMemberMeta(joinedAt = joinedAt ?: Instant.now(), filter = filter)
+            } else null
+        }.toMap()
 }
+
 
