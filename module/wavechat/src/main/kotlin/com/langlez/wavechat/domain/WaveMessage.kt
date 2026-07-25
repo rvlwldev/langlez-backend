@@ -12,7 +12,7 @@ import java.time.Instant
 @Entity
 @Table(
     name = "wave_messages",
-    indexes = [Index(name = "IDX_WAVE_MESSAGE_ROOM", columnList = "wave_room_id, created_at, id")]
+    indexes = [Index(name = "IDX_WAVE_MESSAGE_ROOM", columnList = "wave_room_id, id")]
 )
 class WaveMessage(
     @Column(name = "wave_room_id", nullable = false) val waveRoomId: Long,
