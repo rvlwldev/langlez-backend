@@ -36,7 +36,7 @@ class EchoOutBox(
     }
 
     fun complete() {
-        check(status == Status.PROCESSING || status == Status.FAILED) { "잘못된 이벤트 '완료' 시도" }
+        check(status == Status.PROCESSING) { "잘못된 이벤트 '완료' 시도" }
         status = Status.COMPLETE
     }
 

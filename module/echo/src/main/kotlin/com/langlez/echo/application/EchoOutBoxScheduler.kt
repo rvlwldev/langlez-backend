@@ -15,9 +15,9 @@ internal class EchoOutBoxScheduler(
     private val transaction: TransactionTemplate,
 ) {
     @Scheduled(fixedDelay = 5000)
-    @DistributedLock(prefix = "lock:echo-outbox", ttl = 3, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:echo-outbox", ttl = 30, wait = 0, retries = 0, throwOnFailure = false)
     fun dispatchEvents() {
-        val events = repo.findToDispatch(500)
+        val events = repo.findToDispatch(100)
         if (events.isEmpty()) return
 
         events.forEach { event ->
@@ -33,9 +33,16 @@ internal class EchoOutBoxScheduler(
     @Scheduled(cron = "0 0 0 * * *")
     @DistributedLock(prefix = "lock:echo-outbox-archive")
     fun archiveEvents() {
-        transaction.execute {
-            repo.findAllCompleted().also { repo.deleteAll(it) }
-                .map { EchoOutBoxHistory(it) }.also { repo.saveAllHistory(it) }
-        }
+        var processed: List<com.langlez.echo.infrastructure.outbox.EchoOutBox>
+        do {
+            processed = transaction.execute {
+                val events = repo.findCompletedOrFailed(100)
+                if (events.isNotEmpty()) {
+                    repo.deleteAll(events)
+                    repo.saveAllHistory(events.map { EchoOutBoxHistory(it) })
+                }
+                events
+            } ?: emptyList()
+        } while (processed.size == 100)
     }
 }

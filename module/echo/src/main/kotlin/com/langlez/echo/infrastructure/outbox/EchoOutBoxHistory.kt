@@ -14,7 +14,7 @@ class EchoOutBoxHistory(
     val aggregateId: String,
     val eventName: String,
     @Column(columnDefinition = "TEXT") val payload: String,
-    val retries: Int,
+    val attempts: Int,
     val createdAt: Instant,
     val processedAt: Instant = Instant.now(),
 ) {
@@ -24,7 +24,7 @@ class EchoOutBoxHistory(
         aggregateId = o.aggregateId,
         eventName = o.eventName,
         payload = o.payload,
-        retries = o.attempts,
+        attempts = o.attempts,
         createdAt = o.createdAt,
     )
 }

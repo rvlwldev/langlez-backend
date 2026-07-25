@@ -25,7 +25,7 @@ class PostRepositoryImpl(
     }
 
     override fun findRecommendedFeed(excludeAuthorIds: List<Long>, cursor: Long?, size: Int): List<Post> {
-        val cursorLikeCount = cursor?.let { postJpa.findByIdOrNull(it)?.takeIf { p -> p.deletedAt == null }?.likeCount }
+        val cursorLikeCount = cursor?.let { postJpa.findByIdOrNull(it)?.likeCount }
         val pageable = PageRequest.of(0, size)
         return if (excludeAuthorIds.isEmpty()) {
             postJpa.findRecommendedFeedWithoutExcludes(cursor, cursorLikeCount, pageable)
@@ -42,9 +42,6 @@ class PostRepositoryImpl(
 
     override fun saveMediaAll(mediaList: List<PostMedia>): List<PostMedia> =
         postMediaJpa.saveAll(mediaList)
-
-    override fun findMediaByPostId(postId: Long): List<PostMedia> =
-        postMediaJpa.findByPostIdOrderBySequenceAsc(postId)
 
     override fun findMediaByPostIds(postIds: List<Long>): List<PostMedia> {
         if (postIds.isEmpty()) return emptyList()
@@ -78,9 +75,18 @@ class PostRepositoryImpl(
     override fun findHashtagByName(name: String): Hashtag? =
         hashtagJpa.findByName(name)
 
+    override fun findHashtagsByNames(names: Collection<String>): List<Hashtag> =
+        if (names.isEmpty()) emptyList() else hashtagJpa.findByNameIn(names)
+
     override fun saveHashtag(hashtag: Hashtag): Hashtag =
         hashtagJpa.save(hashtag)
 
+    override fun saveHashtagsAll(hashtags: List<Hashtag>): List<Hashtag> =
+        if (hashtags.isEmpty()) emptyList() else hashtagJpa.saveAll(hashtags)
+
     override fun savePostHashtag(postHashtag: PostHashtag): PostHashtag =
         postHashtagJpa.save(postHashtag)
+
+    override fun savePostHashtagsAll(postHashtags: List<PostHashtag>): List<PostHashtag> =
+        if (postHashtags.isEmpty()) emptyList() else postHashtagJpa.saveAll(postHashtags)
 }

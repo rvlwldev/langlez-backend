@@ -28,6 +28,12 @@ class EchoOutBoxRepositoryImpl(
     override fun findAllCompleted(): List<EchoOutBox> =
         jpa.findAllByStatus(EchoOutBox.Status.COMPLETE)
 
+    override fun findCompletedOrFailed(limit: Int): List<EchoOutBox> =
+        jpa.findAllByStatusIn(
+            listOf(EchoOutBox.Status.COMPLETE, EchoOutBox.Status.FAILED),
+            PageRequest.of(0, limit)
+        )
+
     override fun saveAll(outboxes: List<EchoOutBox>): List<EchoOutBox> = jpa.saveAll(outboxes)
 
     override fun deleteAll(outboxes: List<EchoOutBox>) = jpa.deleteAll(outboxes)

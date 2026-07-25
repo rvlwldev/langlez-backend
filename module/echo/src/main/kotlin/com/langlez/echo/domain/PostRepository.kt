@@ -12,7 +12,6 @@ interface PostRepository {
 
     // PostMedia
     fun saveMediaAll(mediaList: List<PostMedia>): List<PostMedia>
-    fun findMediaByPostId(postId: Long): List<PostMedia>
     fun findMediaByPostIds(postIds: List<Long>): List<PostMedia>
 
     // PostLike
@@ -27,8 +26,11 @@ interface PostRepository {
 
     // Hashtag
     fun findHashtagByName(name: String): Hashtag?
+    fun findHashtagsByNames(names: Collection<String>): List<Hashtag>
     fun saveHashtag(hashtag: Hashtag): Hashtag
+    fun saveHashtagsAll(hashtags: List<Hashtag>): List<Hashtag>
 
     // PostHashtag
     fun savePostHashtag(postHashtag: PostHashtag): PostHashtag
+    fun savePostHashtagsAll(postHashtags: List<PostHashtag>): List<PostHashtag>
 }

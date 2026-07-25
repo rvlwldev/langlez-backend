@@ -10,4 +10,5 @@ interface EchoOutBoxJpaRepository : JpaRepository<EchoOutBox, Long> {
         pageable: Pageable,
     ): List<EchoOutBox>
     fun findAllByStatus(status: EchoOutBox.Status): List<EchoOutBox>
+    fun findAllByStatusIn(statuses: List<EchoOutBox.Status>, pageable: Pageable): List<EchoOutBox>
 }
