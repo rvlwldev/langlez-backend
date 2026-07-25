@@ -37,10 +37,18 @@ class RecommendationService(
 
     private fun refreshAll(ttl: Duration, predicate: (Profile) -> Boolean) {
         val all = profileRepository.findAllProfiles()
-        all.filter(predicate).forEach { myProfile -> refreshFor(myProfile, all, ttl) }
+        // 유저마다 전체 인구를 필터링(O(N²))하는 대신, 레벨별 풀을 한 번만 만들어두고
+        // 유저별로는 그 풀에서 무작위 샘플링만 한다.
+        val byLevel = all.groupBy { it.languageLevel }
+        all.filter(predicate).forEach { myProfile -> refreshFor(myProfile, all, byLevel, ttl) }
     }
 
-    fun refreshFor(myProfile: Profile, all: List<Profile>, ttl: Duration) {
+    fun refreshFor(
+        myProfile: Profile,
+        all: List<Profile>,
+        byLevel: Map<Profile.LanguageLevel?, List<Profile>>,
+        ttl: Duration,
+    ) {
         val myId = myProfile.id
         val blockedIds = relationshipRepository.findBlocks(myId, null, EXCLUSION_SCAN_SIZE).map { it.blockedId }.toSet()
         val matchedIds = chatRoomRepository.findByParticipant(myId, null, EXCLUSION_SCAN_SIZE)
@@ -49,14 +57,36 @@ class RecommendationService(
             .toSet()
         val excluded = blockedIds + matchedIds + myId
 
-        val candidates = all.filter { it.id !in excluded }
-        val (sameLevel, otherLevel) = candidates.partition {
-            myProfile.languageLevel != null && it.languageLevel == myProfile.languageLevel
+        val sameLevelPool = myProfile.languageLevel?.let { byLevel[it] } ?: emptyList()
+        val picked = LinkedHashSet<Profile>()
+        picked += sampleExcluding(sameLevelPool, excluded, RECOMMENDATION_SIZE)
+        if (picked.size < RECOMMENDATION_SIZE) {
+            val pickedIds = picked.mapTo(mutableSetOf()) { it.id }
+            picked += sampleExcluding(all, excluded + pickedIds, RECOMMENDATION_SIZE - picked.size)
         }
-        val picked = (sameLevel.shuffled() + otherLevel.shuffled()).take(RECOMMENDATION_SIZE)
 
         val usernames = memberRepository.findByIds(picked.map { it.id }).map { it.username }
         recommendationRepository.save(myId, usernames, ttl)
+    }
+
+    /**
+     * pool에서 excluded를 뺀 후보 중 count명을 무작위로 뽑는다. 전체를 필터링하지 않고
+     * 무작위 인덱스를 뽑아보는 방식이라, excluded 비율이 지나치게 높은 극단적 경우
+     * count에 못 미칠 수 있다(허용 가능한 트레이드오프).
+     */
+    private fun sampleExcluding(pool: List<Profile>, excluded: Set<Long>, count: Int): List<Profile> {
+        if (pool.isEmpty() || count <= 0) return emptyList()
+        val result = LinkedHashSet<Profile>()
+        val tried = HashSet<Int>()
+        val maxAttempts = (count * SAMPLE_ATTEMPT_MULTIPLIER).coerceAtMost(pool.size)
+        while (result.size < count && tried.size < maxAttempts && tried.size < pool.size) {
+            val idx = pool.indices.random()
+            if (tried.add(idx)) {
+                val candidate = pool[idx]
+                if (candidate.id !in excluded) result.add(candidate)
+            }
+        }
+        return result.toList()
     }
 
     @Transactional(readOnly = true)
@@ -108,6 +138,7 @@ class RecommendationService(
     companion object {
         private const val RECOMMENDATION_SIZE = 15
         private const val EXCLUSION_SCAN_SIZE = 1000
+        private const val SAMPLE_ATTEMPT_MULTIPLIER = 5
     }
 }
 
