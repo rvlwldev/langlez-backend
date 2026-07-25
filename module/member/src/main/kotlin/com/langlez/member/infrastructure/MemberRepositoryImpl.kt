@@ -41,27 +41,7 @@ class MemberRepositoryImpl(
 
     override fun findByIds(ids: List<Long>): List<Member> {
         if (ids.isEmpty()) return emptyList()
-
-        val cache = cacheManager.getCache("member")
-        val results = mutableListOf<Member>()
-        val missedIds = mutableListOf<Long>()
-
-        for (id in ids) {
-            val cached = cache?.get(id, Member::class.java)
-            if (cached != null) results.add(cached)
-            else missedIds.add(id)
-        }
-
-        if (missedIds.isNotEmpty()) {
-            val members = jpa.findAllById(missedIds)
-            members.forEach { member ->
-                results.add(member)
-                cache?.put(member.id, member)
-            }
-        }
-
-        val sequences = results.associateBy { it.id }
-        return ids.mapNotNull { sequences[it] }
+        return jpa.findAllById(ids)
     }
 
     override fun countAll(): Long = jpa.count()

@@ -37,27 +37,14 @@ class Member(
     @Column(name = "provider_username") var providerDisplayName: String? = null,
 
     var isVerified: Boolean = false,
-    var premiumExpiresAt: Instant? = null,
 
     @CreatedDate var createdAt: Instant = Instant.now(),
     @LastModifiedDate var updatedAt: Instant = Instant.now(),
-    var deletedAt: Instant? = null,
     @Column(name = "last_logged_in_at") var lastAccessedAt: Instant? = null,
 
     @Version var version: Long = 0,
     var fcmToken: String? = null
 ) {
-    constructor(email: String, username: String?, nickname: String, provider: Provider, providerId: String, providerDisplayName: String?) : this(
-        email = email,
-        username = username ?: generateRandomUsername(),
-        nickname = nickname,
-        provider = provider,
-        providerId = providerId,
-        providerDisplayName = providerDisplayName,
-    )
-
-
-
     fun login() {
         lastAccessedAt = Instant.now()
     }
@@ -78,20 +65,13 @@ class Member(
         lastNicknameUpdatedAt = now
     }
 
-    fun upgradeToPremium() {
-        role = Role.PREMIUM
-    }
-
-    fun delete() {
-        deletedAt = Instant.now()
-    }
-
     enum class Role { MEMBER, PREMIUM, ADMIN }
 
     enum class Provider { GOOGLE, APPLE }
 
     companion object {
-        private val USERNAME_PATTERN = Regex("^[a-zA-Z0-9_]{3,20}$")
+        const val USERNAME_REGEX = "^[a-zA-Z0-9_]{3,20}$"
+        private val USERNAME_PATTERN = Regex(USERNAME_REGEX)
         private val CHANGE_COOLDOWN: Duration = Duration.ofDays(15)
 
         fun generateRandomUsername(): String = (1..20)
