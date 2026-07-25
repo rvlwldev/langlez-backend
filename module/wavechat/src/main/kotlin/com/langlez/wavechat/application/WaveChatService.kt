@@ -39,7 +39,7 @@ class WaveChatService(
             throw LanglezException(403, "wavechat.forbidden")
         }
 
-        waveMessageRepository.markDeleted(messageId)
+        message.delete()
     }
 
     companion object {

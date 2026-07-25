@@ -109,12 +109,11 @@ class WaveChatServiceTest : BehaviorSpec({
         When("보낸 사람 본인이 올바른 방에서 삭제를 시도하면") {
             val message = WaveMessage(waveRoomId = waveRoomId, senderId = senderId, content = "Msg")
             every { waveMessageRepository.findById(messageId) } returns message
-            every { waveMessageRepository.markDeleted(messageId) } returns Unit
 
-            Then("정상적으로 markDeleted가 호출된다") {
+            Then("정상적으로 message.isDeleted()가 true가 된다") {
                 service.deleteMessage(waveRoomId, senderId, messageId)
 
-                verify(exactly = 1) { waveMessageRepository.markDeleted(messageId) }
+                message.isDeleted() shouldBe true
             }
         }
     }

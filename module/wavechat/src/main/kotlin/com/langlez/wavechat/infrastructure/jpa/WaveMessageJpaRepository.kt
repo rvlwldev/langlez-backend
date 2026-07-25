@@ -3,7 +3,6 @@ package com.langlez.wavechat.infrastructure.jpa
 import com.langlez.wavechat.domain.WaveMessage
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -15,8 +14,4 @@ interface WaveMessageJpaRepository : JpaRepository<WaveMessage, Long> {
         @Param("cursor") cursor: Long?,
         pageable: Pageable
     ): List<WaveMessage>
-
-    @Modifying(clearAutomatically = true)
-    @Query("UPDATE WaveMessage m SET m.deletedAt = CURRENT_TIMESTAMP WHERE m.id = :id AND m.deletedAt IS NULL")
-    fun markDeleted(@Param("id") id: Long)
 }

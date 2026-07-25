@@ -20,8 +20,4 @@ class WaveMessageRepositoryImpl(
 
     override fun findById(id: Long): WaveMessage? =
         waveMessageJpaRepository.findByIdOrNull(id)
-
-    override fun markDeleted(id: Long) {
-        waveMessageJpaRepository.markDeleted(id)
-    }
 }
