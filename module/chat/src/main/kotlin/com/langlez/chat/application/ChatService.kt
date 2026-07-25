@@ -39,15 +39,16 @@ class ChatService(
     }
 
     fun toRoomSummary(room: ChatRoom, memberId: Long): ChatResponse.RoomSummary {
+        val roomId = requireNotNull(room.id) { "ChatRoom.id must not be null for a persisted room" }
         val targetId = room.participantIds.firstOrNull { it != memberId } ?: memberId
         val target = memberRepository.findById(targetId)
             ?: throw LanglezException(404, "member.not-found")
 
         val lastReadAt = room.readStatus[memberId] ?: Instant.EPOCH
-        val unreadCount = chatMessageRepository.countUnread(room.id!!, memberId, lastReadAt)
+        val unreadCount = chatMessageRepository.countUnread(roomId, memberId, lastReadAt)
 
         return ChatResponse.RoomSummary(
-            id = room.id!!,
+            id = roomId,
             targetUsername = target.username,
             targetNickname = target.nickname,
             lastMessageAt = room.lastMessageAt,
@@ -208,15 +209,16 @@ class ChatService(
         val unreadMap = chatMessageRepository.countUnreadBatch(rooms, memberId)
 
         val summaries = rooms.map { room ->
+            val roomId = requireNotNull(room.id) { "ChatRoom.id must not be null for a persisted room" }
             val targetId = room.participantIds.firstOrNull { it != memberId } ?: memberId
             val target = membersMap[targetId]
             val targetUsername = target?.username ?: "unknown"
             val targetNickname = target?.nickname ?: "Unknown"
 
-            val unreadCount = unreadMap[room.id!!] ?: 0L
+            val unreadCount = unreadMap[roomId] ?: 0L
 
             ChatResponse.RoomSummary(
-                id = room.id!!,
+                id = roomId,
                 targetUsername = targetUsername,
                 targetNickname = targetNickname,
                 lastMessageAt = room.lastMessageAt,
@@ -249,7 +251,8 @@ class ChatService(
 
         val replyIds = messages.mapNotNull { it.replyToMessageId }.distinct()
         val replyMessagesMap = if (replyIds.isNotEmpty()) {
-            chatMessageRepository.findByIds(replyIds).associateBy { it.id!! }
+            chatMessageRepository.findByIds(replyIds)
+                .associateBy { requireNotNull(it.id) { "ChatMessage.id must not be null for a persisted message" } }
         } else emptyMap()
 
         val allSenderIds = (messages.map { it.senderId } + replyMessagesMap.values.map { it.senderId }).distinct()
@@ -287,7 +290,7 @@ class ChatService(
 
             val isDeleted = msg.deletedAt != null
             ChatResponse.MessageSummary(
-                id = msg.id!!,
+                id = requireNotNull(msg.id) { "ChatMessage.id must not be null for a persisted message" },
                 senderUsername = senderUsername,
                 type = msg.type,
                 content = if (isDeleted) null else msg.content,
@@ -339,7 +342,7 @@ class ChatService(
 
         val isDeleted = message.deletedAt != null
         return ChatResponse.MessageSummary(
-            id = message.id!!,
+            id = requireNotNull(message.id) { "ChatMessage.id must not be null for a persisted message" },
             senderUsername = senderUsername,
             type = message.type,
             content = if (isDeleted) null else message.content,
