@@ -19,7 +19,7 @@ class ProfileResponse {
         val languageLevel: String? = null,
         val interests: Set<String> = emptySet(),
     ) {
-        constructor(profile: Profile) : this(
+        constructor(profile: Profile, interests: Set<String> = emptySet()) : this(
             bio = profile.bio,
             goal = profile.goal,
             want = profile.want,
@@ -28,7 +28,7 @@ class ProfileResponse {
             locale = profile.locale,
             birthDay = profile.birthDay,
             languageLevel = profile.languageLevel?.name,
-            interests = profile.interests.toSet(),
+            interests = interests,
         )
     }
 
@@ -46,7 +46,7 @@ class ProfileResponse {
         val languageLevel: String? = null,
         val interests: Set<String> = emptySet(),
     ) {
-        constructor(profile: Profile, member: Member, visitCount: Long) : this(
+        constructor(profile: Profile, member: Member, visitCount: Long, interests: Set<String> = emptySet()) : this(
             username = member.username,
             nickname = member.nickname,
             bio = profile.bio,
@@ -58,7 +58,7 @@ class ProfileResponse {
             birthDay = profile.birthDay,
             visitCount = visitCount,
             languageLevel = profile.languageLevel?.name,
-            interests = profile.interests.toSet(),
+            interests = interests,
         )
     }
 

@@ -85,7 +85,6 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
     private fun createMemberWithProfile(
         username: String,
         languageLevel: Profile.LanguageLevel,
-        interests: Set<String>,
         birthDay: LocalDate? = null,
     ): Member =
         // member 저장과 profile 저장을 같은 트랜잭션(같은 영속성 컨텍스트)에서 수행해야
@@ -103,15 +102,15 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
                 )
             )
             profileRepository.saveProfile(
-                Profile(id = member.id, member = member, languageLevel = languageLevel, interests = interests.toMutableSet(), birthDay = birthDay)
+                Profile(id = member.id, member = member, languageLevel = languageLevel, birthDay = birthDay)
             )
             member
         }!!
 
     init {
         Given("같은 언어 레벨의 두 유저가 있을 때") {
-            val alice = createMemberWithProfile("alice", Profile.LanguageLevel.INTERMEDIATE, setOf("movie", "music"))
-            val bob = createMemberWithProfile("bob", Profile.LanguageLevel.INTERMEDIATE, setOf("movie"))
+            val alice = createMemberWithProfile("alice", Profile.LanguageLevel.INTERMEDIATE)
+            val bob = createMemberWithProfile("bob", Profile.LanguageLevel.INTERMEDIATE)
 
             When("alice가 먼저 큐에 참가하면") {
                 val aliceResult = matchingService.joinQueue(alice.id)
@@ -136,8 +135,8 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
         }
 
         Given("조건 필터가 지정된 유저들이 큐에 참가할 때") {
-            val charlie = createMemberWithProfile("charlie", Profile.LanguageLevel.INTERMEDIATE, setOf("game"), birthDay = LocalDate.now().minusYears(20))
-            val david = createMemberWithProfile("david", Profile.LanguageLevel.INTERMEDIATE, setOf("game"), birthDay = LocalDate.now().minusYears(30))
+            val charlie = createMemberWithProfile("charlie", Profile.LanguageLevel.INTERMEDIATE, birthDay = LocalDate.now().minusYears(20))
+            val david = createMemberWithProfile("david", Profile.LanguageLevel.INTERMEDIATE, birthDay = LocalDate.now().minusYears(30))
 
             When("charlie가 25세 이상 조건으로 큐에 참가하면") {
                 val charlieFilter = MatchingQueueFilter(minAge = 25)

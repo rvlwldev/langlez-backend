@@ -16,6 +16,5 @@ class ProfileRequest {
         val locale: Locale? = null,
         val birthDay: LocalDate? = null,
         val languageLevel: Profile.LanguageLevel? = null,
-        val interests: Set<String>? = null,
     )
 }

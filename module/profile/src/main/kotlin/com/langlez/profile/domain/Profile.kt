@@ -27,11 +27,6 @@ class Profile(
 
     @Enumerated(STRING) var languageLevel: LanguageLevel? = null,
 
-    @ElementCollection
-    @CollectionTable(name = "member_profile_interests", joinColumns = [JoinColumn(name = "id")])
-    @Column(name = "interest")
-    var interests: MutableSet<String> = mutableSetOf(),
-
     @Version var version: Long? = null
 ) {
     enum class Gender { MALE, FEMALE, SECRET }

@@ -10,11 +10,13 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import java.time.Instant
+import java.util.Locale
 
 class ProfileControllerTest : BehaviorSpec({
 
     val service = mockk<ProfileService>()
     val controller = ProfileController(service)
+    val locale = Locale.forLanguageTag("ko")
 
     afterEach { clearMocks(service, answers = false) }
 
@@ -42,10 +44,10 @@ class ProfileControllerTest : BehaviorSpec({
                 birthDay = null,
                 visitCount = 5L,
             )
-            every { service.getProfileDetail(1L, "target") } returns detail
+            every { service.getProfileDetail(1L, "target", locale) } returns detail
 
             Then("서비스 결과가 그대로 반환된다") {
-                val result = controller.getProfile(1L, "target")
+                val result = controller.getProfile(1L, "target", locale)
                 result.username shouldBe "target"
                 result.nickname shouldBe "Target User"
                 result.visitCount shouldBe 5L
@@ -53,11 +55,11 @@ class ProfileControllerTest : BehaviorSpec({
         }
 
         When("존재하지 않는 username을 조회하면") {
-            every { service.getProfileDetail(1L, "ghost") } throws LanglezException(404, "profile.not-found")
+            every { service.getProfileDetail(1L, "ghost", locale) } throws LanglezException(404, "profile.not-found")
 
             Then("NOT_FOUND 예외가 전파된다") {
                 val ex = shouldThrow<LanglezException> {
-                    controller.getProfile(1L, "ghost")
+                    controller.getProfile(1L, "ghost", locale)
                 }
                 ex.status shouldBe 404
             }
@@ -69,10 +71,11 @@ class ProfileControllerTest : BehaviorSpec({
             val member = createMember()
             val profile = Profile(id = 1L, member = member, bio = "new bio", gender = Profile.Gender.MALE)
             val request = ProfileRequest.Update(bio = "new bio")
-            every { service.updateProfile(1L, request) } returns profile
+            val detail = ProfileResponse.ProfileDetail(profile)
+            every { service.updateProfile(1L, request, locale) } returns detail
 
             Then("변경된 프로필이 반환된다") {
-                val result = controller.updateProfile(1L, request)
+                val result = controller.updateProfile(1L, request, locale)
                 result.bio shouldBe "new bio"
                 result.gender shouldBe "MALE"
             }

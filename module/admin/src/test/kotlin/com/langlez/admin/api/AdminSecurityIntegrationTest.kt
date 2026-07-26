@@ -7,6 +7,7 @@ import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.MemberPresenceTracker
 import com.langlez.echo.domain.CommentRepository
 import com.langlez.echo.domain.PostRepository
+import com.langlez.interest.application.InterestService
 import com.langlez.member.domain.MemberRepository
 import com.langlez.report.domain.ReportRepository
 import io.kotest.core.spec.style.DescribeSpec
@@ -72,6 +73,9 @@ class AdminSecurityIntegrationTest : DescribeSpec() {
 
         @Bean
         fun reportRepository(): ReportRepository = mockk(relaxed = true)
+
+        @Bean
+        fun interestService(): InterestService = mockk(relaxed = true)
 
         @Bean
         fun entityManagerFactory(): jakarta.persistence.EntityManagerFactory = mockk(relaxed = true)
