@@ -43,6 +43,11 @@
                 <span>첨부파일 모아보기</span>
             </a>
         </li>
+        <li class="menu-item" th:classappend="${activePage == 'interests'} ? 'active'">
+            <a th:href="@{/admin/interests}">
+                <span>관심사 관리</span>
+            </a>
+        </li>
     </ul>
     <div class="sidebar-footer">
         <form th:action="@{/admin/logout}" method="post" style="width: 100%;">

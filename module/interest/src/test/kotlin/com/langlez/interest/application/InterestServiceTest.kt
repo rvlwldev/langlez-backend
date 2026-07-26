@@ -51,4 +51,43 @@ class InterestServiceTest : BehaviorSpec({
             }
         }
     }
+
+    Given("admin이 관심사를 병합할 때") {
+        val from = Interest(ko = "하이킹")
+        val to = Interest(ko = null, en = "Hiking")
+
+        When("from에만 있는 언어값은 to로 백필되고, from은 삭제된다") {
+            every { interestRepo.findById(7L) } returns from
+            every { interestRepo.findById(5L) } returns to
+            every { interestRepo.save(match { it === to }) } returns to
+            every { memberInterestRepo.findByInterestId(7L) } returns listOf(MemberInterest(1L, 7L))
+            every { memberInterestRepo.findByInterestId(5L) } returns emptyList()
+            every { memberInterestRepo.saveAll(any()) } answers { firstArg() }
+            every { interestRepo.delete(match { it === from }) } returns Unit
+
+            service.merge(fromId = 7L, toId = 5L)
+
+            Then("to.ko가 백필되고 from은 삭제된다") {
+                to.ko shouldBe "하이킹"
+                verify { interestRepo.delete(match { it === from }) }
+            }
+        }
+
+        When("같은 회원이 from/to를 둘 다 가지고 있으면 중복 생성하지 않는다") {
+            every { interestRepo.findById(7L) } returns from
+            every { interestRepo.findById(5L) } returns to
+            every { interestRepo.save(match { it === to }) } returns to
+            every { memberInterestRepo.findByInterestId(7L) } returns listOf(MemberInterest(1L, 7L))
+            every { memberInterestRepo.findByInterestId(5L) } returns listOf(MemberInterest(1L, 5L))
+            val saved = slot<List<MemberInterest>>()
+            every { memberInterestRepo.saveAll(capture(saved)) } answers { firstArg() }
+            every { interestRepo.delete(any()) } returns Unit
+
+            service.merge(fromId = 7L, toId = 5L)
+
+            Then("추가로 저장되는 MemberInterest가 없다") {
+                saved.captured shouldBe emptyList()
+            }
+        }
+    }
 })

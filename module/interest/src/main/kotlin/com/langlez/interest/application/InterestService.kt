@@ -52,6 +52,29 @@ class InterestService(
     fun getMemberInterestIds(memberId: Long): Set<Long> =
         memberInterestRepo.findByMemberId(memberId).map { it.interestId }.toSet()
 
+    fun merge(fromId: Long, toId: Long) {
+        require(fromId != toId) { "fromId and toId must differ" }
+        val from = interestRepo.findById(fromId) ?: throw IllegalArgumentException("interest not found: $fromId")
+        val to = interestRepo.findById(toId) ?: throw IllegalArgumentException("interest not found: $toId")
+
+        Interest.LOCALE_FIELDS.forEach { field ->
+            if (to.get(field) == null && from.get(field) != null) {
+                to.set(field, from.get(field))
+            }
+        }
+        interestRepo.save(to)
+
+        val fromMembers = memberInterestRepo.findByInterestId(fromId)
+        val toMemberIds = memberInterestRepo.findByInterestId(toId).map { it.memberId }.toSet()
+        val toRepoint = fromMembers.filter { it.memberId !in toMemberIds }
+        memberInterestRepo.saveAll(toRepoint.map { MemberInterest(it.memberId, toId) })
+        if (fromMembers.isNotEmpty()) {
+            memberInterestRepo.deleteAll(fromMembers)
+        }
+
+        interestRepo.delete(from)
+    }
+
     private fun resolveOrCreate(field: String, name: String): Interest {
         interestRepo.findByColumn(field, name)?.let { return it }
         val created = Interest()
