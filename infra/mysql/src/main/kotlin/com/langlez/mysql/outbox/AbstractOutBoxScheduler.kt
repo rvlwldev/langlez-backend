@@ -42,8 +42,12 @@ abstract class AbstractOutBoxScheduler<T : AbstractOutBox, H : AbstractOutBoxHis
             try {
                 event.dispatch()
             } catch (e: IllegalStateException) {
-                // 잘못된 상태 전이(poison row)로 하나가 실패해도 배치 전체가 멈추지 않게 건너뛴다.
-                log.error("Outbox event in unexpected state, skipping. id={}, status={}", event.id, event.status, e)
+                // 잘못된 상태 전이(poison row) — 건너뛰기만 하면 createdAt ASC 정렬 때문에 매 사이클
+                // 똑같은 row가 다시 걸려 영원히 재발생한다. fail()로 강제 전이시켜 격리한다
+                // (attempts가 이미 소진된 상태라 fail()은 FAILED로 확정 전이시킨다).
+                log.error("Outbox event in unexpected state, marking FAILED. id={}, status={}, attempts={}", event.id, event.status, event.attempts, e)
+                event.fail()
+                transaction.execute { repo.saveAll(listOf(event)) }
                 return@forEach
             }
             runCatching {
