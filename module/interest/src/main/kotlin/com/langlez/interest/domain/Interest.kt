@@ -1,5 +1,6 @@
 package com.langlez.interest.domain
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType.IDENTITY
@@ -12,8 +13,10 @@ class Interest(
     var ko: String? = null,
     var en: String? = null,
     var ja: String? = null,
-    var zhTW: String? = null,
-    var zhCN: String? = null,
+    // Hibernate 기본 네이밍 전략이 zhTW/zhCN을 zhtw/zhcn(언더스코어 없이)으로 매핑하므로
+    // camelToSnake 기반 native DDL/검색 쿼리와 어긋나지 않도록 컬럼명을 명시적으로 고정한다.
+    @Column(name = "zh_tw") var zhTW: String? = null,
+    @Column(name = "zh_cn") var zhCN: String? = null,
     var de: String? = null,
     var vi: String? = null,
     var ind: String? = null,
