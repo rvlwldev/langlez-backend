@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/layout :: header('관심사 관리')}"></head>
+<body>
+    <div class="app-container">
+        <div th:replace="~{admin/layout :: sidebar('interests')}"></div>
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">관심사 관리</h1>
+                    <p class="page-subtitle">중복된 관심사를 검색해 병합합니다(영어 이름 기준 검색).</p>
+                </div>
+            </div>
+
+            <form method="get" th:action="@{/admin/interests}" style="display:flex; gap:8px; margin-bottom:16px;">
+                <input type="text" name="q" th:value="${query}" placeholder="영어로 검색 (예: Hiking)"/>
+                <button type="submit">검색</button>
+            </form>
+
+            <form method="post" th:action="@{/admin/interests/merge}" style="display:flex; gap:8px; margin-bottom:16px;">
+                <input type="number" name="fromId" placeholder="합칠 대상 ID (사라짐)" required/>
+                <input type="number" name="toId" placeholder="남길 ID" required/>
+                <button type="submit">병합</button>
+            </form>
+
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead><tr><th>ID</th><th>이름</th></tr></thead>
+                    <tbody>
+                        <tr th:each="item : ${items}">
+                            <td th:text="${item.id}">1</td>
+                            <td th:text="${item.name}">Hiking</td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(items)}">
+                            <td colspan="2" style="text-align: center; color: var(--text-secondary);">검색 결과가 없습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

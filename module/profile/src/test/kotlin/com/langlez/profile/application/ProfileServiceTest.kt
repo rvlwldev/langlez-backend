@@ -2,6 +2,7 @@ package com.langlez.profile.application
 
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
+import com.langlez.interest.application.InterestService
 import com.langlez.member.domain.Member
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -20,10 +21,11 @@ class ProfileServiceTest : BehaviorSpec({
     val repo = mockk<ProfileRepository>()
     val storage = mockk<FileStorage>()
     val profileImageLocker = mockk<ProfileImageLocker>()
+    val interestService = mockk<InterestService>()
 
-    val service = ProfileService(repo, storage, profileImageLocker)
+    val service = ProfileService(repo, storage, profileImageLocker, interestService)
 
-    afterEach { clearMocks(repo, storage, profileImageLocker, answers = false) }
+    afterEach { clearMocks(repo, storage, profileImageLocker, interestService, answers = false) }
 
     fun member(id: Long) = Member(
         id = id,

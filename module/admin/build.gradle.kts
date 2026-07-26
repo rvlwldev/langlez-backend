@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":module:attachment"))
     implementation(project(":module:echo"))
     implementation(project(":module:report"))
+    implementation(project(":module:interest"))
     implementation(project(":infra:redis"))
     implementation(libs.dependency.springboot.thymeleaf)
 

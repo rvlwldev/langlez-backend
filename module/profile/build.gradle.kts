@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":infra:redis"))
 
     implementation(project(":module:member"))
+    implementation(project(":module:interest"))
 
     ksp(libs.dependency.querydsl.ksp)
 

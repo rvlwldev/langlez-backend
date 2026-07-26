@@ -2,6 +2,7 @@ package com.langlez.profile.application
 
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
+import com.langlez.interest.application.InterestService
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
 import com.langlez.profile.domain.Profile
@@ -10,12 +11,14 @@ import com.langlez.profile.domain.ProfileRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.util.Locale
 
 @Service
 class ProfileService(
     private val repo: ProfileRepository,
     private val storage: FileStorage,
     private val profileImageLocker: ProfileImageLocker,
+    private val interestService: InterestService,
 ) {
 
     @Transactional(readOnly = true)
@@ -23,12 +26,13 @@ class ProfileService(
         repo.findProfileByUsername(username) ?: throw LanglezException(404, "profile.not-found")
 
     @Transactional
-    fun getProfileDetail(visitorId: Long, username: String): ProfileResponse.Detail {
+    fun getProfileDetail(visitorId: Long, username: String, locale: Locale): ProfileResponse.Detail {
         increaseVisitCount(visitorId, username)
         val profile = repo.findProfileByUsername(username)
             ?: throw LanglezException(404, "profile.not-found")
         val visitDelta = getVisitCount(username)
-        return ProfileResponse.Detail(profile, profile.member, profile.visitCount + visitDelta)
+        val interests = interestService.getMemberInterests(profile.id, locale).map { it.name }.toSet()
+        return ProfileResponse.Detail(profile, profile.member, profile.visitCount + visitDelta, interests)
     }
 
     fun increaseVisitCount(visitorId: Long, username: String) {
@@ -71,7 +75,7 @@ class ProfileService(
     }
 
     @Transactional
-    fun updateProfile(memberId: Long, request: ProfileRequest.Update): Profile {
+    fun updateProfile(memberId: Long, request: ProfileRequest.Update, locale: Locale): ProfileResponse.ProfileDetail {
         val profile = repo.findProfile(memberId)
             ?: throw LanglezException(404, "profile.not-found")
 
@@ -83,9 +87,10 @@ class ProfileService(
         request.locale?.let { profile.locale = it }
         request.birthDay?.let { profile.birthDay = it }
         request.languageLevel?.let { profile.languageLevel = it }
-        request.interests?.let { profile.interests = it.toMutableSet() }
 
-        return repo.saveProfile(profile)
+        val saved = repo.saveProfile(profile)
+        val interests = interestService.getMemberInterests(memberId, locale).map { it.name }.toSet()
+        return ProfileResponse.ProfileDetail(saved, interests)
     }
 
     private fun replaceRepresentImage(memberId: Long, newUrl: String): ProfileImage {

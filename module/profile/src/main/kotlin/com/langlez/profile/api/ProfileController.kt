@@ -5,21 +5,23 @@ import com.langlez.security.web.MemberID
 import org.springframework.http.HttpStatus.CREATED
 import org.springframework.http.HttpStatus.NO_CONTENT
 import org.springframework.web.bind.annotation.*
+import java.util.Locale
 
 @RestController
 @RequestMapping("/api/v1/profiles")
 class ProfileController(private val service: ProfileService) {
 
     @GetMapping("/@{username}")
-    fun getProfile(@MemberID visitorId: Long, @PathVariable username: String): ProfileResponse.Detail =
-        service.getProfileDetail(visitorId, username)
+    fun getProfile(@MemberID visitorId: Long, @PathVariable username: String, locale: Locale): ProfileResponse.Detail =
+        service.getProfileDetail(visitorId, username, locale)
 
     @PatchMapping("/me")
     fun updateProfile(
         @MemberID memberId: Long,
         @RequestBody request: ProfileRequest.Update,
+        locale: Locale,
     ): ProfileResponse.ProfileDetail =
-        ProfileResponse.ProfileDetail(service.updateProfile(memberId, request))
+        service.updateProfile(memberId, request, locale)
 
     @GetMapping("/images/upload-url")
     fun getImageUploadUrl(

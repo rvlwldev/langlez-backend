@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":infra:files"))
     implementation(project(":module:member"))
     implementation(project(":module:profile"))
+    implementation(project(":module:interest"))
     implementation(project(":module:auth"))
     implementation(project(":module:relationship"))
     implementation(project(":module:echo"))
