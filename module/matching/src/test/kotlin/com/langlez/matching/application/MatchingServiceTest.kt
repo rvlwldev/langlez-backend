@@ -3,6 +3,7 @@ package com.langlez.matching.application
 import com.langlez.chat.application.ChatService
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.core.LanglezException
+import com.langlez.interest.application.InterestService
 import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
@@ -26,6 +27,7 @@ class MatchingServiceTest : BehaviorSpec({
     val memberRepository = mockk<MemberRepository>()
     val relationshipRepository = mockk<RelationshipRepository>()
     val chatService = mockk<ChatService>()
+    val interestService = mockk<InterestService>(relaxed = true)
     val matchBroadcaster = mockk<MatchBroadcaster>(relaxed = true)
 
     val service = MatchingService(
@@ -34,6 +36,7 @@ class MatchingServiceTest : BehaviorSpec({
         memberRepository,
         relationshipRepository,
         chatService,
+        interestService,
         matchBroadcaster,
     )
 
@@ -44,7 +47,7 @@ class MatchingServiceTest : BehaviorSpec({
     afterEach {
         clearMocks(
             queueRepository, profileRepository, memberRepository,
-            relationshipRepository, chatService, matchBroadcaster,
+            relationshipRepository, chatService, interestService, matchBroadcaster,
             answers = false
         )
     }
@@ -62,8 +65,7 @@ class MatchingServiceTest : BehaviorSpec({
     fun profile(
         id: Long,
         languageLevel: Profile.LanguageLevel? = Profile.LanguageLevel.INTERMEDIATE,
-        interests: Set<String> = emptySet(),
-    ) = Profile(id = id, member = member(id), languageLevel = languageLevel, interests = interests.toMutableSet())
+    ) = Profile(id = id, member = member(id), languageLevel = languageLevel)
 
     Given("joinQueue 호출 시") {
         val memberId = 1L
@@ -159,7 +161,8 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.score(memberId) } returns 1000.0
             every { queueRepository.findJoinedAt(memberId) } returns now
             every { profileRepository.findProfile(memberId) } returns
-                profile(memberId, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie", "music"))
+                profile(memberId, Profile.LanguageLevel.INTERMEDIATE)
+            every { interestService.getMemberInterestIds(memberId) } returns setOf(100L, 200L)
         }
 
         When("점수 범위 내 후보가 아무도 없으면") {
@@ -189,7 +192,8 @@ class MatchingServiceTest : BehaviorSpec({
             every { relationshipRepository.findBlock(memberId, 2L) } returns null
             every { relationshipRepository.findBlock(2L, memberId) } returns null
             every { profileRepository.findProfiles(listOf(2L)) } returns
-                listOf(profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie")))
+                listOf(profile(2L, Profile.LanguageLevel.INTERMEDIATE))
+            every { interestService.getMemberInterestIds(2L) } returns setOf(100L)
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.score(2L) } returns 1000.0
             every { queueRepository.findFilter(memberId) } returns null
@@ -263,9 +267,11 @@ class MatchingServiceTest : BehaviorSpec({
             every { queueRepository.findFilter(any()) } returns null
             // candidate 2: 공통 관심사 1개("movie"), candidate 3: 공통 관심사 2개("movie", "music") - 더 많음
             every { profileRepository.findProfiles(listOf(2L, 3L)) } returns listOf(
-                profile(2L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie")),
-                profile(3L, Profile.LanguageLevel.INTERMEDIATE, interests = setOf("movie", "music")),
+                profile(2L, Profile.LanguageLevel.INTERMEDIATE),
+                profile(3L, Profile.LanguageLevel.INTERMEDIATE),
             )
+            every { interestService.getMemberInterestIds(2L) } returns setOf(100L)
+            every { interestService.getMemberInterestIds(3L) } returns setOf(100L, 200L)
             every { queueRepository.findJoinedAt(2L) } returns now
             every { queueRepository.findJoinedAt(3L) } returns now
             every { queueRepository.score(3L) } returns 1000.0

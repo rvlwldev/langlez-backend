@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":module:profile"))
     implementation(project(":module:relationship"))
     implementation(project(":module:chat"))
+    implementation(project(":module:interest"))
 
     implementation(libs.dependency.springboot.websocket)
 

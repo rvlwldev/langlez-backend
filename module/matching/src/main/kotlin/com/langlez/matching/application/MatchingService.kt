@@ -2,6 +2,7 @@ package com.langlez.matching.application
 
 import com.langlez.chat.application.ChatService
 import com.langlez.core.LanglezException
+import com.langlez.interest.application.InterestService
 import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
@@ -28,6 +29,7 @@ class MatchingService(
     private val memberRepository: MemberRepository,
     private val relationshipRepository: RelationshipRepository,
     private val chatService: ChatService,
+    private val interestService: InterestService,
     private val matchBroadcaster: MatchBroadcaster,
 ) {
 
@@ -70,6 +72,7 @@ class MatchingService(
 
         val myProfile = profileRepository.findProfile(memberId) ?: return null
         val myFilter = myMetaMap[memberId]?.filter ?: queueRepository.findFilter(memberId)
+        val myInterestIds = interestService.getMemberInterestIds(memberId)
 
         val candidateMetaMap = queueRepository.findMetaInBatch(candidateIds)
         val candidateProfileMap = profileRepository.findProfiles(candidateIds).associateBy { it.id }
@@ -84,7 +87,7 @@ class MatchingService(
             }
             .filterNot { (candidateId, _) -> isBlockedEitherWay(memberId, candidateId) }
             .map { (candidateId, candidateProfile) ->
-                val commonInterests = candidateProfile.interests.intersect(myProfile.interests).size
+                val commonInterests = interestService.getMemberInterestIds(candidateId).intersect(myInterestIds).size
                 val candidateJoinedAt = candidateMetaMap[candidateId]?.joinedAt
                     ?: queueRepository.findJoinedAt(candidateId)
                     ?: Instant.now()
