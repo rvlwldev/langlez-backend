@@ -1,9 +1,11 @@
 package com.langlez.mysql.outbox
 
 import com.langlez.core.MessageQueue
-import org.springframework.transaction.support.TransactionTemplate
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import org.springframework.beans.factory.DisposableBean
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * OutBox 발행/이관 루프의 공통 구현.
@@ -13,20 +15,20 @@ import java.util.concurrent.Semaphore
  *
  * ```
  * @Scheduled(fixedDelay = 5000)
- * @DistributedLock(prefix = "lock:echo-outbox", ttl = -1, wait = 0, retries = 0, throwOnFailure = false)
+ * @DistributedLock(prefix = "lock:echo-outbox", leaseSecs = 0, waitMs = 0, retries = 0, throwOnFailure = false)
  * override fun dispatchEvents() = super.dispatchEvents()
  * ```
  *
  * [분산 락 설정 안내]
- * - `ttl = -1` (기본값): Redisson Watchdog 자동 연장이 활성화되어, 작업이 진행 중인 동안 락 만료 시간이 10초마다 자동 연장됩니다.
+ * - `leaseSecs = 0` (기본값): Redisson Watchdog 자동 연장이 활성화되어, 작업이 진행 중인 동안 락 만료 시간이 10초마다 자동 연장됩니다.
  * - 작업 도중 서버 인스턴스가 다운되거나 프로세스가 죽으면 Watchdog이 정지되어 30초 후 레디스가 자동으로 락을 해제합니다.
  */
-abstract class AbOutBoxProcessor<T : AbOutBox, H : AbOutBoxHistory>(
+abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
     protected val repo: OutBoxRepository<T, H>,
     private val mq: MessageQueue,
     private val tx: TransactionTemplate,
     private val toHistory: (T) -> H,
-) {
+) : DisposableBean {
     private val semaphore = Semaphore(4)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
@@ -55,7 +57,7 @@ abstract class AbOutBoxProcessor<T : AbOutBox, H : AbOutBoxHistory>(
                     semaphore.release()
                 }
             }
-        }.forEach { runCatching { it.get() } }
+        }.forEach { runCatching { it.get(10, TimeUnit.SECONDS) } }
     }
 
     /**
@@ -77,6 +79,14 @@ abstract class AbOutBoxProcessor<T : AbOutBox, H : AbOutBoxHistory>(
                 outboxes.size
             } ?: 0
         } while (processedCount == HISTORY_BATCH_SIZE)
+    }
+
+    override fun destroy() {
+        runCatching {
+            executor.shutdown()
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS))
+                executor.shutdownNow()
+        }
     }
 
     companion object {

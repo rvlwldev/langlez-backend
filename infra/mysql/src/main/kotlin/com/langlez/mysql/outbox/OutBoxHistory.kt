@@ -8,7 +8,7 @@ import jakarta.persistence.MappedSuperclass
 import java.time.Instant
 
 @MappedSuperclass
-abstract class AbOutBoxHistory(
+abstract class OutBoxHistory(
     @Id val id: Long,
     val domain: String,
     val topic: String,
@@ -19,7 +19,7 @@ abstract class AbOutBoxHistory(
     val createdAt: Instant,
     val processedAt: Instant = Instant.now(),
 ) {
-    constructor(o: AbOutBox) : this(
+    constructor(o: OutBox) : this(
         id = o.id,
         domain = o.domain,
         topic = o.topic,

@@ -6,7 +6,7 @@ import jakarta.persistence.MappedSuperclass
 import java.time.LocalDate
 
 @MappedSuperclass
-abstract class AbOutBoxArchive(
+abstract class OutBoxArchive(
     val domain: String,
     val date: LocalDate,
     val index: Int,

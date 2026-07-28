@@ -9,16 +9,8 @@ import jakarta.persistence.Id
 import jakarta.persistence.MappedSuperclass
 import java.time.Instant
 
-/**
- * 도메인 모듈별 OutBox 엔티티의 공통 베이스.
- *
- * OutBox는 도메인 개념이 아니라 기술적 장치이므로 공용 도메인 모듈을 두지 않고,
- * 각 모듈이 자기 테이블(`@Entity` + `@Table`)을 소유한 채 여기서 상태 전이 로직만 상속한다.
- *
- * 상태 전이: READY → PROCESSING → COMPLETE, 재시도 소진 시 PROCESSING → FAILED.
- */
 @MappedSuperclass
-abstract class AbOutBox(
+abstract class OutBox(
     val domain: String,
     val topic: String,
     @Column(columnDefinition = "TEXT") val payload: String?,

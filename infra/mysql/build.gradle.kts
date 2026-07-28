@@ -10,6 +10,7 @@ plugins {
 dependencies {
     // OutBox 공통 베이스가 core.MessageQueue를 사용한다
     api(project(":core"))
+    api(project(":common"))
 
     api(libs.dependency.springboot.jpa)
     api(libs.dependency.querydsl.jpa)
