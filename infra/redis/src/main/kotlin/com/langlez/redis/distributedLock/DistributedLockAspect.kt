@@ -22,9 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate
 @Component
 @Order(1)
 class DistributedLockAspect(
-        private val redisLockService: RedisLockService,
-        private val transactionManager: PlatformTransactionManager,
-        private val paramDiscoverer: ParameterNameDiscoverer = DefaultParameterNameDiscoverer()
+    private val redisLockService: RedisLockService,
+    private val transactionManager: PlatformTransactionManager,
+    private val paramDiscoverer: ParameterNameDiscoverer = DefaultParameterNameDiscoverer()
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -43,12 +43,18 @@ class DistributedLockAspect(
         }
 
         val lockName = "${distributedLock.prefix}${lockKeys.joinToString(":")}"
-        val waitTime = distributedLock.retries * distributedLock.wait
-        val leaseTime = distributedLock.ttl * 1000
+        val waitTime = distributedLock.retries * distributedLock.waitMs
+        val leaseTime = distributedLock.leaseSecs * 1000
 
         logger.debug("Attempting to acquire lock: $lockName (wait: ${waitTime}ms, lease: ${leaseTime}ms)")
 
-        return redisLockService.executeWithLock(lockName, waitTime, leaseTime, TimeUnit.MILLISECONDS, distributedLock.throwOnFailure) {
+        return redisLockService.executeWithLock(
+            lockName,
+            waitTime,
+            leaseTime,
+            TimeUnit.MILLISECONDS,
+            distributedLock.throwOnFailure
+        ) {
             if (distributedLock.transactional) TransactionTemplate(transactionManager).execute { point.proceed() }
             else point.proceed()
         }

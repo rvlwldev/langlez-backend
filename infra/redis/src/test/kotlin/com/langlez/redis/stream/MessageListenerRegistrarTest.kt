@@ -47,7 +47,7 @@ class MessageListenerRegistrarTest : BehaviorSpec({
             ctx.registerBean(RegistrarTestListener::class.java, Supplier { RegistrarTestListener(received, latch) })
             ctx.refresh()
 
-            queue.publish(topic, "member-1", "hello")
+            queue.publish(topic, "hello", "member-1")
             val completed = latch.await(15, TimeUnit.SECONDS)
 
             Then("리스너가 메시지를 수신해 핸들러를 호출하고, 처리 후 ACK하여 pending이 0이 된다") {
@@ -87,7 +87,7 @@ class MessageListenerRegistrarTest : BehaviorSpec({
                 thrown = e
             }
 
-            queue.publish(topic, "member-2", "after-restart")
+            queue.publish(topic, "after-restart", "member-2")
             val completed = latch.await(15, TimeUnit.SECONDS)
 
             Then("BUSYGROUP 예외 없이 정상 초기화되고, 이후 메시지도 정상적으로 수신/ACK된다") {
@@ -108,7 +108,7 @@ private class RegistrarTestListener(
     private val received: MutableList<String>,
     private val latch: CountDownLatch,
 ) {
-    @MessageListener(topic = "registrar-test-topic", group = "registrar-test-group")
+    @MessageListener(topics = ["registrar-test-topic"], group = "registrar-test-group")
     fun onMessage(payload: String) {
         received += payload
         latch.countDown()
@@ -119,7 +119,7 @@ private class RestartTestListener(
     private val received: MutableList<String>,
     private val latch: CountDownLatch,
 ) {
-    @MessageListener(topic = "registrar-restart-topic", group = "registrar-restart-group")
+    @MessageListener(topics = ["registrar-restart-topic"], group = "registrar-restart-group")
     fun onMessage(payload: String) {
         received += payload
         latch.countDown()

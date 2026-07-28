@@ -1,7 +1,7 @@
 package com.langlez.redis.config
 
-import com.langlez.observability.PerformanceLogger
-import com.langlez.observability.config.LoggerProperties
+import com.langlez.logger.PerformanceLogger
+import com.langlez.property.LoggerProperties
 import io.lettuce.core.AbstractRedisClient
 import io.lettuce.core.RedisClient
 import io.lettuce.core.cluster.RedisClusterClient

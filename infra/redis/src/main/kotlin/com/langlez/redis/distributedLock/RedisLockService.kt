@@ -35,7 +35,11 @@ class RedisLockService(private val redissonClient: RedissonClient) {
 
         val acquired =
             try {
-                rLock.tryLock(waitTime, leaseTime, unit)
+                if (leaseTime <= 0) {
+                    rLock.tryLock(waitTime, unit)
+                } else {
+                    rLock.tryLock(waitTime, leaseTime, unit)
+                }
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw IllegalStateException("Interrupted while acquiring lock: $key", e)

@@ -37,5 +37,22 @@ class RedisLockServiceTest : BehaviorSpec({
                 result shouldBe "success"
             }
         }
+
+        When("leaseTime가 0 이하일 때 (Redisson Watchdog 자동 갱신 설정)") {
+            val key = "test:watchdog:lock:key"
+
+            Then("작업 수행 중에도 락이 자동 연장되어 락을 유지하고 완료 후 해제된다") {
+                val result = lockService.executeWithLock(key, 1000, 0, TimeUnit.MILLISECONDS) {
+                    val rLock = redissonClient.getLock(key)
+                    rLock.isLocked shouldBe true
+                    rLock.isHeldByCurrentThread shouldBe true
+                    "watchdog_success"
+                }
+                result shouldBe "watchdog_success"
+
+                val rLock = redissonClient.getLock(key)
+                rLock.isLocked shouldBe false
+            }
+        }
     }
 })

@@ -28,9 +28,9 @@ class RedisStreamMessageQueueTest : BehaviorSpec({
 
     Given("RedisStreamMessageQueue.publish 호출 시") {
 
-        When("topic, key, payload를 전달하면") {
+        When("topic, payload, key를 전달하면") {
             val topic = "publish-test-topic"
-            queue.publish(topic, "member-1", "hello-world")
+            queue.publish(topic, "hello-world", "member-1")
 
             Then("실제 Redis Stream에 key/payload 필드를 가진 엔트리가 추가된다") {
                 val entries = redissonClient.getStream<String, String>(topic)
@@ -45,8 +45,8 @@ class RedisStreamMessageQueueTest : BehaviorSpec({
 
         When("동일한 topic에 여러 번 publish하면") {
             val topic = "publish-test-topic-multi"
-            queue.publish(topic, "k1", "payload-1")
-            queue.publish(topic, "k2", "payload-2")
+            queue.publish(topic, "payload-1", "k1")
+            queue.publish(topic, "payload-2", "k2")
 
             Then("두 엔트리가 순서대로 모두 추가된다") {
                 val entries = redissonClient.getStream<String, String>(topic)
@@ -55,6 +55,19 @@ class RedisStreamMessageQueueTest : BehaviorSpec({
                 entries.size shouldBe 2
                 val payloads = entries.values.map { it["payload"] }
                 payloads shouldBe listOf("payload-1", "payload-2")
+            }
+        }
+
+        When("MINID 기반 자르기가 구동될 때 (방안 A)") {
+            val topic = "publish-test-topic-minid"
+            queue.publish(topic, "payload-1", "k1")
+            queue.publish(topic, "payload-2", "k2")
+
+            Then("24시간 이내의 최신 메시지는 트림 대상에 걸리지 않고 안전하게 보존된다") {
+                val stream = redissonClient.getStream<String, String>(topic)
+                val entries = stream.range(StreamMessageId.MIN, StreamMessageId.MAX)
+                entries.size shouldBe 2
+                entries.values.map { it["payload"] } shouldBe listOf("payload-1", "payload-2")
             }
         }
     }
