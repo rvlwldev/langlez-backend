@@ -1,8 +1,8 @@
 package com.langlez.member.domain
 
 import jakarta.persistence.*
+import jakarta.persistence.EnumType.STRING
 import org.springframework.data.annotation.CreatedDate
-import org.springframework.data.annotation.LastModifiedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Duration
 import java.time.Instant
@@ -23,30 +23,28 @@ class Member(
     val id: Long = 0,
     val email: String,
 
-    @Column(length = 20)
-    var username: String = generateRandomUsername(),
-    var nickname: String,
+    @Column(length = 20) var username: String = generateRandomUsername(),
+    @Column(length = 20) var nickname: String,
+    @Enumerated(STRING) var status: MemberStatus = MemberStatus.CREATED,
+    @Enumerated(STRING) var role: MemberRole = MemberRole.MEMBER,
 
-    var lastUsernameUpdatedAt: Instant? = null,
-    var lastNicknameUpdatedAt: Instant? = null,
-
-    @Enumerated(EnumType.STRING) var role: Role = Role.MEMBER,
-
-    @Enumerated(EnumType.STRING) @Column(name = "provider_type") var provider: Provider,
+    @Enumerated(STRING) @Column(name = "provider_type") var provider: MemberProvider,
     @Column(name = "provider_id") var providerId: String,
-    @Column(name = "provider_username") var providerDisplayName: String? = null,
+    @Column(name = "provider_display_name") var providerDisplayName: String? = null,
 
-    var isVerified: Boolean = false,
+    var imageUrl: String? = null,
+
+    var fcm: String? = null,
 
     @CreatedDate var createdAt: Instant = Instant.now(),
-    @LastModifiedDate var updatedAt: Instant = Instant.now(),
-    @Column(name = "last_logged_in_at") var lastAccessedAt: Instant? = null,
+    var lastUsernameUpdatedAt: Instant? = null,
+    var lastNicknameUpdatedAt: Instant? = null,
+    @Column(name = "last_accessed_at") var lastAccessedAt: Instant? = null,
 
-    @Version var version: Long = 0,
-    var fcmToken: String? = null
+    @Version var version: Long = 0
 ) {
-    fun login() {
-        lastAccessedAt = Instant.now()
+    fun updateAccessedAt(accessedAt: Instant = Instant.now()) {
+        if (accessedAt > this.lastAccessedAt) this.lastAccessedAt = accessedAt
     }
 
     fun canChangeUsername(now: Instant = Instant.now()): Boolean =
@@ -65,10 +63,6 @@ class Member(
         lastNicknameUpdatedAt = now
     }
 
-    enum class Role { MEMBER, PREMIUM, ADMIN }
-
-    enum class Provider { GOOGLE, APPLE }
-
     companion object {
         const val USERNAME_REGEX = "^[a-zA-Z0-9_]{3,20}$"
         private val USERNAME_PATTERN = Regex(USERNAME_REGEX)
@@ -81,5 +75,4 @@ class Member(
         fun isValidUsername(username: String): Boolean = USERNAME_PATTERN.matches(username)
     }
 }
-
 
