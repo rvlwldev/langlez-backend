@@ -1,6 +1,6 @@
 package com.langlez.mysql.outbox
 
-import com.langlez.core.MessageQueue
+import com.langlez.core.MessageProducer
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate
  */
 abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
     protected val repo: OutBoxRepository<T, H>,
-    private val mq: MessageQueue,
+    private val producer: MessageProducer,
     private val tx: TransactionTemplate,
     private val toHistory: (T) -> H,
 ) : DisposableBean {
@@ -48,7 +48,7 @@ abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
                             return@submit
                         }
 
-                    runCatching { event.run { mq.publish(topic, payload, key) } }
+                    runCatching { event.run { producer.produce(topic, payload, key) } }
                         .onSuccess { event.complete() }
                         .onFailure { event.fail() }
 

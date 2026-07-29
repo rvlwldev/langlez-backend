@@ -1,6 +1,6 @@
 package com.langlez.mysql.outbox
 
-import com.langlez.core.MessageQueue
+import com.langlez.core.MessageProducer
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -36,11 +36,11 @@ private class TestOutBoxHistory(
 
 private class TestOutBoxProcessor(
     repo: OutBoxRepository<TestOutBox, TestOutBoxHistory>,
-    messageQueue: MessageQueue,
+    messageProducer: MessageProducer,
     transaction: TransactionTemplate,
 ) : OutBoxProcessor<TestOutBox, TestOutBoxHistory>(
     repo = repo,
-    mq = messageQueue,
+    producer = messageProducer,
     tx = transaction,
     toHistory = ::TestOutBoxHistory,
 )
@@ -55,7 +55,7 @@ private fun forceAttempts(outbox: OutBox, attempts: Int) {
 class AbstractOutBoxSchedulerTest : BehaviorSpec({
 
     val repo = mockk<OutBoxRepository<TestOutBox, TestOutBoxHistory>>()
-    val messageQueue = mockk<MessageQueue>()
+    val messageProducer = mockk<MessageProducer>()
     val transaction = mockk<TransactionTemplate>()
 
     every { transaction.execute<Any?>(any()) } answers {
@@ -67,7 +67,7 @@ class AbstractOutBoxSchedulerTest : BehaviorSpec({
     every { repo.deleteAll(any()) } returns Unit
     every { repo.saveAllHistory(any()) } returns Unit
 
-    val scheduler = TestOutBoxProcessor(repo, messageQueue, transaction)
+    val scheduler = TestOutBoxProcessor(repo, messageProducer, transaction)
 
     Given("배치에 poison row(재시도 소진, 상태는 아직 READY)와 정상 row가 섞여 있으면") {
         val poison = TestOutBox("domain", "topic-poison", "{}", "key-1")
@@ -76,14 +76,14 @@ class AbstractOutBoxSchedulerTest : BehaviorSpec({
         val normal = TestOutBox("domain", "topic-normal", "{}", "key-2")
 
         every { repo.findToDispatch(any()) } returns listOf(poison, normal)
-        every { messageQueue.publish(topic = "topic-normal", payload = any(), key = any()) } returns Unit
+        every { messageProducer.produce(topic = "topic-normal", payload = any(), key = any()) } returns Unit
 
         scheduler.dispatchEvents()
 
         Then("poison row는 FAILED로 격리되고, 정상 row는 그대로 발행/완료된다") {
             poison.status shouldBe OutBoxStatus.FAILED
             normal.status shouldBe OutBoxStatus.COMPLETE
-            verify(exactly = 1) { messageQueue.publish(topic = "topic-normal", payload = any(), key = any()) }
+            verify(exactly = 1) { messageProducer.produce(topic = "topic-normal", payload = any(), key = any()) }
         }
     }
 
@@ -91,7 +91,7 @@ class AbstractOutBoxSchedulerTest : BehaviorSpec({
         val failingEvent = TestOutBox("domain", "topic-fail", "{}", "key-fail")
 
         every { repo.findToDispatch(any()) } returns listOf(failingEvent)
-        every { messageQueue.publish(topic = "topic-fail", payload = any(), key = any()) } throws RuntimeException("MQ 연결 오류")
+        every { messageProducer.produce(topic = "topic-fail", payload = any(), key = any()) } throws RuntimeException("MQ 연결 오류")
 
         scheduler.dispatchEvents()
 

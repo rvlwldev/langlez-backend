@@ -17,8 +17,13 @@ class EchoOutBoxRepositoryImpl(
 ) : EchoOutBoxRepository {
 
     @Transactional(propagation = Propagation.MANDATORY)
-    override fun save(aggregateType: String, aggregateId: String, eventName: String, payload: Any?): EchoOutBox =
-        jpa.save(EchoOutBox(aggregateType, aggregateId, eventName, mapper.writeValueAsString(payload)))
+    override fun save(domain: String, topic: String, payload: String?, key: Any?): EchoOutBox {
+        val payloadString = payload ?: ""
+        val keyString = key?.toString()
+        return jpa.save(EchoOutBox(domain, topic, payloadString, keyString))
+    }
+
+    override fun save(outbox: EchoOutBox): EchoOutBox = jpa.save(outbox)
 
     override fun findToDispatch(limit: Int): List<EchoOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
@@ -26,7 +31,7 @@ class EchoOutBoxRepositoryImpl(
             PageRequest.of(0, limit),
         )
 
-    override fun findCompletedOrFailed(limit: Int): List<EchoOutBox> =
+    override fun findAllProcessed(limit: Int): List<EchoOutBox> =
         jpa.findAllByStatusIn(
             listOf(OutBoxStatus.COMPLETE, OutBoxStatus.FAILED),
             PageRequest.of(0, limit),
@@ -34,7 +39,9 @@ class EchoOutBoxRepositoryImpl(
 
     override fun saveAll(outboxes: List<EchoOutBox>): List<EchoOutBox> = jpa.saveAll(outboxes)
 
-    override fun deleteAll(outboxes: List<EchoOutBox>) = jpa.deleteAll(outboxes)
+    override fun deleteAll(outboxes: List<EchoOutBox>) { jpa.deleteAll(outboxes) }
+
+    override fun saveHistory(history: EchoOutBoxHistory): EchoOutBoxHistory = historyJpa.save(history)
 
     override fun saveAllHistory(history: List<EchoOutBoxHistory>) { historyJpa.saveAll(history) }
 }

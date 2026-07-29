@@ -1,15 +1,15 @@
-package com.langlez.echo.infrastructure.outbox
+package com.langlez.member.infrastructure
 
-import com.langlez.mysql.outbox.OutBox
 import com.langlez.mysql.outbox.OutBoxHistory
 import com.langlez.mysql.outbox.OutBoxStatus
 import jakarta.persistence.Entity
+import jakarta.persistence.Index
 import jakarta.persistence.Table
 import java.time.Instant
 
 @Entity
-@Table(name = "echo_event_outbox_history")
-class EchoOutBoxHistory(
+@Table(name = "member_event_outbox_history", indexes = [Index(name = "", columnList = "domain")])
+class MemberOutBoxHistory(
     id: Long,
     domain: String,
     topic: String,
@@ -21,5 +21,14 @@ class EchoOutBoxHistory(
     processedAt: Instant = Instant.now(),
 ) : OutBoxHistory(id, domain, topic, payload, key, attempts, status, createdAt, processedAt) {
 
-    constructor(o: EchoOutBox) : this(o as OutBox)
+    constructor(o: MemberOutBox) : this(
+        id = o.id,
+        domain = o.domain,
+        topic = o.topic,
+        payload = o.payload,
+        key = o.key,
+        attempts = o.attempts,
+        status = o.status,
+        createdAt = o.createdAt,
+    )
 }

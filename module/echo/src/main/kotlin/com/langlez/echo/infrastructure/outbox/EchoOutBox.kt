@@ -1,6 +1,6 @@
 package com.langlez.echo.infrastructure.outbox
 
-import com.langlez.mysql.outbox.AbstractOutBox
+import com.langlez.mysql.outbox.OutBox
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.Instant
@@ -13,4 +13,4 @@ class EchoOutBox(
     eventName: String,
     payload: String,
     createdAt: Instant = Instant.now(),
-) : AbstractOutBox(aggregateType, aggregateId, eventName, payload, createdAt)
+) : OutBox(aggregateType, aggregateId, eventName, payload, createdAt)

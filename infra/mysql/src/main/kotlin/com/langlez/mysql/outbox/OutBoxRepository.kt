@@ -6,7 +6,7 @@ package com.langlez.mysql.outbox
  */
 interface OutBoxRepository<T : OutBox, H : OutBoxHistory> {
 
-    fun save(type: String, topic: String, payload: String?, key: Any?): T
+    fun save(domain: String, topic: String, payload: String?, key: Any?): T
     fun save(outbox: T): T
     fun saveAll(outboxes: List<T>): List<T>
 

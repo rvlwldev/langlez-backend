@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
 
 @Component
-internal class ChatOutBoxProcessor(
+internal class ChatOutBoxScheduler(
     repo: ChatOutBoxRepository,
     mq: MessageProducer,
     tx: TransactionTemplate,

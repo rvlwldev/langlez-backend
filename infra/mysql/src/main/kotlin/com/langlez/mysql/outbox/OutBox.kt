@@ -14,7 +14,7 @@ abstract class OutBox(
     val domain: String,
     val topic: String,
     @Column(columnDefinition = "TEXT") val payload: String?,
-    val key: String?,
+    @Column(name = "`key`") val key: String?,
     val createdAt: Instant = Instant.now(),
 ) {
     @Id

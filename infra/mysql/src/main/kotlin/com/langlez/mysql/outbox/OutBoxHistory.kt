@@ -13,7 +13,7 @@ abstract class OutBoxHistory(
     val domain: String,
     val topic: String,
     @Column(columnDefinition = "TEXT") val payload: String?,
-    val key: String?,
+    @Column(name = "`key`") val key: String?,
     val attempts: Int,
     @Enumerated(STRING) val status: OutBoxStatus,
     val createdAt: Instant,

@@ -1,8 +1,5 @@
-package com.langlez.chat.application
+package com.langlez.member.infrastructure
 
-import com.langlez.chat.infrastructure.outbox.ChatOutBox
-import com.langlez.chat.infrastructure.outbox.ChatOutBoxHistory
-import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.MessageProducer
 import com.langlez.mysql.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
@@ -11,22 +8,22 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
 
 @Component
-internal class ChatOutBoxProcessor(
-    repo: ChatOutBoxRepository,
+internal class MemberOutBoxScheduler(
+    repo: MemberOutBoxRepositoryImpl,
     mq: MessageProducer,
     tx: TransactionTemplate,
-) : OutBoxProcessor<ChatOutBox, ChatOutBoxHistory>(
+) : OutBoxProcessor<MemberOutBox, MemberOutBoxHistory>(
     repo = repo,
     producer = mq,
     tx = tx,
-    toHistory = ::ChatOutBoxHistory,
+    toHistory = ::MemberOutBoxHistory,
 ) {
 
     @Scheduled(fixedDelay = 5000)
-    @DistributedLock(prefix = "lock:chat-outbox", leaseSecs = -1, waitMs = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:member-outbox")
     override fun dispatchEvents() = super.dispatchEvents()
 
     @Scheduled(cron = "0 0 2 * * *")
-    @DistributedLock(prefix = "lock:chat-outbox-history", leaseSecs = -1, waitMs = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:member-outbox-history")
     override fun moveToHistory() = super.moveToHistory()
 }

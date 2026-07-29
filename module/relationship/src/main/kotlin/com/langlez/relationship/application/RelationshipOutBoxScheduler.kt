@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
 
 @Component
-internal class RelationshipOutBoxProcessor(
+internal class RelationshipOutBoxScheduler(
     repo: RelationshipOutBoxRepository,
     mq: MessageProducer,
     tx: TransactionTemplate,
