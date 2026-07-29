@@ -47,12 +47,13 @@ class JwtTokenProvider(
         }
     }
 
-    fun createRefreshToken(id: Long, role: String): String {
+    fun createRefreshToken(id: Long, username: String, role: String): String {
         val now = Instant.now()
         val expiration = now.plus(Duration.ofSeconds(refreshTokenTTL))
 
         return Jwts.builder()
             .subject(id.toString())
+            .claim("username", username)
             .claim("role", role)
             .claim("type", "refresh")
             .issuedAt(Date.from(now))
@@ -61,12 +62,13 @@ class JwtTokenProvider(
             .compact()
     }
 
-    fun createAccessToken(id: Long, role: String): String {
+    fun createAccessToken(id: Long, username: String, role: String): String {
         val now = Instant.now()
         val expiration = now.plus(Duration.ofSeconds(accessTokenTTL))
 
         return Jwts.builder()
             .subject(id.toString())
+            .claim("username", username)
             .claim("role", role)
             .claim("type", "access")
             .issuedAt(Date.from(now))
@@ -80,6 +82,9 @@ class JwtTokenProvider(
 
     fun extractRole(claims: Claims): String = claims.get("role", String::class.java)
     fun extractRole(token: String): String = extractRole(parseToClaims(token))
+
+    fun extractUsername(claims: Claims): String = claims.get("username", String::class.java)
+    fun extractUsername(token: String): String = extractUsername(parseToClaims(token))
 
     fun extractTokenType(claims: Claims): String = claims.get("type", String::class.java)
     fun extractTokenType(token: String): String = extractTokenType(parseToClaims(token))

@@ -5,13 +5,14 @@ import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.*
-import java.time.Instant
 
 class ChatRoomCreatorTest : BehaviorSpec({
 
@@ -39,7 +40,7 @@ class ChatRoomCreatorTest : BehaviorSpec({
         email = "$username@example.com",
         username = username,
         nickname = nickname,
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = nickname
     )
@@ -64,7 +65,7 @@ class ChatRoomCreatorTest : BehaviorSpec({
 
         When("방이 존재하지 않고, MEMBER 등급인 경우") {
             val requester = createMember(requesterId)
-            requester.role = Member.Role.MEMBER
+            requester.role = MemberRole.MEMBER
 
             every { chatRoomRepository.findByParticipants(lowId, highId) } returns null
             every { memberRepository.findById(requesterId) } returns requester
@@ -82,7 +83,7 @@ class ChatRoomCreatorTest : BehaviorSpec({
 
         When("방이 존재하지 않고, MEMBER가 하루 5명 초과로 새 방 생성을 요청하면") {
             val requester = createMember(requesterId)
-            requester.role = Member.Role.MEMBER
+            requester.role = MemberRole.MEMBER
 
             every { chatRoomRepository.findByParticipants(lowId, highId) } returns null
             every { memberRepository.findById(requesterId) } returns requester
@@ -100,7 +101,7 @@ class ChatRoomCreatorTest : BehaviorSpec({
 
         When("방이 존재하지 않고, PREMIUM 등급인 경우") {
             val requester = createMember(requesterId)
-            requester.role = Member.Role.PREMIUM
+            requester.role = MemberRole.PREMIUM
 
             every { chatRoomRepository.findByParticipants(lowId, highId) } returns null
             every { memberRepository.findById(requesterId) } returns requester

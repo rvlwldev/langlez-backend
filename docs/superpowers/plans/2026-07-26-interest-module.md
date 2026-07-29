@@ -615,7 +615,7 @@ class InterestFullTextIndexRunner(private val em: EntityManager) : ApplicationRu
 
 ```bash
 cd /Users/hj/project/langlez/server/main
-./infra-start.sh
+./local-infra-start.sh
 ./gradlew :app:api:bootRun --args='--spring.profiles.active=' &
 sleep 25
 mysql -h 127.0.0.1 -P 3306 -u admin -padmin langlez_db -e "SHOW INDEX FROM interests WHERE Key_name LIKE 'FT_%';"

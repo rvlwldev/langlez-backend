@@ -1,9 +1,9 @@
 package com.langlez.relationship.infrastructure.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.mysql.outbox.OutBoxStatus
 import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxHistoryJpaRepository
 import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxJpaRepository
-import com.langlez.mysql.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation
@@ -17,8 +17,13 @@ class RelationshipOutBoxRepositoryImpl(
 ) : RelationshipOutBoxRepository {
 
     @Transactional(propagation = Propagation.MANDATORY)
-    override fun save(aggregateType: String, aggregateId: String, eventName: String, payload: Any?): RelationshipOutBox =
-        jpa.save(RelationshipOutBox(aggregateType, aggregateId, eventName, mapper.writeValueAsString(payload)))
+    override fun save(domain: String, topic: String, payload: String?, key: Any?): RelationshipOutBox {
+        val payloadString = payload ?: ""
+        val keyString = key?.toString()
+        return jpa.save(RelationshipOutBox(domain, topic, payloadString, keyString))
+    }
+
+    override fun save(outbox: RelationshipOutBox): RelationshipOutBox = jpa.save(outbox)
 
     override fun findToDispatch(limit: Int): List<RelationshipOutBox> =
         jpa.findAllByStatusInOrderByCreatedAtAsc(
@@ -26,7 +31,7 @@ class RelationshipOutBoxRepositoryImpl(
             PageRequest.of(0, limit),
         )
 
-    override fun findCompletedOrFailed(limit: Int): List<RelationshipOutBox> =
+    override fun findAllProcessed(limit: Int): List<RelationshipOutBox> =
         jpa.findAllByStatusIn(
             listOf(OutBoxStatus.COMPLETE, OutBoxStatus.FAILED),
             PageRequest.of(0, limit),
@@ -34,7 +39,9 @@ class RelationshipOutBoxRepositoryImpl(
 
     override fun saveAll(outboxes: List<RelationshipOutBox>): List<RelationshipOutBox> = jpa.saveAll(outboxes)
 
-    override fun deleteAll(outboxes: List<RelationshipOutBox>) = jpa.deleteAll(outboxes)
+    override fun deleteAll(outboxes: List<RelationshipOutBox>) { jpa.deleteAll(outboxes) }
+
+    override fun saveHistory(history: RelationshipOutBoxHistory): RelationshipOutBoxHistory = historyJpa.save(history)
 
     override fun saveAllHistory(history: List<RelationshipOutBoxHistory>) { historyJpa.saveAll(history) }
 }

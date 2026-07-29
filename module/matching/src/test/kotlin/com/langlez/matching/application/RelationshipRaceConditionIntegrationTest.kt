@@ -2,6 +2,7 @@ package com.langlez.matching.application
 
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.relationship.application.RelationshipService
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -79,7 +80,7 @@ class RelationshipRaceConditionIntegrationTest : BehaviorSpec() {
             email = "$username@test.com",
             username = username,
             nickname = username,
-            provider = Member.Provider.GOOGLE,
+            provider = MemberProvider.GOOGLE,
             providerId = "p-$username",
             providerDisplayName = username,
         )

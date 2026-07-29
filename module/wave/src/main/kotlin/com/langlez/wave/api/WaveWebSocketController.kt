@@ -1,7 +1,7 @@
 package com.langlez.wave.api
 
-import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberRole
 import com.langlez.wave.application.WaveBroadcaster
 import com.langlez.wave.application.WaveChatBroadcastPayload
 import com.langlez.wave.application.WaveErrorPayload
@@ -43,7 +43,7 @@ class WaveWebSocketController(
         val memberId = stompPrincipal?.memberId ?: principal.name.toLongOrNull() ?: return
         val role = stompPrincipal?.role ?: memberRepository.findById(memberId)?.role ?: return
 
-        if (role == Member.Role.MEMBER) {
+        if (role == MemberRole.MEMBER) {
             val cooldownKey = "wave:chat-cooldown:$roomId:$memberId"
             val acquired = redissonClient.getBucket<String>(cooldownKey)
                 .setIfAbsent("1", Duration.ofSeconds(30))

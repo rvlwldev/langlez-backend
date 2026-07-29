@@ -7,13 +7,14 @@ import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
-import com.langlez.core.MemberPresenceTracker
 import com.langlez.echo.domain.Comment
 import com.langlez.echo.domain.CommentRepository
 import com.langlez.echo.domain.Post
 import com.langlez.echo.domain.PostRepository
+import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
 import io.kotest.assertions.throwables.shouldThrow
@@ -28,7 +29,7 @@ import java.time.Instant
 class AdminServiceTest : BehaviorSpec({
 
     val memberRepository = mockk<MemberRepository>()
-    val memberPresenceTracker = mockk<MemberPresenceTracker>()
+    val memberOnlineTracker = mockk<MemberOnlineTracker>()
     val chatRoomRepository = mockk<ChatRoomRepository>()
     val chatMessageRepository = mockk<ChatMessageRepository>()
     val attachmentRepository = mockk<AttachmentRepository>()
@@ -38,7 +39,7 @@ class AdminServiceTest : BehaviorSpec({
 
     val adminService = AdminService(
         memberRepository,
-        memberPresenceTracker,
+        memberOnlineTracker,
         chatRoomRepository,
         chatMessageRepository,
         attachmentRepository,
@@ -50,7 +51,7 @@ class AdminServiceTest : BehaviorSpec({
     afterEach {
         clearMocks(
             memberRepository,
-            memberPresenceTracker,
+            memberOnlineTracker,
             chatRoomRepository,
             chatMessageRepository,
             attachmentRepository,
@@ -65,14 +66,14 @@ class AdminServiceTest : BehaviorSpec({
         email = "$username@test.com",
         username = username,
         nickname = nickname,
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = nickname
     )
 
     Given("대시보드 조회 시") {
         every { memberRepository.countAll() } returns 10L
-        every { memberPresenceTracker.countOnline() } returns 3L
+        every { memberOnlineTracker.countOnline() } returns 3L
 
         When("대시보드 데이터를 가져오면") {
             val result = adminService.getDashboard()
@@ -88,8 +89,8 @@ class AdminServiceTest : BehaviorSpec({
         val m1 = createMember(1L, "user1", "nick1")
         val m2 = createMember(2L, "user2", "nick2")
 
-        every { memberRepository.findAll(null, 2) } returns listOf(m2, m1)
-        every { memberPresenceTracker.areOnline(listOf(2L, 1L)) } returns mapOf(2L to true, 1L to false)
+        every { memberRepository.findAll(2, null) } returns listOf(m2, m1)
+        every { memberOnlineTracker.checkStatus(listOf("user2", "user1")) } returns mapOf("user2" to true, "user1" to false)
 
         When("목록을 조회하면") {
             val result = adminService.getUsers(null, 2)

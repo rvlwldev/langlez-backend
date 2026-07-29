@@ -11,28 +11,28 @@ class RelationshipController(
     private val service: RelationshipService,
 ) {
 
-    @PostMapping("/follow/@{followingUsername}")
+    @PostMapping("/follow/{followingUsername}")
     @ResponseStatus(HttpStatus.CREATED)
     fun follow(@MemberID followerId: Long, @PathVariable followingUsername: String) {
         val followingId = resolveUsername(followingUsername)
         service.follow(followerId, followingId)
     }
 
-    @DeleteMapping("/follow/@{followingUsername}")
+    @DeleteMapping("/follow/{followingUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun unfollow(@MemberID followerId: Long, @PathVariable followingUsername: String) {
         val followingId = resolveUsername(followingUsername)
         service.unfollow(followerId, followingId)
     }
 
-    @PostMapping("/block/@{blockedUsername}")
+    @PostMapping("/block/{blockedUsername}")
     @ResponseStatus(HttpStatus.CREATED)
     fun block(@MemberID blockerId: Long, @PathVariable blockedUsername: String) {
         val blockedId = resolveUsername(blockedUsername)
         service.block(blockerId, blockedId)
     }
 
-    @DeleteMapping("/block/@{blockedUsername}")
+    @DeleteMapping("/block/{blockedUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun unblock(@MemberID blockerId: Long, @PathVariable blockedUsername: String) {
         val blockedId = resolveUsername(blockedUsername)

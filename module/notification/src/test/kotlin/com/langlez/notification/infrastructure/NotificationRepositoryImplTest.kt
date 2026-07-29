@@ -2,6 +2,7 @@ package com.langlez.notification.infrastructure
 
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -59,7 +60,7 @@ class NotificationRepositoryImplTest : BehaviorSpec() {
                     email = "receiver@test.com",
                     username = "receiver",
                     nickname = "Receiver",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-receiver",
                     providerDisplayName = "Receiver"
                 )

@@ -4,6 +4,8 @@ import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
@@ -80,10 +82,10 @@ class ChatRoomConcurrencyIntegrationTest : BehaviorSpec() {
                     email = "alice@example.com",
                     username = "alice",
                     nickname = "Alice",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "p-alice",
                     providerDisplayName = "Alice",
-                    role = Member.Role.MEMBER
+                    role = MemberRole.MEMBER
                 )
             )
 
@@ -92,10 +94,10 @@ class ChatRoomConcurrencyIntegrationTest : BehaviorSpec() {
                     email = "bob@example.com",
                     username = "bob",
                     nickname = "Bob",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "p-bob",
                     providerDisplayName = "Bob",
-                    role = Member.Role.MEMBER
+                    role = MemberRole.MEMBER
                 )
             )
 

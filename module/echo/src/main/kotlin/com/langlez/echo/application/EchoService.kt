@@ -4,8 +4,8 @@ import com.langlez.core.LanglezException
 import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository
-import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberRole
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.RelationshipRepository
 import org.redisson.api.RedissonClient
@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 @Service
@@ -44,7 +43,7 @@ class EchoService(
         }
 
         val author = memberRepository.findById(authorId) ?: throw LanglezException(404, "member.not-found")
-        if (author.role == Member.Role.MEMBER) {
+        if (author.role == MemberRole.MEMBER) {
             if (!dailyRateLimiter.tryConsume("echo:post:$authorId", 1)) {
                 throw LanglezException(429, "echo.post.daily-limit-exceeded")
             }

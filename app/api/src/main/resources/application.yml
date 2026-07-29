@@ -20,9 +20,17 @@ spring:
     virtual:
       enabled: true
 
+  mvc:
+    throw-exception-if-no-handler-found: true
+
+  web:
+    resources:
+      add-mappings: false
+
   # Data Sources — 로컬 개발용 값 (운영은 application-production.yml의 환경 변수로 대체됨)
   datasource:
-    url: jdbc:mysql://localhost:3306/langlez_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    # rewriteBatchedStatements=true 추가 필요
+    url: jdbc:mysql://localhost:3306/langlez_db?rewriteBatchedStatements=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: admin
     password: admin
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -45,6 +53,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_size: 100
+        order_updates: true
+        order_inserts: true
 
   messages:
     basename: messages
@@ -111,7 +123,7 @@ swagger:
   version: "1.0.0"
   contact:
     name: "Langlez Development Team"
-    email: "dev@langlez.com"
+    email: "admin@langlez.com"
     url: "https://langlez.com"
   servers:
     - url: "http://localhost:8080"

@@ -20,6 +20,6 @@ class PerformanceLogger {
         if (durationMs >= warnThresholdMs)
             logger.warn("type={} command={} duration_ms={} params={}", *payload)
         else if (durationMs >= thresholdMs)
-            logger.trace("type={} command={} duration_ms={} params={}", *payload)
+            logger.debug("type={} command={} duration_ms={} params={}", *payload)
     }
 }

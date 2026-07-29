@@ -2,6 +2,7 @@ package com.langlez.profile.api
 
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.application.ProfileService
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -25,7 +26,7 @@ class ProfileControllerTest : BehaviorSpec({
         email = "$username@example.com",
         username = username,
         nickname = nickname,
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "g$id",
         providerDisplayName = nickname
     )

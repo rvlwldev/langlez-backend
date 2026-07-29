@@ -3,6 +3,7 @@ package com.langlez.relationship.application
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
@@ -30,7 +31,7 @@ class RelationshipServiceTest : BehaviorSpec({
         email = "$username@example.com",
         username = username,
         nickname = nickname,
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = nickname
     )

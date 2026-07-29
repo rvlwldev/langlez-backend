@@ -1,14 +1,12 @@
 package com.langlez.filter
 
 import com.langlez.core.TokenBlacklist
-// import com.langlez.security.event.MemberAuthenticatedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.utility.JwtTokenProvider
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Lazy
 import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -22,7 +20,6 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 class JwtAuthenticationFilter(
     private val jwt: JwtTokenProvider,
     private val tokenBlacklist: TokenBlacklist,
-    private val eventPublisher: ApplicationEventPublisher,
     @param:Lazy @param:Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
 
@@ -46,10 +43,6 @@ class JwtAuthenticationFilter(
             val role = jwt.extractRole(claims)
             val authentication = UsernamePasswordAuthenticationToken(id, null, listOf(SimpleGrantedAuthority(role)))
             SecurityContextHolder.getContext().authentication = authentication
-
-            // 온라인 상태 갱신
-            // TODO: MQ로 변경
-            // eventPublisher.publishEvent(MemberAuthenticatedEvent(id))
 
             chain.doFilter(req, res)
         } catch (e: Exception) {

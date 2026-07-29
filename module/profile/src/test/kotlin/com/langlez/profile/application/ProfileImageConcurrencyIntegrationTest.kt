@@ -3,7 +3,8 @@ package com.langlez.profile.application
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.profile.domain.Profile
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -74,10 +75,10 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
                     email = "lockuser@example.com",
                     username = "lockuser",
                     nickname = "LockUser",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "p-lockuser",
                     providerDisplayName = "LockUser",
-                    role = Member.Role.MEMBER
+                    role = MemberRole.MEMBER
                 )
             )
 

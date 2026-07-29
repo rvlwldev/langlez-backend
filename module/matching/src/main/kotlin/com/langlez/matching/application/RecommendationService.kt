@@ -5,8 +5,8 @@ import com.langlez.core.LanglezException
 import com.langlez.matching.api.MatchingRequest
 import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.RecommendationRepository
-import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberRole
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.relationship.domain.RelationshipRepository
@@ -31,9 +31,9 @@ class RecommendationService(
     private val recommendationRepository: RecommendationRepository,
 ) {
 
-    fun refreshFreeMembers() = refreshAll(Duration.ofDays(1)) { it.member.role == Member.Role.MEMBER }
+    fun refreshFreeMembers() = refreshAll(Duration.ofDays(1)) { it.member.role == MemberRole.MEMBER }
 
-    fun refreshPremiumMembers() = refreshAll(Duration.ofHours(1)) { it.member.role != Member.Role.MEMBER }
+    fun refreshPremiumMembers() = refreshAll(Duration.ofHours(1)) { it.member.role != MemberRole.MEMBER }
 
     private fun refreshAll(ttl: Duration, predicate: (Profile) -> Boolean) {
         val all = profileRepository.findAllProfiles()
@@ -95,7 +95,7 @@ class RecommendationService(
         role: String,
         filter: MatchingRequest.RecommendationFilter,
     ): MatchingResponse.RecommendationList {
-        if (filter.isPresent() && role == Member.Role.MEMBER.name) {
+        if (filter.isPresent() && role == MemberRole.MEMBER.name) {
             throw LanglezException(403, "matching.recommendation.premium-only-filter")
         }
 

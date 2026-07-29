@@ -5,9 +5,9 @@ import com.langlez.attachment.domain.AttachmentRepository
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
-import com.langlez.core.MemberPresenceTracker
 import com.langlez.echo.domain.CommentRepository
 import com.langlez.echo.domain.PostRepository
+import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
@@ -17,7 +17,7 @@ import java.time.Instant
 @Service
 class AdminService(
     private val memberRepository: MemberRepository,
-    private val memberPresenceTracker: MemberPresenceTracker,
+    private val memberOnlineTracker: MemberOnlineTracker,
     private val chatRoomRepository: ChatRoomRepository,
     private val chatMessageRepository: ChatMessageRepository,
     private val attachmentRepository: AttachmentRepository,
@@ -28,21 +28,21 @@ class AdminService(
 
     fun getDashboard(): AdminDashboardView {
         val totalMembers = memberRepository.countAll()
-        val onlineMembers = memberPresenceTracker.countOnline()
+        val onlineMembers = memberOnlineTracker.countOnline()
         return AdminDashboardView(totalMembers, onlineMembers)
     }
 
     fun getUsers(cursor: Long?, size: Int): List<AdminUserRow> {
-        val members = memberRepository.findAll(cursor, size)
-        val memberIds = members.map { it.id }
-        val onlineMap = memberPresenceTracker.areOnline(memberIds)
+        val members = memberRepository.findAll(size, cursor)
+        val usernames = members.map { it.username }
+        val onlineMap = memberOnlineTracker.checkStatus(usernames)
         return members.map { member ->
             AdminUserRow(
                 id = member.id,
                 username = member.username,
                 nickname = member.nickname,
                 createdAt = member.createdAt,
-                online = onlineMap[member.id] ?: false
+                online = onlineMap[member.username] == true
             )
         }
     }

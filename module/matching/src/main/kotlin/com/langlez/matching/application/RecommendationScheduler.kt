@@ -13,13 +13,13 @@ class RecommendationScheduler(
 ) {
 
     @Scheduled(cron = "0 0 0 * * *")
-    @DistributedLock(prefix = "lock:matching-recommend-free", ttl = 300, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:matching-recommend-free", leaseSecs = 300, waitMs = 0, retries = 0, throwOnFailure = false)
     fun refreshFreeMembers() {
         recommendationService.refreshFreeMembers()
     }
 
     @Scheduled(fixedRate = 3600000)
-    @DistributedLock(prefix = "lock:matching-recommend-premium", ttl = 300, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:matching-recommend-premium", leaseSecs = 300, waitMs = 0, retries = 0, throwOnFailure = false)
     fun refreshPremiumMembers() {
         recommendationService.refreshPremiumMembers()
     }

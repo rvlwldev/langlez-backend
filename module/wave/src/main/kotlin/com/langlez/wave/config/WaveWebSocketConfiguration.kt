@@ -2,7 +2,7 @@ package com.langlez.wave.config
 
 import com.langlez.core.LanglezException
 import com.langlez.core.TokenBlacklist
-import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRole
 import com.langlez.security.util.JwtParser
 import com.langlez.wave.domain.WaveRoom
 import com.langlez.wave.domain.WaveRoomRepository
@@ -125,8 +125,8 @@ class WaveJwtChannelInterceptor(
             }
             val roleStr = try { jwtParser.extractRole(token) } catch (e: Exception) { null }
             val role = roleStr?.let {
-                try { Member.Role.valueOf(it) } catch (e: Exception) { null }
-            } ?: Member.Role.MEMBER
+                try { MemberRole.valueOf(it) } catch (e: Exception) { null }
+            } ?: MemberRole.MEMBER
             accessor.user = WaveStompPrincipal(memberId, role)
         } catch (e: Exception) {
             throw LanglezException(401, "auth.invalid-token")
@@ -182,7 +182,7 @@ class WaveSessionDisconnectListener(
 
 class WaveStompPrincipal(
     val memberId: Long,
-    val role: Member.Role = Member.Role.MEMBER,
+    val role: MemberRole = MemberRole.MEMBER,
 ) : Principal {
     override fun getName(): String = memberId.toString()
 }

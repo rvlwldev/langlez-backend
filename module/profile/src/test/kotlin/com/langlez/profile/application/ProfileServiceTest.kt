@@ -4,6 +4,7 @@ import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.interest.application.InterestService
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -13,8 +14,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.*
 import org.springframework.http.HttpStatus
-import org.springframework.transaction.support.TransactionCallback
-import org.springframework.transaction.support.TransactionTemplate
 
 class ProfileServiceTest : BehaviorSpec({
 
@@ -32,7 +31,7 @@ class ProfileServiceTest : BehaviorSpec({
         email = "user$id@test.com",
         username = "user$id",
         nickname = "User$id",
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = "User$id"
     )

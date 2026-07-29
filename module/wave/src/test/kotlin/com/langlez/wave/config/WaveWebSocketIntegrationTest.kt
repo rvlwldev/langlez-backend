@@ -3,6 +3,8 @@ package com.langlez.wave.config
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.security.util.JwtParser
 import com.langlez.wave.application.WaveChatBroadcastPayload
 import com.langlez.wave.domain.WaveRoom
@@ -100,11 +102,11 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
         }
     }
 
-    private fun createMember(role: Member.Role): Member {
+    private fun createMember(role: MemberRole): Member {
         val member = Member(
             email = "wave-${System.nanoTime()}@example.com",
             nickname = "Wave User",
-            provider = Member.Provider.GOOGLE,
+            provider = MemberProvider.GOOGLE,
             providerId = "wave-${System.nanoTime()}",
             providerDisplayName = "Wave User"
         )
@@ -121,7 +123,7 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
             val wsUrl = "ws://localhost:$port/ws/wave"
 
             When("addViewerIfAllowed를 직접 호출하면") {
-                val member = createMember(Member.Role.MEMBER)
+                val member = createMember(MemberRole.MEMBER)
                 val room = waveRoomRepository.save(WaveRoom(broadcasterId = member.id))
 
                 Then("정상적으로 뷰어로 등록되고 시청자 수가 1 증가해야 한다") {
@@ -133,7 +135,7 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
             }
 
             When("존재하지 않는 방을 구독하려 하면") {
-                val stranger = createMember(Member.Role.MEMBER)
+                val stranger = createMember(MemberRole.MEMBER)
                 val strangerToken = jwtParser.createAccessToken(stranger.id, stranger.role.name)
                 val headers = StompHeaders().apply { add("Authorization", "Bearer $strangerToken") }
 
@@ -155,12 +157,12 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
             }
 
             When("이미 종료된 방을 구독하려 하면") {
-                val broadcaster = createMember(Member.Role.PREMIUM)
+                val broadcaster = createMember(MemberRole.PREMIUM)
                 val endedRoom = waveRoomRepository.save(
                     WaveRoom(broadcasterId = broadcaster.id, endedAt = Instant.now())
                 )
 
-                val viewer = createMember(Member.Role.MEMBER)
+                val viewer = createMember(MemberRole.MEMBER)
                 val viewerToken = jwtParser.createAccessToken(viewer.id, viewer.role.name)
                 val headers = StompHeaders().apply { add("Authorization", "Bearer $viewerToken") }
 
@@ -182,11 +184,11 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
             }
 
             When("진행 중인 방에서 시그널링 메시지를 주고받으면") {
-                val broadcaster = createMember(Member.Role.PREMIUM)
+                val broadcaster = createMember(MemberRole.PREMIUM)
                 val room = waveRoomRepository.save(WaveRoom(broadcasterId = broadcaster.id))
 
-                val alice = createMember(Member.Role.MEMBER)
-                val bob = createMember(Member.Role.MEMBER)
+                val alice = createMember(MemberRole.MEMBER)
+                val bob = createMember(MemberRole.MEMBER)
                 val aliceHeaders = StompHeaders().apply {
                     add("Authorization", "Bearer ${jwtParser.createAccessToken(alice.id, alice.role.name)}")
                 }
@@ -226,10 +228,10 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
             }
 
             When("무료 회원이 30초 이내에 채팅을 두 번 보내면") {
-                val broadcaster = createMember(Member.Role.PREMIUM)
+                val broadcaster = createMember(MemberRole.PREMIUM)
                 val room = waveRoomRepository.save(WaveRoom(broadcasterId = broadcaster.id))
 
-                val freeMember = createMember(Member.Role.MEMBER)
+                val freeMember = createMember(MemberRole.MEMBER)
                 val freeHeaders = StompHeaders().apply {
                     add("Authorization", "Bearer ${jwtParser.createAccessToken(freeMember.id, freeMember.role.name)}")
                 }

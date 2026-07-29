@@ -1,10 +1,10 @@
 package com.langlez.echo.application
 
 import com.langlez.core.LanglezException
-import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberRole
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
@@ -15,7 +15,6 @@ import io.kotest.matchers.shouldNotBe
 import io.mockk.*
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
-import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class EchoServiceTest : BehaviorSpec({
@@ -54,7 +53,7 @@ class EchoServiceTest : BehaviorSpec({
 
         val authorMember = mockk<Member>()
         every { authorMember.id } returns authorId
-        every { authorMember.role } returns Member.Role.MEMBER
+        every { authorMember.role } returns MemberRole.MEMBER
         every { authorMember.username } returns "test_user"
         every { authorMember.nickname } returns "Test"
         every { memberRepo.findById(authorId) } returns authorMember
@@ -135,7 +134,7 @@ class EchoServiceTest : BehaviorSpec({
             val premiumAuthorId = 2L
             val premiumMember = mockk<Member>()
             every { premiumMember.id } returns premiumAuthorId
-            every { premiumMember.role } returns Member.Role.PREMIUM
+            every { premiumMember.role } returns MemberRole.PREMIUM
             every { premiumMember.username } returns "premium_user"
             every { premiumMember.nickname } returns "Premium"
             every { memberRepo.findById(premiumAuthorId) } returns premiumMember

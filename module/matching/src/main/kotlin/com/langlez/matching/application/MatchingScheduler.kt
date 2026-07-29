@@ -15,7 +15,7 @@ class MatchingScheduler(
 ) {
 
     @Scheduled(fixedDelay = 5000)
-    @DistributedLock(prefix = "lock:matching-scheduler", ttl = 10, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:matching-scheduler", leaseSecs = 10, waitMs = 0, retries = 0, throwOnFailure = false)
     fun rematchWaitingMembers() {
         // 대기열이 커져도 한 사이클이 무한정 길어지지 않도록 상한을 두고, 특정 대기자가 계속 밀리지 않도록 매 사이클 무작위로 섞는다.
         queueRepository.allMembers().shuffled().take(BATCH_SIZE).forEach { memberId ->

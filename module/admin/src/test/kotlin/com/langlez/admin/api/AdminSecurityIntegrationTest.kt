@@ -4,10 +4,10 @@ import com.langlez.admin.TestAdminApplication
 import com.langlez.attachment.domain.AttachmentRepository
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoomRepository
-import com.langlez.core.MemberPresenceTracker
 import com.langlez.echo.domain.CommentRepository
 import com.langlez.echo.domain.PostRepository
 import com.langlez.interest.application.InterestService
+import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.report.domain.ReportRepository
 import io.kotest.core.spec.style.DescribeSpec
@@ -54,7 +54,7 @@ class AdminSecurityIntegrationTest : DescribeSpec() {
         fun memberRepository(): MemberRepository = mockk(relaxed = true)
 
         @Bean
-        fun memberPresenceTracker(): MemberPresenceTracker = mockk(relaxed = true)
+        fun memberOnlineTracker(): MemberOnlineTracker = mockk(relaxed = true)
 
         @Bean
         fun chatRoomRepository(): ChatRoomRepository = mockk(relaxed = true)

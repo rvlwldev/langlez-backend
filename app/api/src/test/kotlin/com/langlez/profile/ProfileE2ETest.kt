@@ -2,6 +2,7 @@ package com.langlez.profile
 
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
@@ -114,7 +115,7 @@ class ProfileE2ETest : BehaviorSpec() {
                     email = "alice@test.com",
                     username = "alice",
                     nickname = "Alice",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-alice",
                     providerDisplayName = "Alice"
                 )
@@ -124,7 +125,7 @@ class ProfileE2ETest : BehaviorSpec() {
                     email = "bob@test.com",
                     username = "bob",
                     nickname = "Bob",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-bob",
                     providerDisplayName = "Bob"
                 )
@@ -152,7 +153,7 @@ class ProfileE2ETest : BehaviorSpec() {
             When("Bob이 Alice의 프로필을 조회하면") {
                 val headers = HttpHeaders().apply { setBearerAuth(bobToken) }
                 val response = restTemplate.exchange(
-                    "/api/v1/profiles/@alice",
+                    "/api/v1/profiles/alice",
                     HttpMethod.GET,
                     HttpEntity<Void>(headers),
                     ProfileResponse.Detail::class.java,
@@ -169,7 +170,7 @@ class ProfileE2ETest : BehaviorSpec() {
             When("존재하지 않는 username으로 프로필을 조회하면") {
                 val headers = HttpHeaders().apply { setBearerAuth(bobToken) }
                 val response = restTemplate.exchange(
-                    "/api/v1/profiles/@ghost",
+                    "/api/v1/profiles/ghost",
                     HttpMethod.GET,
                     HttpEntity<Void>(headers),
                     Any::class.java,

@@ -11,7 +11,7 @@ import java.util.Locale
 @RequestMapping("/api/v1/profiles")
 class ProfileController(private val service: ProfileService) {
 
-    @GetMapping("/@{username}")
+    @GetMapping("/{username}")
     fun getProfile(@MemberID visitorId: Long, @PathVariable username: String, locale: Locale): ProfileResponse.Detail =
         service.getProfileDetail(visitorId, username, locale)
 

@@ -1,7 +1,7 @@
 package com.langlez.report.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.MessageListener
+import com.langlez.core.MessageConsumer
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
 import org.slf4j.LoggerFactory
@@ -16,7 +16,7 @@ class ReportEventListener(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional
-    @MessageListener(topic = "topic-echo_report", group = "report-service")
+    @MessageConsumer(topics = ["topic-echo_report"], group = "report-service")
     fun onEchoPostReported(payload: String) {
         val event = runCatching { mapper.readValue(payload, EchoReportPayload::class.java) }
             .getOrElse {
@@ -37,7 +37,7 @@ class ReportEventListener(
     }
 
     @Transactional
-    @MessageListener(topic = "topic-chat_report", group = "report-service")
+    @MessageConsumer(topics = ["topic-chat_report"], group = "report-service")
     fun onChatUserReported(payload: String) {
         val event = runCatching { mapper.readValue(payload, ChatReportPayload::class.java) }
             .getOrElse {

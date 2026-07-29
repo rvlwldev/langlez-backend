@@ -3,7 +3,7 @@ package com.langlez.attachment.application
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.attachment.domain.Attachment
 import com.langlez.attachment.domain.AttachmentRepository
-import com.langlez.core.MessageListener
+import com.langlez.core.MessageConsumer
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -14,7 +14,7 @@ class AttachmentEventListener(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @MessageListener(topic = "topic-echo_post", group = "attachment-service")
+    @MessageConsumer(topics = ["topic-echo_post"], group = "attachment-service")
     fun onEchoAttachmentsUploaded(payload: String) {
         val attachments = runCatching {
             val event = mapper.readValue(payload, EchoAttachmentsUploadedEvent::class.java)
@@ -32,7 +32,7 @@ class AttachmentEventListener(
         attachmentRepository.saveAll(attachments)
     }
 
-    @MessageListener(topic = "topic-chat_message", group = "attachment-service")
+    @MessageConsumer(topics = ["topic-chat_message"], group = "attachment-service")
     fun onChatAttachmentUploaded(payload: String) {
         val attachments = runCatching {
             val event = mapper.readValue(payload, ChatAttachmentUploadedEvent::class.java)

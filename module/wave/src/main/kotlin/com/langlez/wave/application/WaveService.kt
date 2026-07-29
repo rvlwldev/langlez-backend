@@ -2,8 +2,8 @@ package com.langlez.wave.application
 
 import com.langlez.core.LanglezException
 import com.langlez.core.Notificator
-import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberRole
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.wave.api.WaveResponse
 import com.langlez.wave.domain.WaveRoom
@@ -31,7 +31,7 @@ class WaveService(
         val broadcaster = memberRepository.findById(memberId)
             ?: throw LanglezException(404, "member.not-found")
 
-        if (broadcaster.role == Member.Role.MEMBER) {
+        if (broadcaster.role == MemberRole.MEMBER) {
             throw LanglezException(403, "wave.premium-required")
         }
 

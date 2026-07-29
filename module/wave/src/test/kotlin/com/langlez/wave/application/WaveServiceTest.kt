@@ -4,6 +4,8 @@ import com.langlez.core.LanglezException
 import com.langlez.core.Notificator
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.wave.domain.WaveRoom
@@ -37,12 +39,12 @@ class WaveServiceTest : BehaviorSpec({
         clearMocks(waveRoomRepository, memberRepository, relationshipRepository, viewerTracker, notificator, broadcaster, answers = false)
     }
 
-    fun createMember(id: Long, role: Member.Role = Member.Role.MEMBER, username: String = "user$id") = Member(
+    fun createMember(id: Long, role: MemberRole = MemberRole.MEMBER, username: String = "user$id") = Member(
         id = id,
         email = "$username@example.com",
         username = username,
         nickname = "Nick $id",
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = "Nick $id",
         role = role
@@ -54,7 +56,7 @@ class WaveServiceTest : BehaviorSpec({
         val maxParticipants = 6
 
         When("요청자가 MEMBER(무료 회원)이면") {
-            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, Member.Role.MEMBER)
+            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, MemberRole.MEMBER)
 
             Then("403 예외가 발생하고 방이 생성되지 않는다") {
                 val ex = shouldThrow<LanglezException> {
@@ -66,7 +68,7 @@ class WaveServiceTest : BehaviorSpec({
         }
 
         When("인원수가 4~8 범위를 벗어나면(e.g., 2 또는 10)") {
-            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, Member.Role.PREMIUM)
+            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, MemberRole.PREMIUM)
 
             Then("400 예외가 발생하고 방이 생성되지 않는다") {
                 val ex2 = shouldThrow<LanglezException> {
@@ -85,7 +87,7 @@ class WaveServiceTest : BehaviorSpec({
 
         When("요청자가 PREMIUM이면") {
             val savedRoom = WaveRoom(id = 10L, broadcasterId = broadcasterId, title = title, maxParticipants = maxParticipants)
-            val broadcasterMember = createMember(broadcasterId, Member.Role.PREMIUM)
+            val broadcasterMember = createMember(broadcasterId, MemberRole.PREMIUM)
             every { memberRepository.findById(broadcasterId) } returns broadcasterMember
             every { waveRoomRepository.save(any()) } returns savedRoom
             every { relationshipRepository.findFollowers(broadcasterId, null, any()) } returns listOf(

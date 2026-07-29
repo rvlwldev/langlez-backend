@@ -33,7 +33,7 @@ class WaveViewerTracker(
         sessionRooms[sessionId] = roomId to memberId
     }
 
-    @DistributedLock(prefix = "lock:wave-join:", ttl = 5, retries = 20, wait = 100)
+    @DistributedLock(prefix = "lock:wave-join:", leaseSecs = 5, retries = 20, waitMs = 100)
     fun addViewerIfAllowed(@LockKey roomId: Long, memberId: Long, maxParticipants: Int): Boolean {
         if (isViewer(roomId, memberId)) return true
         if (viewerCount(roomId) >= maxParticipants) return false

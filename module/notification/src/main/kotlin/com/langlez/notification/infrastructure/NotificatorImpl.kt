@@ -39,7 +39,7 @@ class NotificatorImpl(
         }
 
         for (member in members) {
-            val fcmToken = member.fcmToken
+            val fcmToken = member.fcm
             if (!fcmToken.isNullOrBlank()) {
                 fcmPushSender.send(fcmToken, title, body, data)
             }

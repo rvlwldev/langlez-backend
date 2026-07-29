@@ -17,7 +17,7 @@ class HashtagStatSyncScheduler(
 ) {
 
     @Scheduled(fixedDelay = 3600000)
-    @DistributedLock(prefix = "lock:echo-hashtag-stat-sync", ttl = 10, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:echo-hashtag-stat-sync", leaseSecs = 10, waitMs = 0, retries = 0, throwOnFailure = false)
     fun syncHashtagStats() {
         val today = LocalDate.now()
         val dailyCounts = hashtagTrendRepository.snapshotDailyCounts(today)

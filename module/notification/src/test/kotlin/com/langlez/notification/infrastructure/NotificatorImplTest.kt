@@ -3,11 +3,12 @@ package com.langlez.notification.infrastructure
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.*
-import java.lang.RuntimeException
 
 class NotificatorImplTest : BehaviorSpec({
 
@@ -32,11 +33,11 @@ class NotificatorImplTest : BehaviorSpec({
         email = "user$id@example.com",
         username = "user$id",
         nickname = "Nick $id",
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = "Nick $id",
-        role = Member.Role.MEMBER,
-        fcmToken = fcmToken
+        role = MemberRole.MEMBER,
+        fcm = fcmToken
     )
 
     Given("notify 호출 시") {

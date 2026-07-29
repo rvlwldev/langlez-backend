@@ -9,6 +9,7 @@ import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.relationship.domain.Block
@@ -57,7 +58,7 @@ class MatchingServiceTest : BehaviorSpec({
         email = "$username@test.com",
         username = username,
         nickname = "User$id",
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = "User$id",
     )

@@ -3,6 +3,7 @@ package com.langlez.echo.infrastructure
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.collections.shouldHaveSize
@@ -72,7 +73,7 @@ class PostRepositoryImplTest : BehaviorSpec() {
                     email = "usera@test.com",
                     username = "usera",
                     nickname = "User A",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-usera",
                     providerDisplayName = "User A"
                 )
@@ -83,7 +84,7 @@ class PostRepositoryImplTest : BehaviorSpec() {
                     email = "userb@test.com",
                     username = "userb",
                     nickname = "User B",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-userb",
                     providerDisplayName = "User B"
                 )
@@ -94,7 +95,7 @@ class PostRepositoryImplTest : BehaviorSpec() {
                     email = "userc@test.com",
                     username = "userc",
                     nickname = "User C",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-userc",
                     providerDisplayName = "User C"
                 )

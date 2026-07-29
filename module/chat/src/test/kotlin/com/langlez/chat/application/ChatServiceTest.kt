@@ -1,6 +1,5 @@
 package com.langlez.chat.application
 
-import com.langlez.chat.api.ChatResponse
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRoom
@@ -10,6 +9,7 @@ import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
@@ -56,7 +56,7 @@ class ChatServiceTest : BehaviorSpec({
         email = "$username@example.com",
         username = username,
         nickname = nickname,
-        provider = Member.Provider.GOOGLE,
+        provider = MemberProvider.GOOGLE,
         providerId = "p$id",
         providerDisplayName = nickname
     )

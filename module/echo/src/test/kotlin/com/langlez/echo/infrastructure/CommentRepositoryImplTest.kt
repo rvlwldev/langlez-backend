@@ -3,11 +3,11 @@ package com.langlez.echo.infrastructure
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -76,7 +76,7 @@ class CommentRepositoryImplTest : BehaviorSpec() {
                     email = "commenter@test.com",
                     username = "commenter",
                     nickname = "Commenter",
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "g-commenter",
                     providerDisplayName = "Commenter"
                 )

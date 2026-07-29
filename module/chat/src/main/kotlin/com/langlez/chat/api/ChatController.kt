@@ -14,7 +14,7 @@ class ChatController(
     private val service: ChatService,
 ) {
 
-    @PostMapping("/rooms/@{username}")
+    @PostMapping("/rooms/{username}")
     @ResponseStatus(HttpStatus.CREATED)
     fun getOrCreateRoom(
         @MemberID memberId: Long,

@@ -5,6 +5,8 @@ import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRole
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -95,10 +97,10 @@ class MatchingQueueIntegrationTest : BehaviorSpec() {
                     email = "$username@example.com",
                     username = username,
                     nickname = username,
-                    provider = Member.Provider.GOOGLE,
+                    provider = MemberProvider.GOOGLE,
                     providerId = "p-$username",
                     providerDisplayName = username,
-                    role = Member.Role.MEMBER,
+                    role = MemberRole.MEMBER,
                 )
             )
             profileRepository.saveProfile(
