@@ -17,7 +17,7 @@ class ResilientCache(
         try {
             op()
         } catch (e: Exception) {
-            logger.warn("Redis operation failed for cache $name: ${e.message}")
+            logger.error("Redis operation failed for cache $name", e)
             onFailure()
             fallback()
         }
@@ -38,10 +38,13 @@ class ResilientCache(
     override fun put(key: Any, value: Any?) =
         runGuarded(op = { redis.put(key, value) }, fallback = { local.put(key, value) })
 
-    override fun evict(key: Any) =
-        runGuarded(op = { redis.evict(key) }, fallback = { local.evict(key) })
+    override fun evict(key: Any) {
+        runGuarded(op = { redis.evict(key) }, fallback = {})
+        local.evict(key)
+    }
 
-    override fun clear() =
-        runGuarded(op = { redis.clear() }, fallback = { local.clear() })
-
+    override fun clear() {
+        runGuarded(op = { redis.clear() }, fallback = {})
+        local.clear()
+    }
 }

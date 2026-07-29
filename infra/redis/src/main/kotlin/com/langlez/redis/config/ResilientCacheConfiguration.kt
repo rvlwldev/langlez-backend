@@ -67,6 +67,12 @@ class ResilientCacheConfiguration {
         caffeineCacheManager: CaffeineCacheManager,
         connectionFactory: RedisConnectionFactory,
         redissonClient: org.redisson.api.RedissonClient,
-    ): ResilientCacheManager = ResilientCacheManager(redisCacheManager, caffeineCacheManager, connectionFactory, redissonClient)
-
+        objectMapper: ObjectMapper,
+    ): ResilientCacheManager = ResilientCacheManager(
+        redisCacheManager = redisCacheManager,
+        caffeineCacheManager = caffeineCacheManager,
+        connectionFactory = connectionFactory,
+        redissonClient = redissonClient,
+        objectMapper = objectMapper,
+    )
 }

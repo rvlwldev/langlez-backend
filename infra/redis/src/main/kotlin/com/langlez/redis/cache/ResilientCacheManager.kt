@@ -1,5 +1,6 @@
 package com.langlez.redis.cache
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.cache.Cache
@@ -19,13 +20,13 @@ class ResilientCacheManager(
     private val caffeineCacheManager: CaffeineCacheManager,
     private val connectionFactory: RedisConnectionFactory,
     private val redissonClient: RedissonClient,
+    objectMapper: ObjectMapper,
 ) : CacheManager {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val serializer = GenericJackson2JsonRedisSerializer()
+    private val serializer = GenericJackson2JsonRedisSerializer(objectMapper)
 
     private val caches = ConcurrentHashMap<String, Cache>()
-    private val _isRedisAvailable = AtomicBoolean(true)
-    val isRedisAvailable: Boolean get() = _isRedisAvailable.get()
+    private val isRedisAvailable = AtomicBoolean(true)
 
     override fun getCache(name: String): Cache? = caches.getOrPut(name) {
         val redisCache = redisCacheManager.getCache(name)
@@ -41,18 +42,19 @@ class ResilientCacheManager(
     fun checkRedisAndMigrate() {
         try {
             connectionFactory.connection.use { it.ping() }
-            if (_isRedisAvailable.compareAndSet(false, true)) {
-                logger.info("Redis is back online! Starting migration from local to Redis...")
+            if (isRedisAvailable.compareAndSet(false, true)) {
+                logger.debug("Redis is back online! Starting migration from local to Redis...")
                 executeMigrationWithLock()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             markRedisDown()
         }
     }
 
     private fun markRedisDown() {
-        if (_isRedisAvailable.compareAndSet(true, false))
+        if (isRedisAvailable.compareAndSet(true, false)) {
             logger.error("Redis connection failed. Falling back to local cache.")
+        }
     }
 
     private fun executeMigrationWithLock() {
@@ -101,5 +103,3 @@ class ResilientCacheManager(
         }
     }
 }
-
-

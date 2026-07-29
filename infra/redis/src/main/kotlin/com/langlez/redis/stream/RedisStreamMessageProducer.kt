@@ -1,6 +1,6 @@
 package com.langlez.redis.stream
 
-import com.langlez.core.MessageQueue
+import com.langlez.core.MessageProducer
 import com.langlez.core.MessageSemantic
 import java.util.concurrent.ThreadLocalRandom
 import org.redisson.api.RedissonClient
@@ -10,12 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
 @Component
-class RedisStreamMessageQueue(
+class RedisStreamMessageProducer(
     private val redisson: RedissonClient,
     @param:Autowired(required = false) private val configurer: RedisStreamConfigurer? = null,
-) : MessageQueue {
+) : MessageProducer {
 
-    override fun publish(topic: String, payload: String?, key: Any?) {
+    override fun produce(topic: String, payload: String?, key: Any?) {
         val config = configurer?.getTopic(topic)
         val partitions = config?.partitions ?: 1
         val semantic = config?.semantic ?: MessageSemantic.ALO
