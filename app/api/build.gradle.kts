@@ -8,7 +8,6 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation(project(":infra:rdb"))
-    implementation(project(":infra:mongo"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:kafka"))
     implementation(project(":infra:files"))
