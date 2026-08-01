@@ -8,7 +8,7 @@ import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant

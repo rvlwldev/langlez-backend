@@ -1,6 +1,6 @@
 package com.langlez.mysql.outbox
 
-import com.langlez.core.MessageProducer
+import com.langlez.core.message.MessageProducer
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every

@@ -4,7 +4,7 @@ import com.langlez.core.LanglezException
 import com.langlez.echo.api.EchoResponse
 import com.langlez.echo.domain.*
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberRole
 import com.langlez.redis.ratelimit.DailyRateLimiter
 import com.langlez.relationship.domain.RelationshipRepository

@@ -1,6 +1,6 @@
 package com.langlez.wave.api
 
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberRole
 import com.langlez.wave.application.WaveBroadcaster
 import com.langlez.wave.application.WaveChatBroadcastPayload

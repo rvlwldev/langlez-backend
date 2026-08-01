@@ -2,7 +2,7 @@ package com.langlez.wave.config
 
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRole
 import com.langlez.security.util.JwtParser

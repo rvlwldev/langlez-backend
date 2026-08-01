@@ -28,21 +28,34 @@ class Member(
     @Enumerated(STRING) var status: MemberStatus = MemberStatus.CREATED,
     @Enumerated(STRING) var role: MemberRole = MemberRole.MEMBER,
 
+    var imageUrl: String? = null,
+    var agreedMarketingReceive: Boolean = false,
+
     @Enumerated(STRING) @Column(name = "provider_type") var provider: MemberProvider,
     @Column(name = "provider_id") var providerId: String,
     @Column(name = "provider_display_name") var providerDisplayName: String? = null,
 
-    var imageUrl: String? = null,
-
     var fcm: String? = null,
 
+    var lastAccessedIp: String? = null,
+
     @CreatedDate var createdAt: Instant = Instant.now(),
+    var verifiedAt: Instant? = null,
+    var agreedTermsAt: Instant? = null,
     var lastUsernameUpdatedAt: Instant? = null,
     var lastNicknameUpdatedAt: Instant? = null,
-    @Column(name = "last_accessed_at") var lastAccessedAt: Instant? = null,
+    var lastAccessedAt: Instant? = null,
+    var suspendedAt: Instant? = null,
+    var withdrawnAt: Instant? = null,
 
     @Version var version: Long = 0
 ) {
+    fun verify() {
+        require(verifiedAt == null) { "member.already-verified" }
+        verifiedAt = Instant.now()
+        agreedTermsAt = Instant.now()
+    }
+
     fun updateAccessedAt(accessedAt: Instant = Instant.now()) {
         if (accessedAt > this.lastAccessedAt) this.lastAccessedAt = accessedAt
     }
@@ -50,15 +63,20 @@ class Member(
     fun canChangeUsername(now: Instant = Instant.now()): Boolean =
         lastUsernameUpdatedAt == null || Duration.between(lastUsernameUpdatedAt, now) >= CHANGE_COOLDOWN
 
-    fun canChangeNickname(now: Instant = Instant.now()): Boolean =
-        lastNicknameUpdatedAt == null || Duration.between(lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
-
     fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
+        require(canChangeUsername()) { "member.username.cooldown" }
+        require(isValidUsername(newUsername)) { "member.username.invalid" }
+
         username = newUsername
         lastUsernameUpdatedAt = now
     }
 
+    fun canChangeNickname(now: Instant = Instant.now()): Boolean =
+        lastNicknameUpdatedAt == null || Duration.between(lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
+
     fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
+        require(canChangeNickname()) { "member.nickname.cooldown" }
+
         nickname = newNickname
         lastNicknameUpdatedAt = now
     }

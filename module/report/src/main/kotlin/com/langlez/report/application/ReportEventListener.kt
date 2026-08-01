@@ -1,7 +1,7 @@
 package com.langlez.report.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.MessageConsumer
+import com.langlez.core.message.MessageConsumer
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository
 import org.slf4j.LoggerFactory

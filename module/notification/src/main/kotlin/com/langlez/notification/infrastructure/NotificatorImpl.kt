@@ -2,7 +2,7 @@ package com.langlez.notification.infrastructure
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.Notificator
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import org.slf4j.LoggerFactory

@@ -3,7 +3,7 @@ package com.langlez.attachment.application
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.attachment.domain.Attachment
 import com.langlez.attachment.domain.AttachmentRepository
-import com.langlez.core.MessageConsumer
+import com.langlez.core.message.MessageConsumer
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 

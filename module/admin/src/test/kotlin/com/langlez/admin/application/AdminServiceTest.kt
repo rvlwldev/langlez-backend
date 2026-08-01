@@ -13,7 +13,7 @@ import com.langlez.echo.domain.Post
 import com.langlez.echo.domain.PostRepository
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import com.langlez.report.domain.Report
 import com.langlez.report.domain.ReportRepository

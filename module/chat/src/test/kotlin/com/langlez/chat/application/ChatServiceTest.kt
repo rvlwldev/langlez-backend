@@ -8,7 +8,7 @@ import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.FileStorage
 import com.langlez.core.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec

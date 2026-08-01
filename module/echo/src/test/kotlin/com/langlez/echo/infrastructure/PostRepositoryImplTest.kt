@@ -2,7 +2,7 @@ package com.langlez.echo.infrastructure
 
 import com.langlez.echo.domain.*
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension

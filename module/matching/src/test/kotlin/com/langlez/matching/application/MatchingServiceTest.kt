@@ -8,7 +8,7 @@ import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository

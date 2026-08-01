@@ -1,7 +1,7 @@
 package com.langlez.member.application
 
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.redisson.api.RedissonClient
 import org.springframework.scheduling.annotation.Scheduled

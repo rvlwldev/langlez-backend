@@ -1,6 +1,6 @@
 package com.langlez.echo.application
 
-import com.langlez.core.MessageProducer
+import com.langlez.core.message.MessageProducer
 import com.langlez.echo.infrastructure.outbox.EchoOutBox
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxHistory
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository

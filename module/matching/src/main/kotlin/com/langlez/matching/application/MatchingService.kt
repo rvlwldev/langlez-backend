@@ -6,7 +6,7 @@ import com.langlez.interest.application.InterestService
 import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.MatchingQueueFilter
 import com.langlez.matching.domain.MatchingQueueRepository
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.relationship.domain.RelationshipRepository

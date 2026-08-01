@@ -1,6 +1,6 @@
 package com.langlez.relationship.application
 
-import com.langlez.core.MessageProducer
+import com.langlez.core.message.MessageProducer
 import com.langlez.mysql.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBox

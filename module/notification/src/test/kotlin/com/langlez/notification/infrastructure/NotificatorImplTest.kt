@@ -2,7 +2,7 @@ package com.langlez.notification.infrastructure
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRole
 import com.langlez.notification.domain.Notification

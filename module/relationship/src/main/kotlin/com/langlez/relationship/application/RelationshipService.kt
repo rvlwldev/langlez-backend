@@ -1,7 +1,7 @@
 package com.langlez.relationship.application
 
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
 import org.springframework.dao.DataIntegrityViolationException

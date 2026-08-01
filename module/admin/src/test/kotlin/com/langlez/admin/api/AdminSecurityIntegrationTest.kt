@@ -8,7 +8,7 @@ import com.langlez.echo.domain.CommentRepository
 import com.langlez.echo.domain.PostRepository
 import com.langlez.interest.application.InterestService
 import com.langlez.member.application.MemberOnlineTracker
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.report.domain.ReportRepository
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.extensions.spring.SpringExtension

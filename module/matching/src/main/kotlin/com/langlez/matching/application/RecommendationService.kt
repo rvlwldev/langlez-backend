@@ -5,7 +5,7 @@ import com.langlez.core.LanglezException
 import com.langlez.matching.api.MatchingRequest
 import com.langlez.matching.api.MatchingResponse
 import com.langlez.matching.domain.RecommendationRepository
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberRole
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository

@@ -3,7 +3,7 @@ package com.langlez.wave.application
 import com.langlez.core.LanglezException
 import com.langlez.core.Notificator
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberProvider
 import com.langlez.member.domain.MemberRole
 import com.langlez.relationship.domain.Follow

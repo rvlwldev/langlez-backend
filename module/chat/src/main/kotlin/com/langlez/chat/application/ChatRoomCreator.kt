@@ -3,7 +3,7 @@ package com.langlez.chat.application
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomRepository
 import com.langlez.core.LanglezException
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.MemberRole
 import com.langlez.redis.distributedLock.DistributedLock
 import com.langlez.redis.distributedLock.LockKey

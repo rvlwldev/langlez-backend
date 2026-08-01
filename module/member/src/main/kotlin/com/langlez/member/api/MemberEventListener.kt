@@ -6,8 +6,6 @@ import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.infrastructure.MemberOutBoxRepositoryImpl
-import org.springframework.cache.CacheManager
-import org.springframework.cache.get
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT
@@ -19,7 +17,6 @@ class MemberEventListener(
     private val repo: MemberOutBoxRepositoryImpl,
     private val tracker: MemberOnlineTracker,
     private val mapper: ObjectMapper,
-    private val cacheManager: CacheManager,
 ) {
 
     @TransactionalEventListener(phase = BEFORE_COMMIT)
@@ -42,11 +39,10 @@ class MemberEventListener(
         )
     }
 
-    @TransactionalEventListener(phase = AFTER_COMMIT)
-    fun onUsernameChangedAndOffline(event: MemberUsernameChangedEvent) = runCatching {
-        tracker.toOffline(event.oldUsername)
-        cacheManager.getCache("member-username")?.evict(event.oldUsername)
-    }
+//    @TransactionalEventListener(phase = AFTER_COMMIT)
+//    fun onUsernameChangedAndOffline(event: MemberUsernameChangedEvent) = runCatching {
+//        cacheManager.getCache("member-username")?.evict(event.oldUsername)
+//    }
 
 
     @TransactionalEventListener(phase = BEFORE_COMMIT)
