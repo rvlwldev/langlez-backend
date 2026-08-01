@@ -17,19 +17,19 @@ class P6SpyEventListener(
         val durationMs = elapsedNanos / 1_000_000 // Convert ns to ms
 
         if (e != null) logger.log(
-            type = "MySQL",
+            type = "RDB",
             command = "$command (FAILED)",
             durationMs = durationMs,
-            thresholdMs = properties.mysql.logThresholdMs,
-            warnThresholdMs = properties.mysql.warnThresholdMs,
+            thresholdMs = properties.rdb.logThresholdMs,
+            warnThresholdMs = properties.rdb.warnThresholdMs,
             params = "error=${e.message}",
         )
         else logger.log(
-            type = "MySQL",
+            type = "RDB",
             command = command,
             durationMs = durationMs,
-            thresholdMs = properties.mysql.logThresholdMs,
-            warnThresholdMs = properties.mysql.warnThresholdMs,
+            thresholdMs = properties.rdb.logThresholdMs,
+            warnThresholdMs = properties.rdb.warnThresholdMs,
         )
 
     }

@@ -3,7 +3,7 @@ package com.langlez.chat.infrastructure.outbox
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.infrastructure.outbox.jpa.ChatOutBoxHistoryJpaRepository
 import com.langlez.chat.infrastructure.outbox.jpa.ChatOutBoxJpaRepository
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation

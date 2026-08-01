@@ -1,6 +1,6 @@
 package com.langlez.member.infrastructure
 
-import com.langlez.mysql.outbox.OutBoxProcessor
+import com.langlez.rdb.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.Scheduled

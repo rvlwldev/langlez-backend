@@ -9,7 +9,7 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation(project(":infra:redis"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":infra:rdb"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)

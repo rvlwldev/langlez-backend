@@ -16,7 +16,7 @@ dependencies {
     implementation(project(":infra:redis"))
     implementation(libs.dependency.springboot.thymeleaf)
 
-    testImplementation(project(":infra:mysql"))
+    testImplementation(project(":infra:rdb"))
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.springboot.security)

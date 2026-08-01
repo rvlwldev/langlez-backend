@@ -1,4 +1,4 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 /**
  * OutBox 스케줄러가 요구하는 최소 저장소 계약.

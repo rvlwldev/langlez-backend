@@ -1,7 +1,7 @@
 package com.langlez.relationship.infrastructure.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBoxStatus
 import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxHistoryJpaRepository
 import com.langlez.relationship.infrastructure.outbox.jpa.RelationshipOutBoxJpaRepository
 import org.springframework.data.domain.PageRequest

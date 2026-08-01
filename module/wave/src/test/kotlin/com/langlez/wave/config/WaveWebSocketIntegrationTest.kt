@@ -29,7 +29,7 @@ import org.springframework.web.socket.WebSocketHttpHeaders
 import org.springframework.web.socket.client.standard.StandardWebSocketClient
 import org.springframework.web.socket.messaging.WebSocketStompClient
 import org.testcontainers.containers.GenericContainer
-import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import java.lang.reflect.Type
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
@@ -68,7 +68,7 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
 
     companion object {
         @JvmField
-        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+        val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
             .withDatabaseName("langlez_db")
             .withUsername("admin")
             .withPassword("admin")
@@ -82,9 +82,9 @@ class WaveWebSocketIntegrationTest : BehaviorSpec() {
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url") { mysql.jdbcUrl + "?serverTimezone=Asia/Seoul&characterEncoding=UTF-8" }
-            registry.add("spring.datasource.username") { mysql.username }
-            registry.add("spring.datasource.password") { mysql.password }
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
             registry.add("spring.data.redis.host") { redis.host }
             registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
         }

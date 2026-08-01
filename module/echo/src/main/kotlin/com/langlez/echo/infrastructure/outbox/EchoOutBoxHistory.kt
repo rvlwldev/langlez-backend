@@ -1,8 +1,8 @@
 package com.langlez.echo.infrastructure.outbox
 
-import com.langlez.mysql.outbox.OutBox
-import com.langlez.mysql.outbox.OutBoxHistory
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBox
+import com.langlez.rdb.outbox.OutBoxHistory
+import com.langlez.rdb.outbox.OutBoxStatus
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.Instant

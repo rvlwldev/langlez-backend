@@ -20,5 +20,5 @@ dependencies {
     // OutBox 베이스가 @MappedSuperclass라, 상속받는 모듈의 Q클래스가 참조할 부모 Q클래스를 여기서 생성한다
     ksp(libs.dependency.querydsl.ksp)
 
-    runtimeOnly(libs.runtimeonly.mysql)
+    runtimeOnly(libs.runtimeonly.postgresql)
 }

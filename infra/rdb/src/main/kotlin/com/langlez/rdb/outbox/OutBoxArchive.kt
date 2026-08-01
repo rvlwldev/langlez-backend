@@ -1,4 +1,4 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 import jakarta.persistence.Column
 import jakarta.persistence.Id

@@ -4,7 +4,7 @@ import com.langlez.chat.infrastructure.outbox.ChatOutBox
 import com.langlez.chat.infrastructure.outbox.ChatOutBoxHistory
 import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
 import com.langlez.core.message.MessageProducer
-import com.langlez.mysql.outbox.OutBoxProcessor
+import com.langlez.rdb.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component

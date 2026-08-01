@@ -4,7 +4,7 @@ import com.langlez.core.message.MessageProducer
 import com.langlez.echo.infrastructure.outbox.EchoOutBox
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxHistory
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxRepository
-import com.langlez.mysql.outbox.OutBoxProcessor
+import com.langlez.rdb.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component

@@ -9,7 +9,7 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation(project(":infra:mongo"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
 
     implementation(project(":module:member"))

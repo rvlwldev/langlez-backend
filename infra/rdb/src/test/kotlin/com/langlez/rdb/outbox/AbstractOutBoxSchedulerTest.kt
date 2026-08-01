@@ -1,4 +1,4 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 import com.langlez.core.message.MessageProducer
 import io.kotest.core.spec.style.BehaviorSpec

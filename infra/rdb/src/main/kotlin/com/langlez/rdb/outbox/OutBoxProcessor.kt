@@ -1,4 +1,4 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
@@ -51,8 +51,10 @@ abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
                     // 브로커 ack 를 확인한 뒤에만 COMPLETE 로 넘긴다. send 는 비동기라
                     // 기다리지 않으면 발행 실패한 이벤트까지 완료 처리되어 유실된다.
                     runCatching {
-                        event.run { kafka.send(topic, key?.toString(), payload) }
-                            .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        event.run {
+                            kafka.send(topic, key, payload).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        }
+
                     }
                         .onSuccess { event.complete() }
                         .onFailure { event.fail() }

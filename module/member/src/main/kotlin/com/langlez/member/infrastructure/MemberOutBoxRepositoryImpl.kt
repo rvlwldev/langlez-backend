@@ -3,8 +3,8 @@ package com.langlez.member.infrastructure
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.member.infrastructure.jpa.MemberOutBoxHistoryJpaRepository
 import com.langlez.member.infrastructure.jpa.MemberOutBoxJpaRepository
-import com.langlez.mysql.outbox.OutBoxRepository
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBoxRepository
+import com.langlez.rdb.outbox.OutBoxStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Propagation

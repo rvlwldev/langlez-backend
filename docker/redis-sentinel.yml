@@ -1,4 +1,4 @@
-name: langlez-redis-sentinel
+name: langlez
 
 services:
   redis-master:

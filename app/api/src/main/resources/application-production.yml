@@ -23,11 +23,11 @@ spring:
 
   # Data Sources - TODO: Fill in production values or use environment variables
   datasource:
-    # TODO: # rewriteBatchedStatements=true 추가 필요 (rewriteBatchedStatements=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8)
-    url: ${MYSQL_URL}
-    username: ${MYSQL_USERNAME}
-    password: ${MYSQL_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # TODO: reWriteBatchedInserts=true 파라미터 포함 여부 확인
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USERNAME}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
   
   data:
     mongodb:
@@ -106,7 +106,7 @@ management:
 
 # 슬로우 쿼리 추적 임계값 (운영: 느린 쿼리만)
 logger:
-  mysql:
+  rdb:
     log-threshold-ms: 200
     warn-threshold-ms: 1000
   mongo:

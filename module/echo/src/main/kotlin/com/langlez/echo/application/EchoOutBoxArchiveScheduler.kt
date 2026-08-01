@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxArchive
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxArchiveRepository
 import com.langlez.echo.infrastructure.outbox.EchoOutBoxHistory
-import com.langlez.mysql.outbox.OutBoxArchiver
+import com.langlez.rdb.outbox.OutBoxArchiver
 import com.langlez.redis.distributedLock.DistributedLock
 import java.time.LocalDate
 import org.springframework.scheduling.annotation.Scheduled

@@ -1,4 +1,4 @@
-name: langlez-monitoring
+name: langlez
 
 networks:
   langlez-net:

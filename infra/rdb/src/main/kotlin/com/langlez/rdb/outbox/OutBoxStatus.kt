@@ -1,3 +1,3 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 enum class OutBoxStatus { READY, PROCESSING, COMPLETE, FAILED }

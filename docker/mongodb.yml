@@ -1,4 +1,4 @@
-name: langlez-mongo
+name: langlez
 
 networks:
   langlez-net:

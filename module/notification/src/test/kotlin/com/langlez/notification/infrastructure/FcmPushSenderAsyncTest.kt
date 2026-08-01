@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.stereotype.Component
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -35,7 +35,7 @@ class FcmPushSenderAsyncTest : FunSpec() {
 
     companion object {
         @JvmField
-        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+        val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
             .withDatabaseName("langlez_db")
             .withUsername("admin")
             .withPassword("admin")
@@ -44,9 +44,9 @@ class FcmPushSenderAsyncTest : FunSpec() {
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url") { mysql.jdbcUrl + "?serverTimezone=Asia/Seoul&characterEncoding=UTF-8" }
-            registry.add("spring.datasource.username") { mysql.username }
-            registry.add("spring.datasource.password") { mysql.password }
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
         }
     }
 

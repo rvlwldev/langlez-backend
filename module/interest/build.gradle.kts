@@ -9,7 +9,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":infra:rdb"))
 
     ksp(libs.dependency.querydsl.ksp)
 

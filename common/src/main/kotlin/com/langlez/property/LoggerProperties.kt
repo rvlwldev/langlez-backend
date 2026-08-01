@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "logger")
 data class LoggerProperties(
-    val mysql: Thresholds = Thresholds(),
+    val rdb: Thresholds = Thresholds(),
     val mongo: Thresholds = Thresholds(),
     val redis: Thresholds = Thresholds(),
 ) {

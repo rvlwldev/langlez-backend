@@ -1,4 +1,4 @@
-name: langlez-kafka
+name: langlez
 
 networks:
   langlez-net:

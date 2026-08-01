@@ -1,4 +1,4 @@
-package com.langlez.mysql
+package com.langlez.rdb
 
 import com.querydsl.jpa.impl.JPAQueryFactory
 import jakarta.persistence.EntityManager
@@ -12,7 +12,7 @@ import javax.sql.DataSource
 @AutoConfiguration
 @ConditionalOnClass(DataSource::class)
 @EnableJpaRepositories(basePackages = ["com.langlez.**.jpa"])
-class MySQLConfiguration {
+class RdbConfiguration {
     @PersistenceContext
     private lateinit var entityManager: EntityManager
 

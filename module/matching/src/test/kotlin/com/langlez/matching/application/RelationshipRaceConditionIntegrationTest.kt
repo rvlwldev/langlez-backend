@@ -14,7 +14,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MongoDBContainer
-import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.PostgreSQLContainer
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 /**
  * systematic-debugging Phase 1 재현: 두 스레드가 동시에 같은 follow 관계를 생성하려 할 때
  * RelationshipService.follow()의 check-then-act + DataIntegrityViolationException catch가
- * 실제로 500(UnexpectedRollbackException 등)을 막아주는지, 진짜 MySQL로 검증한다.
+ * 실제로 500(UnexpectedRollbackException 등)을 막아주는지, 진짜 PostgreSQL로 검증한다.
  */
 @SpringBootTest(
     webEnvironment = RANDOM_PORT,
@@ -48,7 +48,7 @@ class RelationshipRaceConditionIntegrationTest : BehaviorSpec() {
 
     companion object {
         @JvmField
-        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+        val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
             .withDatabaseName("langlez_db")
             .withUsername("admin")
             .withPassword("admin")
@@ -66,9 +66,9 @@ class RelationshipRaceConditionIntegrationTest : BehaviorSpec() {
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url") { mysql.jdbcUrl + "?serverTimezone=Asia/Seoul&characterEncoding=UTF-8" }
-            registry.add("spring.datasource.username") { mysql.username }
-            registry.add("spring.datasource.password") { mysql.password }
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
             registry.add("spring.data.mongodb.uri") { mongodb.replicaSetUrl }
             registry.add("spring.data.redis.host") { redis.host }
             registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }

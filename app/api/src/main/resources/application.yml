@@ -29,11 +29,11 @@ spring:
 
   # Data Sources — 로컬 개발용 값 (운영은 application-production.yml의 환경 변수로 대체됨)
   datasource:
-    # rewriteBatchedStatements=true 추가 필요
-    url: jdbc:mysql://localhost:3306/langlez_db?rewriteBatchedStatements=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    # reWriteBatchedInserts=true — 배치 INSERT 를 다중 VALUES 한 문장으로 합친다
+    url: jdbc:postgresql://localhost:5432/langlez_db?reWriteBatchedInserts=true
     username: admin
     password: admin
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
   
   data:
     mongodb:
@@ -171,7 +171,7 @@ management:
 
 # 슬로우 쿼리 추적 임계값 (P6Spy / PerformanceLogger)
 logger:
-  mysql:
+  rdb:
     log-threshold-ms: 0         # 로컬: 모든 쿼리 TRACE 로깅 (가시성)
     warn-threshold-ms: 500      # 500ms 이상 → 슬로우 쿼리 WARN
   mongo:

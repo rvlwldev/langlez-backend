@@ -1,7 +1,7 @@
 package com.langlez.member.infrastructure
 
-import com.langlez.mysql.outbox.OutBoxHistory
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBoxHistory
+import com.langlez.rdb.outbox.OutBoxStatus
 import jakarta.persistence.Entity
 import jakarta.persistence.Index
 import jakarta.persistence.Table

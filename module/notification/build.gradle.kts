@@ -8,7 +8,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":infra:rdb"))
     implementation(project(":module:member"))
 
     implementation("com.google.firebase:firebase-admin:9.4.1")

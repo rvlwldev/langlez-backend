@@ -1,7 +1,7 @@
 package com.langlez.member.infrastructure.jpa
 
 import com.langlez.member.infrastructure.MemberOutBox
-import com.langlez.mysql.outbox.OutBoxStatus
+import com.langlez.rdb.outbox.OutBoxStatus
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 

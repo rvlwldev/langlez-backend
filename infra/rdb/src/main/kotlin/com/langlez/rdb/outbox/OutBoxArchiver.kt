@@ -1,4 +1,4 @@
-package com.langlez.mysql.outbox
+package com.langlez.rdb.outbox
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.LocalDate

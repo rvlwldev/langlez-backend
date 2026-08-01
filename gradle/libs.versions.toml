@@ -61,7 +61,7 @@ dependency-p6spy-starter = { module = "com.github.gavlyukovskiy:p6spy-spring-boo
 
 # Infrastructure
 runtimeonly-h2 = { module = "com.h2database:h2" }
-runtimeonly-mysql = { module = "com.mysql:mysql-connector-j", version = "8.3.0" }
+runtimeonly-postgresql = { module = "org.postgresql:postgresql", version = "42.7.4" }
 runtimeonly-oracle = { module = "com.oracle.database.jdbc:ojdbc11", version = "23.4.0.24.05" }
 runtimeonly-sqlite = { module = "org.xerial:sqlite-jdbc" }
 runtimeonly-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
@@ -87,7 +87,7 @@ test-springboot-security = { module = "org.springframework.security:spring-secur
 test-springboot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers", version.ref = "spring-boot" }
 test-testcontainers = { module = "org.testcontainers:testcontainers", version = "1.20.4" }
 test-testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version = "1.20.4" }
-test-testcontainers-mysql = { module = "org.testcontainers:mysql", version = "1.20.4" }
+test-testcontainers-postgresql = { module = "org.testcontainers:postgresql", version = "1.20.4" }
 test-testcontainers-mongodb = { module = "org.testcontainers:mongodb", version = "1.20.4" }
 test-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis-junit", version = "1.6.4" }
 test-testcontainers-kafka = { module = "org.testcontainers:kafka", version = "1.20.4" }
@@ -101,4 +101,4 @@ dependency-aspectj-runtime = { module = "org.aspectj:aspectjrt", version = "1.9.
 kotlin = ["dependency-kotlin-reflect", "dependency-kotlin-jackson", "dependency-kotlin-coroutine"]
 test-kotest = ["test-kotest-assertions", "test-kotest-runner"]
 jjwt = ["dependency-jjwt", "dependency-jjwt-impl", "dependency-jjwt-jackson"]
-testcontainers = ["test-testcontainers", "test-testcontainers-junit", "test-testcontainers-mysql", "test-testcontainers-mongodb", "test-testcontainers-redis"]
+testcontainers = ["test-testcontainers", "test-testcontainers-junit", "test-testcontainers-postgresql", "test-testcontainers-mongodb", "test-testcontainers-redis"]

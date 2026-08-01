@@ -18,7 +18,7 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
     ],
     excludeName = [
         "com.langlez.mongo.config.MongoConfiguration",
-        "com.langlez.mysql.config.MySQLConfiguration"
+        "com.langlez.rdb.RdbConfiguration"
     ]
 )
 class TestAdminApplication
