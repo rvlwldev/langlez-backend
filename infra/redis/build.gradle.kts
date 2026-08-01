@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
+    api(project(":core")) // Cache/CacheProvider 를 공개 시그니처로 노출한다
 
     implementation(libs.dependency.aspectj)
     implementation(libs.dependency.caffeine)

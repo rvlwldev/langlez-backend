@@ -54,11 +54,11 @@ class ResilientCacheManagerTest : BehaviorSpec({
     val config = RedisCacheConfiguration.defaultCacheConfig().serializeValuesWith(serializer)
     val redisCacheManager = RedisCacheManager.builder(connectionFactory).cacheDefaults(config).build()
 
-    val manager = ResilientCacheManager(
+    val manager = ResilientCacheProvider(
         redisCacheManager = redisCacheManager,
         caffeineCacheManager = caffeineCacheManager,
         connectionFactory = connectionFactory,
-        redissonClient = redissonClient,
+        redisson = redissonClient,
         objectMapper = mapper,
     )
 

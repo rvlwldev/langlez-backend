@@ -19,7 +19,7 @@ class RedisQueryListenerRegister(
     private val redisConnectionFactory: RedisConnectionFactory,
 ) : ApplicationListener<ApplicationReadyEvent> {
 
-    private val logger = LoggerFactory.getLogger(RedisQueryListenerRegister::class.java)
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         try {

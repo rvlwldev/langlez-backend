@@ -1,73 +1,32 @@
 package com.langlez.member.infrastructure
 
+import com.langlez.member.application.MemberRepository
+import com.langlez.member.application.MemberRepository2
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.MemberProvider
-import com.langlez.member.infrastructure.jpa.MemberJpaRepository
-import org.springframework.cache.CacheManager
-import org.springframework.cache.annotation.CacheEvict
-import org.springframework.cache.annotation.Cacheable
-import org.springframework.cache.annotation.Caching
-import org.springframework.cache.concurrent.ConcurrentMapCache
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+/**
+ * 구 인터페이스 유지용 위임 계층. 캐시 로직은 `MemberRepositoryImpl2` 하나에만 있다.
+ *
+ * 다른 모듈이 각자 `MemberRepository2` 로 갈아탄 뒤 이 클래스와 `MemberRepository` 를 지운다.
+ */
 @Repository
 class MemberRepositoryImpl(
-    private val jpa: MemberJpaRepository,
-    private val cacheManager: CacheManager
+    private val delegate: MemberRepository2,
 ) : MemberRepository {
 
-    @Caching(
-        evict = [
-            CacheEvict(cacheNames = ["member"], key = "#member.id", condition = "#member.id != null"),
-            CacheEvict(cacheNames = ["member-email"], key = "#member.email"),
-            CacheEvict(cacheNames = ["member-provider"], key = "#member.provider + ':' + #member.providerId"),
-        ]
-    )
-    override fun save(member: Member): Member = jpa.save(member)
+    override fun save(member: Member): Member = delegate.save(member)
 
-    @Cacheable(cacheNames = ["member"], key = "#id")
-    override fun findById(id: Long): Member? = jpa.findByIdOrNull(id)
+    override fun findById(id: Long): Member? = delegate.find(id)
+    override fun findByIds(ids: List<Long>): List<Member> = delegate.findAll(ids)
+    override fun findByEmail(email: String): Member? = delegate.findByEmail(email)
+    override fun findByUsername(username: String): Member? = delegate.find(username)
+    override fun findByUsernames(usernames: List<String>): List<Member> = delegate.findAllByUsernames(usernames)
+    override fun findByProvider(type: MemberProvider, id: String): Member? = delegate.find(type, id)
+    override fun findAll(size: Int, cursor: Long?): List<Member> = delegate.findAll(size, cursor)
 
-    override fun findByIds(ids: List<Long>): List<Member> = if (ids.isEmpty()) emptyList() else jpa.findAllById(ids)
+    override fun countAll(): Long = delegate.count()
 
-    @Cacheable(cacheNames = ["member-email"], key = "#email")
-    override fun findByEmail(email: String): Member? = jpa.findByEmail(email)
-
-    @Cacheable(cacheNames = ["member-provider"], key = "#type + ':' + #id")
-    override fun findByProvider(type: MemberProvider, id: String): Member? = jpa.findByProviderIdAndProvider(id, type)
-
-    @Cacheable(cacheNames = ["member-username"], key = "#username")
-    override fun findByUsername(username: String): Member? = jpa.findByUsername(username)
-
-    override fun findByUsernames(usernames: List<String>): List<Member> {
-        if (usernames.isEmpty()) return emptyList()
-
-        val names = usernames.toSet()
-
-        val cache = cacheManager.getCache("member-username") ?: ConcurrentMapCache("member-username")
-        val cached = names.mapNotNull { cache.get(it, Member::class.java) }
-        if (cached.size == names.size) return cached
-
-        val cachedNames = cached.map { it.username }.toSet()
-        val misses = cachedNames.filterNot { names.contains(it) }
-        val fetches = if (misses.isNotEmpty()) jpa.findAllByUsernameIn(misses) else emptyList()
-        fetches.forEach { cache.put(it.username, it) }
-
-        return cached + fetches
-    }
-
-    override fun findAll(size: Int, cursor: Long?): List<Member> {
-        val pageable = PageRequest.of(0, size)
-
-        return if (cursor == null) jpa.findAllByOrderByIdDesc(pageable)
-        else jpa.findByIdLessThanOrderByIdDesc(cursor, pageable)
-    }
-
-    override fun countAll(): Long = jpa.count()
-
-    @CacheEvict(cacheNames = ["member", "member-email", "member-username", "member-provider"], allEntries = true)
-    override fun deleteAll(members: List<Member>) = jpa.deleteAll(members)
+    override fun deleteAll(members: List<Member>) = delegate.delete(members)
 }

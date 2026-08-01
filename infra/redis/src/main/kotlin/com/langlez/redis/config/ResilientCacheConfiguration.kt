@@ -1,10 +1,10 @@
 package com.langlez.redis.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.github.benmanes.caffeine.cache.Caffeine
-import com.langlez.redis.cache.ResilientCacheManager
-import org.slf4j.LoggerFactory
-import org.springframework.cache.caffeine.CaffeineCacheManager
+import com.langlez.core.cache.CacheProvider
+import com.langlez.redis.cache.ResilientCacheProvider
+import io.micrometer.core.instrument.MeterRegistry
+import org.redisson.api.RedissonClient
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
@@ -16,26 +16,23 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext
 import org.springframework.scheduling.annotation.EnableScheduling
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 @Configuration
-@EnableScheduling
 class ResilientCacheConfiguration {
-    private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    fun caffeineCacheManager(): CaffeineCacheManager {
-        val caffeineBuilder = Caffeine
-            .newBuilder()
-            .expireAfterWrite(1, TimeUnit.HOURS)
-            .maximumSize(10000)
+    fun cacheProvider(redisson: RedissonClient, meterRegistry: MeterRegistry): CacheProvider =
+        ResilientCacheProvider(redisson, meterRegistry)
 
-        return CaffeineCacheManager().apply { setCaffeine(caffeineBuilder) }
-    }
-
+    /**
+     * profile / relationship 의 `@Cacheable` 이 남아 있는 동안만 유지한다.
+     * 전부 `CacheProvider` 로 넘어가면 `@EnableCaching` 과 함께 제거한다.
+     */
+    @Deprecated(message = "use `CacheProvider` instead")
     @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper): RedisCacheManager {
+    @Primary
+    fun cacheManager(connectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper): RedisCacheManager {
         val serializer = RedisSerializationContext.SerializationPair
             .fromSerializer(GenericJackson2JsonRedisSerializer(objectMapper))
 
@@ -59,20 +56,4 @@ class ResilientCacheConfiguration {
             .transactionAware()
             .build()
     }
-
-    @Bean
-    @Primary
-    fun cacheManager(
-        redisCacheManager: RedisCacheManager,
-        caffeineCacheManager: CaffeineCacheManager,
-        connectionFactory: RedisConnectionFactory,
-        redissonClient: org.redisson.api.RedissonClient,
-        objectMapper: ObjectMapper,
-    ): ResilientCacheManager = ResilientCacheManager(
-        redisCacheManager = redisCacheManager,
-        caffeineCacheManager = caffeineCacheManager,
-        connectionFactory = connectionFactory,
-        redissonClient = redissonClient,
-        objectMapper = objectMapper,
-    )
 }

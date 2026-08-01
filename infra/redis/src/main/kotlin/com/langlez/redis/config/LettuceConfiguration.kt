@@ -14,22 +14,21 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 class LettuceConfiguration(private val properties: RedisProperties) {
 
     @Bean
-    fun redisConnectionFactory() =
-        LettuceConnectionFactory(
-            when {
-                properties.cluster != null && properties.cluster.nodes.isNotEmpty() ->
-                    RedisClusterConfiguration(properties.cluster.nodes)
+    fun redisConnectionFactory() = LettuceConnectionFactory(
+        when {
+            properties.cluster != null && properties.cluster.nodes.isNotEmpty() ->
+                RedisClusterConfiguration(properties.cluster.nodes)
 
-                properties.sentinel != null && properties.sentinel.nodes.isNotEmpty() ->
-                    RedisSentinelConfiguration(
-                        properties.sentinel.master,
-                        properties.sentinel.nodes.toSet()
-                    ).apply { database = properties.database }
+            properties.sentinel != null && properties.sentinel.nodes.isNotEmpty() ->
+                RedisSentinelConfiguration(
+                    properties.sentinel.master,
+                    properties.sentinel.nodes.toSet()
+                ).apply { database = properties.database }
 
-                else ->
-                    RedisStandaloneConfiguration(properties.host, properties.port).apply {
-                        database = properties.database
-                    }
-            }
-        )
+            else ->
+                RedisStandaloneConfiguration(properties.host, properties.port).apply {
+                    database = properties.database
+                }
+        }
+    )
 }
