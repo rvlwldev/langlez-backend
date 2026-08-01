@@ -45,6 +45,22 @@ spring:
       repositories:
         enabled: false   # RedissonClient를 직접 사용, Spring Data Redis Repository는 쓰지 않음
 
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all              # 모든 ISR 확인. 아웃박스가 이 ack 를 보고 COMPLETE 를 찍는다
+      properties:
+        enable.idempotence: true   # 아웃박스 재발행 시 브로커단 중복 제거
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false    # 핸들러 성공 후 커밋 (at-least-once)
+    listener:
+      ack-mode: record
+
   jpa:
     hibernate:
       ddl-auto: update

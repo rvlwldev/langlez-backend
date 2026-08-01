@@ -8,9 +8,11 @@ plugins {
 }
 
 dependencies {
-    // OutBox 공통 베이스가 core.MessageQueue를 사용한다
     api(project(":core"))
     api(project(":common"))
+
+    // OutBox 공통 베이스가 생성자로 KafkaTemplate 을 받는다. 상속 모듈에서 타입이 보여야 한다
+    api(libs.dependency.spring.kafka)
 
     api(libs.dependency.springboot.jpa)
     api(libs.dependency.querydsl.jpa)

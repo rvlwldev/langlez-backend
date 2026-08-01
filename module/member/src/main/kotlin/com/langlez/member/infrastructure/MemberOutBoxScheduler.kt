@@ -1,8 +1,8 @@
 package com.langlez.member.infrastructure
 
-import com.langlez.core.MessageProducer
 import com.langlez.mysql.outbox.OutBoxProcessor
 import com.langlez.redis.distributedLock.DistributedLock
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
@@ -10,11 +10,11 @@ import org.springframework.transaction.support.TransactionTemplate
 @Component
 internal class MemberOutBoxScheduler(
     repo: MemberOutBoxRepositoryImpl,
-    mq: MessageProducer,
+    kafka: KafkaTemplate<String, String>,
     tx: TransactionTemplate,
 ) : OutBoxProcessor<MemberOutBox, MemberOutBoxHistory>(
     repo = repo,
-    producer = mq,
+    kafka = kafka,
     tx = tx,
     toHistory = ::MemberOutBoxHistory,
 ) {

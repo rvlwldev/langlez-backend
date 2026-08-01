@@ -1,10 +1,10 @@
 package com.langlez.mysql.outbox
 
-import com.langlez.core.MessageProducer
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import org.springframework.beans.factory.DisposableBean
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.transaction.support.TransactionTemplate
 
 /**
@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate
  */
 abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
     protected val repo: OutBoxRepository<T, H>,
-    private val producer: MessageProducer,
+    private val kafka: KafkaTemplate<String, String>,
     private val tx: TransactionTemplate,
     private val toHistory: (T) -> H,
 ) : DisposableBean {
@@ -48,7 +48,12 @@ abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
                             return@submit
                         }
 
-                    runCatching { event.run { producer.produce(topic, payload, key) } }
+                    // 브로커 ack 를 확인한 뒤에만 COMPLETE 로 넘긴다. send 는 비동기라
+                    // 기다리지 않으면 발행 실패한 이벤트까지 완료 처리되어 유실된다.
+                    runCatching {
+                        event.run { kafka.send(topic, key?.toString(), payload) }
+                            .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    }
                         .onSuccess { event.complete() }
                         .onFailure { event.fail() }
 
@@ -92,5 +97,6 @@ abstract class OutBoxProcessor<T : OutBox, H : OutBoxHistory>(
     companion object {
         const val DISPATCH_BATCH_SIZE = 100
         const val HISTORY_BATCH_SIZE = 100
+        const val SEND_TIMEOUT_SECONDS = 5L
     }
 }

@@ -1,0 +1,36 @@
+name: langlez-kafka
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: langlez-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft — ZooKeeper 없이 브로커가 컨트롤러를 겸한다
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # 단일 노드라 복제본을 늘릴 수 없다. 운영에서는 3 이상으로.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: langlez-kraft-cluster
+    volumes:
+      - ./volume/kafka:/var/lib/kafka/data
+    networks:
+      - langlez-net
