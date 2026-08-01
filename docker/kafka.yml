@@ -4,33 +4,75 @@ networks:
   langlez-net:
     driver: bridge
 
+# KRaft 3노드 클러스터. 각 노드가 broker + controller 를 겸한다.
+#
+# 리스너가 둘인 이유: 컨테이너끼리는 서비스명(kafka1:19092)으로 붙고, 호스트의 앱은
+# localhost:909x 로 붙는다. 광고 주소가 하나뿐이면 둘 중 하나는 반드시 실패한다.
+x-kafka-common: &kafka-common
+  image: apache/kafka:latest   # 4.x 계열
+  networks:
+    - langlez-net
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 1G
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+  # 노드가 3개이므로 내부 토픽도 3중화한다. 1로 두면 브로커 한 대만 죽어도
+  # 컨슈머 그룹 오프셋을 잃는다.
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  CLUSTER_ID: langlez-kraft-cluster
+  # 컨테이너 제한 1G 안에서 JVM 힙을 잡는다. 나머지는 페이지 캐시와 네이티브 버퍼 몫.
+  KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+
 services:
-  kafka:
-    image: apache/kafka:3.9.0
-    container_name: langlez-kafka
+  kafka1:
+    <<: *kafka-common
+    container_name: langlez-kafka1
     ports:
       - "9092:9092"
     environment:
-      # KRaft — ZooKeeper 없이 브로커가 컨트롤러를 겸한다
+      <<: *kafka-env
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-
-      # 단일 노드라 복제본을 늘릴 수 없다. 운영에서는 3 이상으로.
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-      CLUSTER_ID: langlez-kraft-cluster
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://localhost:9092
     volumes:
-      - ./volume/kafka:/var/lib/kafka/data
-    networks:
-      - langlez-net
+      - ./volume/kafka/1:/var/lib/kafka/data
+
+  kafka2:
+    <<: *kafka-common
+    container_name: langlez-kafka2
+    ports:
+      - "9094:9094"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,EXTERNAL://localhost:9094
+    volumes:
+      - ./volume/kafka/2:/var/lib/kafka/data
+
+  kafka3:
+    <<: *kafka-common
+    container_name: langlez-kafka3
+    ports:
+      - "9096:9096"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9096,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,EXTERNAL://localhost:9096
+    volumes:
+      - ./volume/kafka/3:/var/lib/kafka/data

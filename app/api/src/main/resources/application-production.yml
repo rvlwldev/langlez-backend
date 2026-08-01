@@ -33,9 +33,8 @@ spring:
     mongodb:
       uri: ${MONGO_URI}
     redis:
-      sentinel:
-        master: ${REDIS_MASTER}
-        nodes: ${REDIS_SENTINEL_NODES}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
 
   jpa:

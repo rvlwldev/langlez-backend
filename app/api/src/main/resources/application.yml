@@ -46,7 +46,8 @@ spring:
         enabled: false   # RedissonClient를 직접 사용, Spring Data Redis Repository는 쓰지 않음
 
   kafka:
-    bootstrap-servers: localhost:9092
+    # 3노드 전부 적는다. 한 대만 적으면 그 브로커가 죽었을 때 부트스트랩 자체가 실패한다.
+    bootstrap-servers: localhost:9092,localhost:9094,localhost:9096
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
