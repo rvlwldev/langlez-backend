@@ -18,7 +18,8 @@ import java.util.Locale
     uniqueConstraints = [
         UniqueConstraint("UNQ_MEMBER_PROVIDER", ["provider_id", "provider_type"]),
         UniqueConstraint("UNQ_MEMBER_EMAIL", ["email"]),
-        UniqueConstraint("UNQ_MEMBER_HANDLE", ["handle"])
+        UniqueConstraint("UNQ_MEMBER_HANDLE", ["handle"]),
+        UniqueConstraint("UNQ_MEMBER_AUDIT", ["member_audit_id"])
     ]
 )
 class Member(
@@ -52,7 +53,7 @@ class Member(
 
     @get:Transient
     var locale: Locale?
-        get() = country?.let(Locale::of)
+        get() = country?.let { Locale.of("", it) }
         set(value) {
             country = value?.country
         }
