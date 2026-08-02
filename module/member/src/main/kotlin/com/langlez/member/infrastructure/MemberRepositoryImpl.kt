@@ -3,7 +3,7 @@ package com.langlez.member.infrastructure
 import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
 import com.langlez.core.cache.getMany
-import com.langlez.member.application.MemberRepository
+import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.Member
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import org.springframework.data.domain.PageRequest

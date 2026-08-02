@@ -9,7 +9,7 @@ import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
 import com.langlez.member.api.request.MemberUpdateNicknameRequest
 import com.langlez.member.api.request.MemberUpdateUsernameRequest
 import com.langlez.member.application.MemberService
-import com.langlez.member.application.MemberRepository
+import com.langlez.member.domain.MemberRepository
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping

@@ -2,6 +2,7 @@ package com.langlez.member.application
 
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional

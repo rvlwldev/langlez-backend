@@ -1,6 +1,4 @@
-package com.langlez.member.application
-
-import com.langlez.member.domain.Member
+package com.langlez.member.domain
 
 interface MemberRepository {
     fun save(member: Member): Member

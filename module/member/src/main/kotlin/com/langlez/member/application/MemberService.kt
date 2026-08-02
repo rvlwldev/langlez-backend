@@ -4,6 +4,7 @@ import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus

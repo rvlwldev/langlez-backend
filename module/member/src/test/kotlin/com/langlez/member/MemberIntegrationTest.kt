@@ -5,7 +5,7 @@ import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.member.application.MemberRepository
+import com.langlez.member.domain.MemberRepository
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
