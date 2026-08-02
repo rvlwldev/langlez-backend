@@ -17,7 +17,7 @@ class MemberAudit(
     var lastAccessedIp: String? = null,
     var verifiedAt: Instant? = null,
     var agreedTermsAt: Instant? = null,
-    var lastUsernameUpdatedAt: Instant? = null,
+    var lastHandleUpdatedAt: Instant? = null,
     var lastNicknameUpdatedAt: Instant? = null,
     var lastAccessedAt: Instant? = null,
     var suspendedAt: Instant? = null,

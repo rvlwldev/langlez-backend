@@ -2,9 +2,8 @@ package com.langlez.member.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.event.member.MemberCreatedEvent
+import com.langlez.core.event.member.MemberHandleChangedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
-import com.langlez.core.event.member.MemberUsernameChangedEvent
-import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
 import com.langlez.member.infrastructure.outbox.MemberOutBox
 import org.springframework.stereotype.Component
@@ -20,11 +19,11 @@ class MemberEventListener(private val repo: MemberOutBoxRepository, private val 
     }
 
     @TransactionalEventListener(phase = BEFORE_COMMIT)
-    fun onUsernameChanged(event: MemberUsernameChangedEvent) {
+    fun onHandleChanged(event: MemberHandleChangedEvent) {
         repo.save(
             MemberOutBox(
                 "MEMBER",
-                "member-username-changed",
+                "member-handle-changed",
                 mapper.writeValueAsString(event),
                 event.id.toString()
             )
@@ -42,5 +41,4 @@ class MemberEventListener(private val repo: MemberOutBoxRepository, private val 
             )
         )
     }
-
 }

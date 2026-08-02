@@ -8,6 +8,5 @@ import org.springframework.stereotype.Component
 class MemberConsumer(private val tracker: MemberOnlineTracker) {
 
     @KafkaListener(topics = ["member-activity"], groupId = "member")
-    fun onMemberActivity(username: String) = tracker.toOnline(username)
-
+    fun onMemberActivity(handle: String) = tracker.toOnline(handle)
 }

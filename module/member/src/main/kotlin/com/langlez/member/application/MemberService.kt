@@ -1,7 +1,7 @@
 package com.langlez.member.application
 
+import com.langlez.core.event.member.MemberHandleChangedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
-import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -41,21 +41,21 @@ class MemberService(
     fun findByEmail(email: String): Member? = repo.findByEmail(email)
 
     @Transactional
-    fun updateUsername(id: Long, newUsername: String): Member {
-        if (repo.find(newUsername) != null)
-            throw LanglezException(HttpStatus.CONFLICT, "member.username.duplicated")
+    fun updateHandle(id: Long, newHandle: String): Member {
+        if (repo.find(newHandle) != null)
+            throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated")
 
-        val member = findOrThrow(id).apply { tracker.toOnline(username) }
+        val member = findOrThrow(id).apply { tracker.toOnline(handle) }
 
         try {
-            member.changeUsername(newUsername)
+            member.changeHandle(newHandle)
         } catch (e: IllegalArgumentException) {
             throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
         }
 
         return runCatching { repo.save(member) }
-            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.username.duplicated", e) }
-            .also { publisher.publishEvent(MemberUsernameChangedEvent(id, member.username)) }
+            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
+            .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
 
     @Transactional
@@ -73,8 +73,8 @@ class MemberService(
     }
 
     @Transactional(readOnly = true)
-    fun isOnline(username: String): Boolean = findOrThrow(username)
-        .let { member -> tracker.checkStatus(member.username) == true }
+    fun isOnline(handle: String): Boolean = findOrThrow(handle)
+        .let { member -> tracker.checkStatus(member.handle) == true }
 
     @Transactional
     fun verify(id: Long) = findOrThrow(id).apply { verify() }
@@ -90,7 +90,7 @@ class MemberService(
     fun updateLastAccess(id: Long) {
         (repo.find(id) ?: return)
             .apply { updateAccessedAt() }
-            .apply { runCatching { tracker.toOnline(username) } }
+            .apply { runCatching { tracker.toOnline(handle) } }
             .also(repo::save)
     }
 
@@ -119,6 +119,6 @@ class MemberService(
     private fun findOrThrow(id: Long) = repo.find(id)
         ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 
-    private fun findOrThrow(username: String) = repo.find(username)
+    private fun findOrThrow(handle: String) = repo.find(handle)
         ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 }

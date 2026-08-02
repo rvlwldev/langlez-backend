@@ -32,7 +32,7 @@ class AuthServiceTest : BehaviorSpec({
         val member = Member(
             id = memberId,
             email = "test@example.com",
-            username = "tester",
+            handle = "tester",
             nickname = "tester",
             provider = Member.Provider.GOOGLE,
             providerId = "g123",
@@ -115,17 +115,17 @@ class AuthServiceTest : BehaviorSpec({
 
     Given("로그인 성공으로 토큰을 최초 발급할 때") {
         val memberId = 1L
-        val username = "tester"
+        val handle = "tester"
         val role = "MEMBER"
 
         every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
-        every { jwt.createRefreshToken(memberId, username, role) } returns "issued-refresh-token"
-        every { jwt.createAccessToken(memberId, username, role) } returns "issued-access-token"
+        every { jwt.createRefreshToken(memberId, handle, role) } returns "issued-refresh-token"
+        every { jwt.createAccessToken(memberId, handle, role) } returns "issued-access-token"
         every { bucket.set(any(), any<Duration>()) } just runs
 
         When("issueTokens를 호출하면") {
             Then("토큰 쌍을 반환하고 refresh token을 Redis에 저장한다") {
-                val result = service.issueTokens(memberId, username, role)
+                val result = service.issueTokens(memberId, handle, role)
                 result.first shouldBe "issued-refresh-token"
                 result.second shouldBe "issued-access-token"
                 verify { bucket.set("issued-refresh-token", Duration.ofDays(14)) }

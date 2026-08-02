@@ -3,12 +3,12 @@ package com.langlez.member.api.response
 import com.langlez.member.domain.Member
 
 data class MemberPublicResponse(
-    val username: String,
+    val handle: String,
     val nickname: String,
     val role: String,
 ) {
     constructor(member: Member) : this(
-        username = member.username,
+        handle = member.handle,
         nickname = member.nickname,
         role = member.role.name,
     )

@@ -18,7 +18,7 @@ class OAuth2SuccessHandler(
 
     override fun onAuthenticationSuccess(req: HttpServletRequest, res: HttpServletResponse, auth: Authentication) {
         val user = auth.principal as OAuth2LanglezUser
-        val (refreshToken, accessToken) = service.issueTokens(user.id, user.username, user.role)
+        val (refreshToken, accessToken) = service.issueTokens(user.id, user.handle, user.role)
 
         val accessCookie = ResponseCookie.from("accessToken", accessToken)
             .httpOnly(true)
@@ -40,5 +40,4 @@ class OAuth2SuccessHandler(
         clearAuthenticationAttributes(req)
         redirectStrategy.sendRedirect(req, res, uri)
     }
-
 }

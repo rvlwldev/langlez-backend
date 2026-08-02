@@ -11,40 +11,40 @@ import java.time.Instant
 @Component
 class MemberOnlineTracker(private val redisson: RedissonClient, private val repo: MemberRepository) {
 
-    fun toOnline(username: String) {
-        redisson.getBucket<String>(key(username)).set("1", Duration.ofMinutes(TTL))
-        redisson.getScoredSortedSet<String>(ZSET_KEY).add(now(), username)
+    fun toOnline(handle: String) {
+        redisson.getBucket<String>(key(handle)).set("1", Duration.ofMinutes(TTL))
+        redisson.getScoredSortedSet<String>(ZSET_KEY).add(now(), handle)
     }
 
-    fun toOffline(username: String) {
-        redisson.getBucket<String>(key(username)).delete()
-        redisson.getScoredSortedSet<String>(ZSET_KEY).remove(username)
+    fun toOffline(handle: String) {
+        redisson.getBucket<String>(key(handle)).delete()
+        redisson.getScoredSortedSet<String>(ZSET_KEY).remove(handle)
     }
 
-    fun checkStatus(username: String): Boolean? {
-        val isOnline = redisson.getBucket<String>(key(username)).isExists
+    fun checkStatus(handle: String): Boolean? {
+        val isOnline = redisson.getBucket<String>(key(handle)).isExists
         if (isOnline) return true
 
-        repo.find(username) ?: return null
+        repo.find(handle) ?: return null
         return false
     }
 
-    fun checkStatus(usernames: Collection<String>): Map<String, Boolean?> {
-        if (usernames.isEmpty()) return emptyMap()
+    fun checkStatus(handles: Collection<String>): Map<String, Boolean?> {
+        if (handles.isEmpty()) return emptyMap()
 
-        val targets = usernames.toSet()
-        val keymap = targets.associateBy { key(it) } // key to username
+        val targets = handles.toSet()
+        val keymap = targets.associateBy { key(it) } // key to handle
 
         val buckets = redisson.buckets.get<String>(*keymap.keys.toTypedArray())
-        val onlineMap = keymap.entries.associate { (key, username) -> username to (buckets[key] != null) }
+        val onlineMap = keymap.entries.associate { (key, handle) -> handle to (buckets[key] != null) }
 
         val offlines = onlineMap.filterValues { !it }.keys.toList()
-        val presences = repo.findAllByUsernames(offlines).map { it.username }
+        val presences = repo.findAllByHandles(offlines).map { it.handle }
 
-        return targets.associateWith { username ->
+        return targets.associateWith { handle ->
             when {
-                onlineMap[username] == true -> true
-                presences.contains(username) -> false
+                onlineMap[handle] == true -> true
+                presences.contains(handle) -> false
                 else -> null
             }
         }
@@ -68,17 +68,17 @@ class MemberOnlineTracker(private val redisson: RedissonClient, private val repo
 
         if (entries.isEmpty()) return
 
-        val accessedAtByUsername = entries.associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
-        val members = repo.findAllByUsernames(accessedAtByUsername.keys.toList())
+        val accessedAtByHandle = entries.associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
+        val members = repo.findAllByHandles(accessedAtByHandle.keys.toList())
 
         members.forEach { member ->
-            val accessedAt = accessedAtByUsername[member.username] ?: return@forEach
+            val accessedAt = accessedAtByHandle[member.handle] ?: return@forEach
             member.updateAccessedAt(accessedAt)
             repo.save(member)
         }
     }
 
-    private fun key(username: String): String = "online:$username"
+    private fun key(handle: String): String = "online:$handle"
     private fun now() = System.currentTimeMillis().toDouble()
 
     companion object {

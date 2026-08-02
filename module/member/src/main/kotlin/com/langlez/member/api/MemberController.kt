@@ -2,12 +2,12 @@ package com.langlez.member.api
 
 import com.langlez.annotation.MemberId
 import com.langlez.exception.LanglezException
+import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
+import com.langlez.member.api.request.MemberUpdateHandleRequest
+import com.langlez.member.api.request.MemberUpdateNicknameRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
 import com.langlez.member.api.response.MemberPublicResponse
-import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
-import com.langlez.member.api.request.MemberUpdateNicknameRequest
-import com.langlez.member.api.request.MemberUpdateUsernameRequest
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberRepository
 import jakarta.validation.Valid
@@ -30,12 +30,12 @@ class MemberController(private val service: MemberService, private val repo: Mem
         return MemberMeResponse(member)
     }
 
-    @PatchMapping("/me/username")
-    fun patchUsername(
+    @PatchMapping("/me/handle")
+    fun patchHandle(
         @MemberId memberId: Long,
-        @RequestBody @Valid request: MemberUpdateUsernameRequest
+        @RequestBody @Valid request: MemberUpdateHandleRequest
     ): MemberMeResponse {
-        val member = service.updateUsername(memberId, request.username)
+        val member = service.updateHandle(memberId, request.handle)
         return MemberMeResponse(member)
     }
 
@@ -54,15 +54,15 @@ class MemberController(private val service: MemberService, private val repo: Mem
         service.updateFcmToken(memberId, request.token)
     }
 
-    @GetMapping("/{username}")
-    fun getMember(@PathVariable username: String): MemberPublicResponse {
-        val member = repo.find(username) ?: throw LanglezException(404, "member.not-found")
+    @GetMapping("/{handle}")
+    fun getMember(@PathVariable handle: String): MemberPublicResponse {
+        val member = repo.find(handle) ?: throw LanglezException(404, "member.not-found")
         return MemberPublicResponse(member)
     }
 
-    @GetMapping("/{username}/online-status")
-    fun getOnlineStatus(@PathVariable username: String): MemberOnlineStatusResponse {
-        val online = service.isOnline(username)
+    @GetMapping("/{handle}/online-status")
+    fun getOnlineStatus(@PathVariable handle: String): MemberOnlineStatusResponse {
+        val online = service.isOnline(handle)
         return MemberOnlineStatusResponse(online)
     }
 }

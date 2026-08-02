@@ -1,14 +1,14 @@
 package com.langlez.member
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.core.event.member.MemberCreatedEvent
+import com.langlez.core.event.member.MemberHandleChangedEvent
+import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
+import com.langlez.member.application.MemberRepository
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
-import com.langlez.core.event.member.MemberCreatedEvent
-import com.langlez.core.event.member.MemberNicknameChangedEvent
-import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
 import com.langlez.rdb.outbox.OutBox
 import io.kotest.assertions.throwables.shouldThrow
@@ -110,7 +110,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                     val found = memberRepository.find(result.id)
                     found shouldNotBe null
                     found?.email shouldBe "create_test@example.com"
-                    found?.username shouldBe result.username
+                    found?.handle shouldBe result.handle
                 }
 
                 Then("멤버 총 카운트가 1 증가한다") {
@@ -131,7 +131,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
             }
 
-            When("이메일/유저네임 중복 등 DB 제약 위반으로 회원 가입에 실패하면") {
+            When("이메일/핸들 중복 등 DB 제약 위반으로 회원 가입에 실패하면") {
                 val beforeMemberCount = memberRepository.count()
                 val beforeOutboxCount = outboxJpaRepository.count()
 
@@ -158,11 +158,11 @@ class MemberIntegrationTest : BehaviorSpec() {
         }
 
         // =========================================================================
-        // 2. 유저네임 변경 유스케이스
+        // 2. 핸들(핸들네임) 변경 유스케이스
         // =========================================================================
-        Given("유저네임 변경 시") {
+        Given("핸들 변경 시") {
 
-            When("유효한 유저네임으로 변경에 성공하면") {
+            When("유효한 핸들로 변경에 성공하면") {
                 val m = memberService.createMember(
                     email = "user2@example.com",
                     nickname = "User2",
@@ -172,32 +172,32 @@ class MemberIntegrationTest : BehaviorSpec() {
                 )
                 val beforeOutboxCount = outboxJpaRepository.count()
 
-                val updated = memberService.updateUsername(m.id, "user2_after")
+                val updated = memberService.updateHandle(m.id, "user2_after")
 
-                Then("유저네임이 변경된다") {
-                    updated.username shouldBe "user2_after"
+                Then("핸들이 변경된다") {
+                    updated.handle shouldBe "user2_after"
                     val found = memberRepository.find(m.id)
-                    found?.username shouldBe "user2_after"
+                    found?.handle shouldBe "user2_after"
                 }
 
-                Then("lastUsernameUpdatedAt 타임스탬프가 업데이트된다") {
+                Then("lastHandleUpdatedAt 타임스탬프가 업데이트된다") {
                     val found = memberRepository.find(m.id)
-                    found?.audit?.lastUsernameUpdatedAt shouldNotBe null
+                    found?.audit?.lastHandleUpdatedAt shouldNotBe null
                 }
 
-                Then("이벤트 아웃박스에 member-username-changed 레코드가 저장된다") {
+                Then("이벤트 아웃박스에 member-handle-changed 레코드가 저장된다") {
                     outboxJpaRepository.count() shouldBe beforeOutboxCount + 1
                     val outbox = outboxJpaRepository.findAll().last()
-                    outbox.topic shouldBe "member-username-changed"
+                    outbox.topic shouldBe "member-handle-changed"
                     outbox.key shouldBe m.id.toString()
 
-                    val eventPayload = objectMapper.readValue(outbox.payload, MemberUsernameChangedEvent::class.java)
+                    val eventPayload = objectMapper.readValue(outbox.payload, MemberHandleChangedEvent::class.java)
                     eventPayload.id shouldBe m.id
-                    eventPayload.newUsername shouldBe "user2_after"
+                    eventPayload.newHandle shouldBe "user2_after"
                 }
             }
 
-            When("이미 사용 중인 유저네임으로 변경에 실패하면") {
+            When("이미 사용 중인 핸들로 변경에 실패하면") {
                 val m1 = memberService.createMember(
                     email = "u1@test.com",
                     nickname = "U1",
@@ -214,16 +214,16 @@ class MemberIntegrationTest : BehaviorSpec() {
                 )
                 val beforeOutboxCount = outboxJpaRepository.count()
 
-                Then("409 CONFLICT (member.username.duplicated) 예외가 발생한다") {
+                Then("409 CONFLICT (member.handle.duplicated) 예외가 발생한다") {
                     val ex = shouldThrow<LanglezException> {
-                        memberService.updateUsername(m2.id, m1.username)
+                        memberService.updateHandle(m2.id, m1.handle)
                     }
                     ex.status.value() shouldBe 409
-                    ex.message shouldBe "member.username.duplicated"
+                    ex.message shouldBe "member.handle.duplicated"
                 }
 
-                Then("회원 유저네임이 변경되지 않고 이전 상태를 유지한다") {
-                    memberRepository.find(m2.id)?.username shouldBe m2.username
+                Then("회원 핸들이 변경되지 않고 이전 상태를 유지한다") {
+                    memberRepository.find(m2.id)?.handle shouldBe m2.handle
                 }
 
                 Then("이벤트 아웃박스 생성이 롤백된다") {
@@ -231,7 +231,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
             }
 
-            When("형식이 유효하지 않은 유저네임(2자 미만)으로 변경에 실패하면") {
+            When("형식이 유효하지 않은 핸들(2자 미만)으로 변경에 실패하면") {
                 val m = memberService.createMember(
                     email = "u3@test.com",
                     nickname = "U3",
@@ -241,12 +241,12 @@ class MemberIntegrationTest : BehaviorSpec() {
                 )
                 val beforeOutboxCount = outboxJpaRepository.count()
 
-                Then("400 BAD_REQUEST (member.username.invalid) 예외가 발생한다") {
+                Then("400 BAD_REQUEST (member.handle.invalid) 예외가 발생한다") {
                     val ex = shouldThrow<LanglezException> {
-                        memberService.updateUsername(m.id, "a")
+                        memberService.updateHandle(m.id, "a")
                     }
                     ex.status.value() shouldBe 400
-                    ex.message shouldBe "member.username.invalid"
+                    ex.message shouldBe "member.handle.invalid"
                 }
 
                 Then("아웃박스가 생성되지 않고 롤백된다") {
@@ -254,7 +254,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
             }
 
-            When("유저네임 변경 후 15일 쿨다운 기간 내에 재변경을 시도하면") {
+            When("핸들 변경 후 15일 쿨다운 기간 내에 재변경을 시도하면") {
                 val m = memberService.createMember(
                     email = "u3_cd@test.com",
                     nickname = "U3_CD",
@@ -263,24 +263,24 @@ class MemberIntegrationTest : BehaviorSpec() {
                     providerUsername = "U3_CD",
                 )
                 // 1회 변경
-                memberService.updateUsername(m.id, "username_cd2")
+                memberService.updateHandle(m.id, "handle_cd2")
                 val beforeOutboxCount = outboxJpaRepository.count()
 
-                Then("400 BAD_REQUEST (member.username.cooldown) 예외가 발생한다") {
+                Then("400 BAD_REQUEST (member.handle.cooldown) 예외가 발생한다") {
                     val ex = shouldThrow<LanglezException> {
-                        memberService.updateUsername(m.id, "username_cd3")
+                        memberService.updateHandle(m.id, "handle_cd3")
                     }
                     ex.status.value() shouldBe 400
-                    ex.message shouldBe "member.username.cooldown"
+                    ex.message shouldBe "member.handle.cooldown"
                 }
 
-                Then("유저네임이 변경되지 않고 아웃박스가 추가 생성되지 않는다") {
-                    memberRepository.find(m.id)?.username shouldBe "username_cd2"
+                Then("핸들이 변경되지 않고 아웃박스가 추가 생성되지 않는다") {
+                    memberRepository.find(m.id)?.handle shouldBe "handle_cd2"
                     outboxJpaRepository.count() shouldBe beforeOutboxCount
                 }
             }
 
-            When("유저네임 변경 후 15일 쿨다운 기간이 지난 후 재변경하면") {
+            When("핸들 변경 후 15일 쿨다운 기간이 지난 후 재변경하면") {
                 val m = memberService.createMember(
                     email = "u3_pass@test.com",
                     nickname = "U3_PASS",
@@ -291,22 +291,24 @@ class MemberIntegrationTest : BehaviorSpec() {
                 // 강제로 16일 전 타임스탬프 설정
                 val memberEntity = memberRepository.find(m.id)!!
                 val pastTimestamp = Instant.now().minus(16, ChronoUnit.DAYS)
-                memberRepository.save(Member(
-                    id = memberEntity.id,
-                    email = memberEntity.email,
-                    username = memberEntity.username,
-                    nickname = memberEntity.nickname,
-                    provider = memberEntity.provider,
-                    providerId = memberEntity.providerId,
-                    providerDisplayName = memberEntity.providerDisplayName,
-                    audit = com.langlez.member.domain.MemberAudit(lastUsernameUpdatedAt = pastTimestamp)
-                ))
+                memberRepository.save(
+                    Member(
+                        id = memberEntity.id,
+                        email = memberEntity.email,
+                        handle = memberEntity.handle,
+                        nickname = memberEntity.nickname,
+                        provider = memberEntity.provider,
+                        providerId = memberEntity.providerId,
+                        providerDisplayName = memberEntity.providerDisplayName,
+                        audit = com.langlez.member.domain.MemberAudit(lastHandleUpdatedAt = pastTimestamp)
+                    )
+                )
                 val beforeOutboxCount = outboxJpaRepository.count()
 
-                val updated = memberService.updateUsername(m.id, "pass_user2")
+                val updated = memberService.updateHandle(m.id, "pass_user2")
 
-                Then("유저네임이 정상적으로 변경된다") {
-                    updated.username shouldBe "pass_user2"
+                Then("핸들이 정상적으로 변경된다") {
+                    updated.handle shouldBe "pass_user2"
                 }
 
                 Then("아웃박스 레코드가 새로 추가 저장된다") {
@@ -319,7 +321,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("404 NOT_FOUND (member.not-found) 예외가 발생한다") {
                     val ex = shouldThrow<LanglezException> {
-                        memberService.updateUsername(999999L, "newusername")
+                        memberService.updateHandle(999999L, "newhandle")
                     }
                     ex.status.value() shouldBe 404
                     ex.message shouldBe "member.not-found"
@@ -438,7 +440,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m1 = memberRepository.save(
                     Member(
                         email = "member1_page@test.com",
-                        username = "member1_page",
+                        handle = "member1_page",
                         nickname = "member1_page",
                         provider = Member.Provider.GOOGLE,
                         providerId = "gp1_page",
@@ -448,7 +450,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m2 = memberRepository.save(
                     Member(
                         email = "member2_page@test.com",
-                        username = "member2_page",
+                        handle = "member2_page",
                         nickname = "member2_page",
                         provider = Member.Provider.GOOGLE,
                         providerId = "gp2_page",
@@ -481,14 +483,14 @@ class MemberIntegrationTest : BehaviorSpec() {
                     providerId = "p5",
                     providerUsername = "U5",
                 )
-                every { memberOnlineTracker.checkStatus(m.username) } returns true
+                every { memberOnlineTracker.checkStatus(m.handle) } returns true
 
                 Then("MemberOnlineTracker 트래커 상태값(true)을 반환한다") {
-                    memberService.isOnline(m.username) shouldBe true
+                    memberService.isOnline(m.handle) shouldBe true
                 }
             }
 
-            When("존재하지 않는 회원 username으로 조회하면") {
+            When("존재하지 않는 회원 handle로 조회하면") {
                 Then("404 NOT_FOUND (member.not-found) 예외가 발생한다") {
                     val ex = shouldThrow<LanglezException> {
                         memberService.isOnline("non_existing_ghost_user")

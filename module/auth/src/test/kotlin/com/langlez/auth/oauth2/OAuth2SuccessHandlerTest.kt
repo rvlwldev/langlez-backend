@@ -21,13 +21,13 @@ class OAuth2SuccessHandlerTest : BehaviorSpec({
 
     Given("OAuth2 성공 로그인 시") {
         val memberId = 1L
-        val username = "tester"
+        val handle = "tester"
         val role = "ROLE_MEMBER"
-        val user = OAuth2LanglezUser(memberId, username, role, mapOf("sub" to "123"), "sub")
+        val user = OAuth2LanglezUser(memberId, handle, role, mapOf("sub" to "123"), "sub")
         val auth = mockk<Authentication>()
 
         every { auth.principal } returns user
-        every { service.issueTokens(memberId, username, role) } returns ("mock-refresh-token" to "mock-access-token")
+        every { service.issueTokens(memberId, handle, role) } returns ("mock-refresh-token" to "mock-access-token")
 
         When("OAuth2SuccessHandler가 실행되면") {
             val req = MockHttpServletRequest()

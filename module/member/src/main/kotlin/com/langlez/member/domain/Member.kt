@@ -8,6 +8,7 @@ import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 
 @Entity
 @EntityListeners(AuditingEntityListener::class)
@@ -17,7 +18,7 @@ import java.time.Instant
     uniqueConstraints = [
         UniqueConstraint("UNQ_MEMBER_PROVIDER", ["provider_id", "provider_type"]),
         UniqueConstraint("UNQ_MEMBER_EMAIL", ["email"]),
-        UniqueConstraint("UNQ_MEMBER_USERNAME", ["username"])
+        UniqueConstraint("UNQ_MEMBER_HANDLE", ["handle"])
     ]
 )
 class Member(
@@ -25,11 +26,12 @@ class Member(
     val id: Long = 0,
     val email: String,
 
-    @Column(length = 20) var username: String = generateRandomUsername(),
+    @Column(length = 20) var handle: String = randomHandle(),
     @Column(length = 20) var nickname: String,
     @Enumerated(STRING) var status: Status = Status.CREATED,
     @Enumerated(STRING) var role: Role = Role.MEMBER,
 
+    var country: String? = null,
     var imageUrl: String? = null,
     var agreedMarketingReceive: Boolean = false,
 
@@ -47,9 +49,13 @@ class Member(
 
     @Version var version: Long = 0
 ) {
-    enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
-    enum class Role { MEMBER, PREMIUM, ADMIN }
-    enum class Provider { GOOGLE, APPLE }
+
+    @get:Transient
+    var locale: Locale?
+        get() = country?.let(Locale::of)
+        set(value) {
+            country = value?.country
+        }
 
     fun verify() {
         require(audit.verifiedAt == null) { "member.already-verified" }
@@ -62,15 +68,15 @@ class Member(
         if (last == null || accessedAt > last) audit.lastAccessedAt = accessedAt
     }
 
-    fun canChangeUsername(now: Instant = Instant.now()): Boolean =
-        audit.lastUsernameUpdatedAt == null || Duration.between(audit.lastUsernameUpdatedAt, now) >= CHANGE_COOLDOWN
+    fun canChangeHandle(now: Instant = Instant.now()): Boolean =
+        audit.lastHandleUpdatedAt == null || Duration.between(audit.lastHandleUpdatedAt, now) >= CHANGE_COOLDOWN
 
-    fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
-        require(canChangeUsername(now)) { "member.username.cooldown" }
-        require(isValidUsername(newUsername)) { "member.username.invalid" }
+    fun changeHandle(newHandle: String, now: Instant = Instant.now()) {
+        require(canChangeHandle(now)) { "member.handle.cooldown" }
+        require(isValidHandle(newHandle)) { "member.handle.invalid" }
 
-        username = newUsername
-        audit.lastUsernameUpdatedAt = now
+        handle = newHandle
+        audit.lastHandleUpdatedAt = now
     }
 
     fun canChangeNickname(now: Instant = Instant.now()): Boolean =
@@ -83,15 +89,19 @@ class Member(
         audit.lastNicknameUpdatedAt = now
     }
 
+    enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
+    enum class Role { MEMBER, PREMIUM, ADMIN }
+    enum class Provider { GOOGLE, APPLE }
+
     companion object {
-        const val USERNAME_REGEX = "^[a-zA-Z0-9_]{3,20}$"
-        private val USERNAME_PATTERN = Regex(USERNAME_REGEX)
+        const val HANDLE_REGEX = "^[a-zA-Z0-9_.]{3,20}$"
+        private val HANDLE_PATTERN = Regex(HANDLE_REGEX)
         private val CHANGE_COOLDOWN: Duration = Duration.ofDays(15)
 
-        fun generateRandomUsername(): String = (1..20)
-            .map { "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".random() }
+        fun randomHandle(): String = (1..20)
+            .map { "._ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".random() }
             .joinToString("")
 
-        fun isValidUsername(username: String): Boolean = USERNAME_PATTERN.matches(username)
+        fun isValidHandle(handle: String): Boolean = HANDLE_PATTERN.matches(handle)
     }
 }

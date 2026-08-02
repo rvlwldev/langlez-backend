@@ -49,20 +49,16 @@ class AuthService(
 
         return OAuth2LanglezUser(
             member.id,
-            member.username,
+            member.handle,
             "ROLE_${member.role.name.uppercase()}",
             profile.rawAttributes,
             profile.providerKey
         )
     }
 
-    /**
-     * 토큰 쌍을 발급하고 refresh token을 Redis에 기록한다. OAuth2 로그인 성공 시와
-     * 토큰 갱신 시 모두 이 메서드를 거쳐야 refresh token 회전 검증(refresh())이 일관되게 동작한다.
-     */
-    fun issueTokens(id: Long, username: String, role: String): Pair<String, String> {
-        val refreshToken = jwt.createRefreshToken(id, username, role)
-        val accessToken = jwt.createAccessToken(id, username, role)
+    fun issueTokens(id: Long, handle: String, role: String): Pair<String, String> {
+        val refreshToken = jwt.createRefreshToken(id, handle, role)
+        val accessToken = jwt.createAccessToken(id, handle, role)
 
         redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, REFRESH_TOKEN_TTL)
 
@@ -82,7 +78,7 @@ class AuthService(
             throw LanglezException(401, "auth.token-expired")
         }
 
-        return issueTokens(id, member.username, member.role.name)
+        return issueTokens(id, member.handle, member.role.name)
     }
 
     fun logout(memberId: Long, accessToken: String) {
