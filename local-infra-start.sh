@@ -16,6 +16,4 @@ docker compose -p langlez \
   -f docker/monitoring.yml \
   up -d
 
-echo "Infrastructure is up and running!"
-echo "Project: langlez"
-echo "Network: langlez-net"
+echo "All Infrastructures is up and running"
