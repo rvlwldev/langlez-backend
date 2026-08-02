@@ -5,7 +5,7 @@ import com.langlez.auth.oauth2.OAuth2LanglezUser
 import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberService
-import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.Member
 import com.langlez.utility.JwtTokenProvider
 import org.redisson.api.RedissonClient
 import org.springframework.http.HttpStatus
@@ -36,7 +36,7 @@ class AuthService(
     }
 
     private fun oauth2Login(profile: OAuth2UserProfile): OAuth2User {
-        val type = MemberProvider.valueOf(profile.provider.uppercase())
+        val type = Member.Provider.valueOf(profile.provider.uppercase())
         val id = profile.rawAttributes[profile.providerKey]?.toString()
             ?: throw LanglezException(HttpStatus.BAD_REQUEST, "auth.invalid-request")
         val member = service.findByProvider(type, id) ?: run {

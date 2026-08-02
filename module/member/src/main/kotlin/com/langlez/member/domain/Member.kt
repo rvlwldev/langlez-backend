@@ -1,7 +1,9 @@
 package com.langlez.member.domain
 
 import jakarta.persistence.*
+import jakarta.persistence.CascadeType.ALL
 import jakarta.persistence.EnumType.STRING
+import jakarta.persistence.FetchType.LAZY
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Duration
@@ -25,61 +27,60 @@ class Member(
 
     @Column(length = 20) var username: String = generateRandomUsername(),
     @Column(length = 20) var nickname: String,
-    @Enumerated(STRING) var status: MemberStatus = MemberStatus.CREATED,
-    @Enumerated(STRING) var role: MemberRole = MemberRole.MEMBER,
+    @Enumerated(STRING) var status: Status = Status.CREATED,
+    @Enumerated(STRING) var role: Role = Role.MEMBER,
 
     var imageUrl: String? = null,
     var agreedMarketingReceive: Boolean = false,
 
-    @Enumerated(STRING) @Column(name = "provider_type") var provider: MemberProvider,
+    @Enumerated(STRING) @Column(name = "provider_type") var provider: Provider,
     @Column(name = "provider_id") var providerId: String,
     @Column(name = "provider_display_name") var providerDisplayName: String? = null,
 
     var fcm: String? = null,
 
-    var lastAccessedIp: String? = null,
+    @OneToOne(fetch = LAZY, cascade = [ALL], orphanRemoval = true)
+    @JoinColumn(name = "member_audit_id")
+    val audit: MemberAudit = MemberAudit(),
 
     @CreatedDate var createdAt: Instant = Instant.now(),
-    var verifiedAt: Instant? = null,
-    var agreedTermsAt: Instant? = null,
-    var lastUsernameUpdatedAt: Instant? = null,
-    var lastNicknameUpdatedAt: Instant? = null,
-    var lastAccessedAt: Instant? = null,
-    var suspendedAt: Instant? = null,
-    var withdrawnAt: Instant? = null,
 
     @Version var version: Long = 0
 ) {
+    enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
+    enum class Role { MEMBER, PREMIUM, ADMIN }
+    enum class Provider { GOOGLE, APPLE }
+
     fun verify() {
-        require(verifiedAt == null) { "member.already-verified" }
-        verifiedAt = Instant.now()
-        agreedTermsAt = Instant.now()
+        require(audit.verifiedAt == null) { "member.already-verified" }
+        audit.verifiedAt = Instant.now()
+        audit.agreedTermsAt = Instant.now()
     }
 
     fun updateAccessedAt(accessedAt: Instant = Instant.now()) {
-        val last = lastAccessedAt
-        if (last == null || accessedAt > last) this.lastAccessedAt = accessedAt
+        val last = audit.lastAccessedAt
+        if (last == null || accessedAt > last) audit.lastAccessedAt = accessedAt
     }
 
     fun canChangeUsername(now: Instant = Instant.now()): Boolean =
-        lastUsernameUpdatedAt == null || Duration.between(lastUsernameUpdatedAt, now) >= CHANGE_COOLDOWN
+        audit.lastUsernameUpdatedAt == null || Duration.between(audit.lastUsernameUpdatedAt, now) >= CHANGE_COOLDOWN
 
     fun changeUsername(newUsername: String, now: Instant = Instant.now()) {
-        require(canChangeUsername()) { "member.username.cooldown" }
+        require(canChangeUsername(now)) { "member.username.cooldown" }
         require(isValidUsername(newUsername)) { "member.username.invalid" }
 
         username = newUsername
-        lastUsernameUpdatedAt = now
+        audit.lastUsernameUpdatedAt = now
     }
 
     fun canChangeNickname(now: Instant = Instant.now()): Boolean =
-        lastNicknameUpdatedAt == null || Duration.between(lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
+        audit.lastNicknameUpdatedAt == null || Duration.between(audit.lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
 
     fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
-        require(canChangeNickname()) { "member.nickname.cooldown" }
+        require(canChangeNickname(now)) { "member.nickname.cooldown" }
 
         nickname = newNickname
-        lastNicknameUpdatedAt = now
+        audit.lastNicknameUpdatedAt = now
     }
 
     companion object {
@@ -94,4 +95,3 @@ class Member(
         fun isValidUsername(username: String): Boolean = USERNAME_PATTERN.matches(username)
     }
 }
-

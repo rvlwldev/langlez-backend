@@ -5,7 +5,6 @@ import com.langlez.core.cache.get
 import com.langlez.core.cache.getMany
 import com.langlez.member.application.MemberRepository
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.repository.findByIdOrNull
@@ -31,7 +30,7 @@ class MemberRepositoryImpl(
         ?.let(::find)?.takeIf { it.username == username }
         ?: jpa.findByUsername(username)?.also(::updateCaches)
 
-    override fun find(provider: MemberProvider, id: String): Member? = providers.get<String>("$provider:$id")
+    override fun find(provider: Member.Provider, id: String): Member? = providers.get<String>("$provider:$id")
         ?.toLongOrNull()
         ?.let(::find)?.takeIf { it.provider == provider && it.providerId == id }
         ?: jpa.findByProviderAndProviderId(provider, id)?.also(::updateCaches)

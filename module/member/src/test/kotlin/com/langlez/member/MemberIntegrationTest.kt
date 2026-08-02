@@ -9,7 +9,6 @@ import com.langlez.member.application.MemberRepository
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
-import com.langlez.member.domain.MemberProvider
 import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
 import com.langlez.rdb.outbox.OutBox
 import io.kotest.assertions.throwables.shouldThrow
@@ -101,7 +100,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val result = memberService.createMember(
                     email = "create_test@example.com",
                     nickname = "Test User",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "g123_test",
                     providerUsername = "Test User",
                 )
@@ -141,7 +140,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                         memberService.createMember(
                             email = "create_test@example.com",
                             nickname = "Test User",
-                            providerType = MemberProvider.GOOGLE,
+                            providerType = Member.Provider.GOOGLE,
                             providerId = "g123_test",
                             providerUsername = "Test User",
                         )
@@ -167,7 +166,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "user2@example.com",
                     nickname = "User2",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "g456_test",
                     providerUsername = "User2",
                 )
@@ -183,7 +182,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("lastUsernameUpdatedAt 타임스탬프가 업데이트된다") {
                     val found = memberRepository.find(m.id)
-                    found?.lastUsernameUpdatedAt shouldNotBe null
+                    found?.audit?.lastUsernameUpdatedAt shouldNotBe null
                 }
 
                 Then("이벤트 아웃박스에 member-username-changed 레코드가 저장된다") {
@@ -202,14 +201,14 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m1 = memberService.createMember(
                     email = "u1@test.com",
                     nickname = "U1",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p1",
                     providerUsername = "U1",
                 )
                 val m2 = memberService.createMember(
                     email = "u2@test.com",
                     nickname = "U2",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p2",
                     providerUsername = "U2",
                 )
@@ -236,7 +235,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u3@test.com",
                     nickname = "U3",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p3",
                     providerUsername = "U3",
                 )
@@ -259,7 +258,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u3_cd@test.com",
                     nickname = "U3_CD",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p3_cd",
                     providerUsername = "U3_CD",
                 )
@@ -285,7 +284,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u3_pass@test.com",
                     nickname = "U3_PASS",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p3_cd_pass",
                     providerUsername = "U3_PASS",
                 )
@@ -300,7 +299,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                     provider = memberEntity.provider,
                     providerId = memberEntity.providerId,
                     providerDisplayName = memberEntity.providerDisplayName,
-                    lastUsernameUpdatedAt = pastTimestamp
+                    audit = com.langlez.member.domain.MemberAudit(lastUsernameUpdatedAt = pastTimestamp)
                 ))
                 val beforeOutboxCount = outboxJpaRepository.count()
 
@@ -341,7 +340,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u4@test.com",
                     nickname = "OldNick",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p4",
                     providerUsername = "U4",
                 )
@@ -357,7 +356,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("lastNicknameUpdatedAt 타임스탬프가 업데이트된다") {
                     val found = memberRepository.find(m.id)
-                    found?.lastNicknameUpdatedAt shouldNotBe null
+                    found?.audit?.lastNicknameUpdatedAt shouldNotBe null
                 }
 
                 Then("이벤트 아웃박스에 member-nickname-changed 레코드가 저장된다") {
@@ -375,7 +374,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u4_cd@test.com",
                     nickname = "NickCD1",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p4_cd",
                     providerUsername = "U4_CD",
                 )
@@ -406,7 +405,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "fcm@test.com",
                     nickname = "FCM_User",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p_fcm",
                     providerUsername = "FCM_User",
                 )
@@ -441,7 +440,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                         email = "member1_page@test.com",
                         username = "member1_page",
                         nickname = "member1_page",
-                        provider = MemberProvider.GOOGLE,
+                        provider = Member.Provider.GOOGLE,
                         providerId = "gp1_page",
                         providerDisplayName = "member1_page"
                     )
@@ -451,7 +450,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                         email = "member2_page@test.com",
                         username = "member2_page",
                         nickname = "member2_page",
-                        provider = MemberProvider.GOOGLE,
+                        provider = Member.Provider.GOOGLE,
                         providerId = "gp2_page",
                         providerDisplayName = "member2_page"
                     )
@@ -478,7 +477,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = memberService.createMember(
                     email = "u5@test.com",
                     nickname = "U5",
-                    providerType = MemberProvider.GOOGLE,
+                    providerType = Member.Provider.GOOGLE,
                     providerId = "p5",
                     providerUsername = "U5",
                 )

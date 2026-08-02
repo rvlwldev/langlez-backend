@@ -4,7 +4,6 @@ import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import com.langlez.utility.JwtTokenProvider
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -35,7 +34,7 @@ class AuthServiceTest : BehaviorSpec({
             email = "test@example.com",
             username = "tester",
             nickname = "tester",
-            provider = MemberProvider.GOOGLE,
+            provider = Member.Provider.GOOGLE,
             providerId = "g123",
             providerDisplayName = "tester"
         )
@@ -138,7 +137,7 @@ class AuthServiceTest : BehaviorSpec({
     Given("OAuth2 로그인 요청 시") {
         When("신규 회원 가입 중 이메일이 누락된 프로필이면") {
             val profile = OAuth2UserProfile.by("google", "sub", mapOf("sub" to "g123"))
-            every { memberService.findByProvider(MemberProvider.GOOGLE, "g123") } returns null
+            every { memberService.findByProvider(Member.Provider.GOOGLE, "g123") } returns null
 
             Then("400 예외가 발생한다") {
                 val method = AuthService::class.java.getDeclaredMethod("oauth2Login", OAuth2UserProfile::class.java)

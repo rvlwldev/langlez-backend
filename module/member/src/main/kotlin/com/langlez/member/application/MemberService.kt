@@ -4,7 +4,6 @@ import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -23,7 +22,7 @@ class MemberService(
 
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
     fun createMember(
-        providerType: MemberProvider,
+        providerType: Member.Provider,
         providerId: String,
         email: String,
         providerUsername: String,
@@ -34,7 +33,7 @@ class MemberService(
     fun findById(id: Long): Member? = repo.find(id)
 
     @Transactional(readOnly = true)
-    fun findByProvider(type: MemberProvider, providerId: String): Member? =
+    fun findByProvider(type: Member.Provider, providerId: String): Member? =
         repo.find(type, providerId)
 
     @Transactional(readOnly = true)

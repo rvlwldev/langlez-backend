@@ -17,6 +17,6 @@ data class MemberMeResponse(
         nickname = member.nickname,
         role = member.role.name,
         createdAt = member.createdAt,
-        lastAccessedAt = member.lastAccessedAt,
+        lastAccessedAt = member.audit.lastAccessedAt,
     )
 }

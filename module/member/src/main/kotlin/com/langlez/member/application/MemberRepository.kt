@@ -1,14 +1,13 @@
 package com.langlez.member.application
 
 import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
 
 interface MemberRepository {
     fun save(member: Member): Member
 
     fun find(id: Long): Member?
     fun find(username: String): Member?
-    fun find(provider: MemberProvider, id: String): Member?
+    fun find(provider: Member.Provider, id: String): Member?
     fun findByEmail(email: String): Member?
 
     fun findAll(ids: Collection<Long>): List<Member>
