@@ -57,7 +57,8 @@ class Member(
     }
 
     fun updateAccessedAt(accessedAt: Instant = Instant.now()) {
-        if (accessedAt > this.lastAccessedAt) this.lastAccessedAt = accessedAt
+        val last = lastAccessedAt
+        if (last == null || accessedAt > last) this.lastAccessedAt = accessedAt
     }
 
     fun canChangeUsername(now: Instant = Instant.now()): Boolean =

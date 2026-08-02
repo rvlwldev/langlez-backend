@@ -17,14 +17,21 @@ class MemberEventConfiguration {
     @Bean
     fun memberUsernameChangedTopic(): NewTopic = TopicBuilder
         .name("member-username-changed")
-        .partitions(10)
+        .partitions(3)
+        .replicas(3)
+        .build()
+
+    @Bean
+    fun memberNicknameChangedTopic(): NewTopic = TopicBuilder
+        .name("member-nickname-changed")
+        .partitions(3)
         .replicas(3)
         .build()
 
     @Bean
     fun memberActivityTopic(): NewTopic = TopicBuilder
         .name("member-activity")
-        .partitions(10)
+        .partitions(12)
         .replicas(3)
         .build()
 }

@@ -6,7 +6,6 @@ import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberProvider
-import com.langlez.member.domain.MemberStatus
 import com.langlez.utility.JwtTokenProvider
 import org.redisson.api.RedissonClient
 import org.springframework.http.HttpStatus
@@ -15,7 +14,6 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService
 import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 
 @Service
@@ -37,7 +35,6 @@ class AuthService(
         return oauth2Login(profile)
     }
 
-    @Transactional
     private fun oauth2Login(profile: OAuth2UserProfile): OAuth2User {
         val type = MemberProvider.valueOf(profile.provider.uppercase())
         val id = profile.rawAttributes[profile.providerKey]?.toString()
@@ -59,6 +56,19 @@ class AuthService(
         )
     }
 
+    /**
+     * 토큰 쌍을 발급하고 refresh token을 Redis에 기록한다. OAuth2 로그인 성공 시와
+     * 토큰 갱신 시 모두 이 메서드를 거쳐야 refresh token 회전 검증(refresh())이 일관되게 동작한다.
+     */
+    fun issueTokens(id: Long, username: String, role: String): Pair<String, String> {
+        val refreshToken = jwt.createRefreshToken(id, username, role)
+        val accessToken = jwt.createAccessToken(id, username, role)
+
+        redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, REFRESH_TOKEN_TTL)
+
+        return refreshToken to accessToken
+    }
+
     fun refresh(refreshToken: String): Pair<String, String> {
         val tokenType = jwt.extractTokenType(refreshToken)
         if (tokenType != "refresh") throw LanglezException(401, "auth.invalid-token")
@@ -66,22 +76,22 @@ class AuthService(
         val id = jwt.extractId(refreshToken)
         val member = service.findById(id) ?: throw LanglezException(401, "auth.invalid-token")
 
-        val bucket = redisson.getBucket<String>("refresh_token:$id")
+        val bucket = redisson.getBucket<String>(refreshTokenKey(id))
         if (refreshToken != bucket.get()) {
             bucket.delete()
             throw LanglezException(401, "auth.token-expired")
         }
 
-        return member.run {
-            Pair(
-                jwt.createRefreshToken(id, username, role.name),
-                jwt.createAccessToken(id, username, role.name)
-            )
-        }.also { bucket.set(it.first, Duration.ofDays(14)) }
+        return issueTokens(id, member.username, member.role.name)
     }
 
     fun logout(memberId: Long, accessToken: String) {
-        redisson.getBucket<String>("refresh_token:$memberId").delete()
+        redisson.getBucket<String>(refreshTokenKey(memberId)).delete()
         tokenBlacklist.blacklist(accessToken, jwt.extractRemainingValiditySeconds(accessToken))
+    }
+
+    companion object {
+        private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(14)
+        private fun refreshTokenKey(id: Long) = "refresh_token:$id"
     }
 }

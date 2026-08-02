@@ -114,6 +114,26 @@ class AuthServiceTest : BehaviorSpec({
         }
     }
 
+    Given("로그인 성공으로 토큰을 최초 발급할 때") {
+        val memberId = 1L
+        val username = "tester"
+        val role = "MEMBER"
+
+        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
+        every { jwt.createRefreshToken(memberId, username, role) } returns "issued-refresh-token"
+        every { jwt.createAccessToken(memberId, username, role) } returns "issued-access-token"
+        every { bucket.set(any(), any<Duration>()) } just runs
+
+        When("issueTokens를 호출하면") {
+            Then("토큰 쌍을 반환하고 refresh token을 Redis에 저장한다") {
+                val result = service.issueTokens(memberId, username, role)
+                result.first shouldBe "issued-refresh-token"
+                result.second shouldBe "issued-access-token"
+                verify { bucket.set("issued-refresh-token", Duration.ofDays(14)) }
+            }
+        }
+    }
+
     // oauth2Login()은 private이라 리플렉션으로 직접 호출
     Given("OAuth2 로그인 요청 시") {
         When("신규 회원 가입 중 이메일이 누락된 프로필이면") {

@@ -1,6 +1,6 @@
 package com.langlez.auth.oauth2
 
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.auth.application.AuthService
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
@@ -12,12 +12,12 @@ import org.springframework.security.core.Authentication
 
 class OAuth2SuccessHandlerTest : BehaviorSpec({
 
-    val jwt = mockk<JwtTokenProvider>()
+    val service = mockk<AuthService>()
     val redirectUri = "http://localhost:3000/oauth2/callback"
 
-    val handler = OAuth2SuccessHandler(jwt, redirectUri)
+    val handler = OAuth2SuccessHandler(service, redirectUri)
 
-    afterEach { clearMocks(jwt, answers = false) }
+    afterEach { clearMocks(service, answers = false) }
 
     Given("OAuth2 성공 로그인 시") {
         val memberId = 1L
@@ -27,8 +27,7 @@ class OAuth2SuccessHandlerTest : BehaviorSpec({
         val auth = mockk<Authentication>()
 
         every { auth.principal } returns user
-        every { jwt.createRefreshToken(memberId, username, role) } returns "mock-refresh-token"
-        every { jwt.createAccessToken(memberId, username, role) } returns "mock-access-token"
+        every { service.issueTokens(memberId, username, role) } returns ("mock-refresh-token" to "mock-access-token")
 
         When("OAuth2SuccessHandler가 실행되면") {
             val req = MockHttpServletRequest()

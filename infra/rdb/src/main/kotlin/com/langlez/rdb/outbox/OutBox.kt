@@ -14,45 +14,48 @@ abstract class OutBox(
     val domain: String,
     val topic: String,
     @Column(columnDefinition = "TEXT") val payload: String?,
-    @Column(name = "`key`") val key: String?,
+    key: Any? = null,
     val createdAt: Instant = Instant.now(),
 ) {
     @Id
     @GeneratedValue(strategy = IDENTITY)
     val id: Long = 0
 
-    @Enumerated(STRING)
-    var status: OutBoxStatus = OutBoxStatus.READY
-        private set
+    @Column(name = "`key`")
+    val key: String? = key?.toString()
 
-    var attempts: Int = 0
-        private set
+    @Enumerated(STRING)
+    var status: Status = Status.PENDING
+        protected set
+
+    var tries: Int = 0
+        protected set
+
+    var completedAt: Instant? = null
+        protected set
 
     var failedAt: Instant? = null
-        private set
+        protected set
 
     fun dispatch() {
-        check(status == OutBoxStatus.READY || status == OutBoxStatus.PROCESSING) { "잘못된 이벤트 '발행' 시도" }
-        check(attempts < MAX_ATTEMPTS) { "최대 재시도 횟수 초과" }
-        status = OutBoxStatus.PROCESSING
-        attempts++
+        check(status == Status.PENDING) { "잘못된 이벤트 '발행' 시도" }
+        tries++
     }
 
     fun complete() {
-        check(status == OutBoxStatus.PROCESSING) { "잘못된 이벤트 '완료' 시도" }
-        status = OutBoxStatus.COMPLETE
+        check(status == Status.PENDING) { "잘못된 이벤트 '완료' 시도" }
+        status = Status.COMPLETE
+        completedAt = Instant.now()
     }
 
-    fun fail() {
-        if (attempts >= MAX_ATTEMPTS) {
-            status = OutBoxStatus.FAILED
+    fun fail(maxRetries: Int) {
+        if (this.tries >= maxRetries) {
+            status = Status.FAILED
             failedAt = Instant.now()
         } else {
-            status = OutBoxStatus.PROCESSING
+            status = Status.PENDING
         }
     }
 
-    companion object {
-        const val MAX_ATTEMPTS = 3
-    }
+    enum class Status { PENDING, COMPLETE, FAILED }
 }

@@ -26,7 +26,7 @@ class MemberController(private val service: MemberService, private val repo: Mem
 
     @GetMapping("/me")
     fun getMe(@MemberId memberId: Long): MemberMeResponse {
-        val member = repo.findById(memberId) ?: throw LanglezException(404, "member.not-found")
+        val member = repo.find(memberId) ?: throw LanglezException(404, "member.not-found")
         return MemberMeResponse(member)
     }
 
@@ -56,7 +56,7 @@ class MemberController(private val service: MemberService, private val repo: Mem
 
     @GetMapping("/{username}")
     fun getMember(@PathVariable username: String): MemberPublicResponse {
-        val member = repo.findByUsername(username) ?: throw LanglezException(404, "member.not-found")
+        val member = repo.find(username) ?: throw LanglezException(404, "member.not-found")
         return MemberPublicResponse(member)
     }
 

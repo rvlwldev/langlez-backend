@@ -1,6 +1,6 @@
 package com.langlez.auth.oauth2
 
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.auth.application.AuthService
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
@@ -12,14 +12,13 @@ import org.springframework.stereotype.Component
 
 @Component
 class OAuth2SuccessHandler(
-    private val jwt: JwtTokenProvider,
+    private val service: AuthService,
     @param:Value($$"${app.oauth2.redirect-uri}") private val uri: String,
 ) : SimpleUrlAuthenticationSuccessHandler() {
 
     override fun onAuthenticationSuccess(req: HttpServletRequest, res: HttpServletResponse, auth: Authentication) {
         val user = auth.principal as OAuth2LanglezUser
-        val refreshToken = jwt.createRefreshToken(user.id, user.username, user.role)
-        val accessToken = jwt.createAccessToken(user.id, user.username, user.role)
+        val (refreshToken, accessToken) = service.issueTokens(user.id, user.username, user.role)
 
         val accessCookie = ResponseCookie.from("accessToken", accessToken)
             .httpOnly(true)

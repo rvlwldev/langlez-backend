@@ -14,10 +14,10 @@ abstract class OutBoxHistory(
     val topic: String,
     @Column(columnDefinition = "TEXT") val payload: String?,
     @Column(name = "`key`") val key: String?,
-    val attempts: Int,
-    @Enumerated(STRING) val status: OutBoxStatus,
+    val tries: Int,
+    @Enumerated(STRING) val status: OutBox.Status,
     val createdAt: Instant,
-    val processedAt: Instant = Instant.now(),
+    val completedAt: Instant?,
 ) {
     constructor(o: OutBox) : this(
         id = o.id,
@@ -25,8 +25,9 @@ abstract class OutBoxHistory(
         topic = o.topic,
         payload = o.payload,
         key = o.key,
-        attempts = o.attempts,
+        tries = o.tries,
         status = o.status,
         createdAt = o.createdAt,
+        completedAt = o.completedAt
     )
 }

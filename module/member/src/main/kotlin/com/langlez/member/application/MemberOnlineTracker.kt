@@ -1,12 +1,9 @@
 package com.langlez.member.application
 
-import com.langlez.member.domain.Member
-import com.langlez.member.application.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.redisson.api.RedissonClient
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.Instant
 
@@ -27,7 +24,7 @@ class MemberOnlineTracker(private val redisson: RedissonClient, private val repo
         val isOnline = redisson.getBucket<String>(key(username)).isExists
         if (isOnline) return true
 
-        repo.findByUsername(username) ?: return null
+        repo.find(username) ?: return null
         return false
     }
 
@@ -41,7 +38,7 @@ class MemberOnlineTracker(private val redisson: RedissonClient, private val repo
         val onlineMap = keymap.entries.associate { (key, username) -> username to (buckets[key] != null) }
 
         val offlines = onlineMap.filterValues { !it }.keys.toList()
-        val presences = repo.findByUsernames(offlines).map { it.username }
+        val presences = repo.findAllByUsernames(offlines).map { it.username }
 
         return targets.associateWith { username ->
             when {
@@ -71,7 +68,7 @@ class MemberOnlineTracker(private val redisson: RedissonClient, private val repo
         if (entries.isEmpty()) return
 
         val accessedAtByUsername = entries.associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
-        val members = repo.findByUsernames(accessedAtByUsername.keys.toList())
+        val members = repo.findAllByUsernames(accessedAtByUsername.keys.toList())
 
         members.forEach { member ->
             val accessedAt = accessedAtByUsername[member.username] ?: return@forEach

@@ -7,6 +7,7 @@ import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberProvider
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.http.HttpStatus
 import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
@@ -30,38 +31,64 @@ class MemberService(
     ): Member = creator.create(providerType, providerId, email, providerUsername, nickname)
 
     @Transactional(readOnly = true)
-    fun findById(id: Long): Member? = repo.findById(id)
+    fun findById(id: Long): Member? = repo.find(id)
+
+    @Transactional(readOnly = true)
+    fun findByProvider(type: MemberProvider, providerId: String): Member? =
+        repo.find(type, providerId)
 
     @Transactional(readOnly = true)
     fun findByEmail(email: String): Member? = repo.findByEmail(email)
 
-    @Transactional(readOnly = true)
-    fun findByProvider(type: MemberProvider, providerId: String): Member? =
-        repo.findByProvider(type, providerId)
-
-    @Transactional(readOnly = true)
-    fun isOnline(username: String): Boolean =
-        repo.findByUsername(username)
-            ?.let { member -> tracker.checkStatus(member.username) == true }
-            ?: throw LanglezException(404, "member.not-found")
-
     @Transactional
-    fun updateVerifiedAt(id: Long) {
-        (repo.findById(id) ?: throw LanglezException(404, "member.not-found"))
-            .apply { verify() }
-            .also(repo::save)
+    fun updateUsername(id: Long, newUsername: String): Member {
+        if (repo.find(newUsername) != null)
+            throw LanglezException(HttpStatus.CONFLICT, "member.username.duplicated")
+
+        val member = findOrThrow(id).apply { tracker.toOnline(username) }
+
+        try {
+            member.changeUsername(newUsername)
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        return runCatching { repo.save(member) }
+            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.username.duplicated", e) }
+            .also { publisher.publishEvent(MemberUsernameChangedEvent(id, member.username)) }
     }
 
     @Transactional
-    fun updateMarketingAgree(id: Long, agree: Boolean) {
-        (repo.findById(id) ?: throw LanglezException(404, "member.not-found"))
-            .apply { agreedMarketingReceive = agree }
+    fun updateNickname(id: Long, newNickname: String): Member {
+        val member = findOrThrow(id)
+
+        try {
+            member.changeNickname(newNickname)
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        return member.also(repo::save)
+            .also { publisher.publishEvent(MemberNicknameChangedEvent(id, newNickname)) }
+    }
+
+    @Transactional(readOnly = true)
+    fun isOnline(username: String): Boolean = findOrThrow(username)
+        .let { member -> tracker.checkStatus(member.username) == true }
+
+    @Transactional
+    fun verify(id: Long) = findOrThrow(id).apply { verify() }
+        .also(repo::save)
+
+    @Transactional
+    fun updateMarketingPolicy(id: Long, agree: Boolean) {
+        findOrThrow(id).apply { agreedMarketingReceive = agree }
             .also(repo::save)
     }
 
     @Transactional
     fun updateLastAccess(id: Long) {
-        (repo.findById(id) ?: return)
+        (repo.find(id) ?: return)
             .apply { updateAccessedAt() }
             .apply { runCatching { tracker.toOnline(username) } }
             .also(repo::save)
@@ -76,29 +103,8 @@ class MemberService(
     }
 
     @Transactional
-    fun updateUsername(id: Long, newUsername: String): Member {
-        if (repo.findByUsername(newUsername) != null) throw LanglezException(409, "member.username.duplicated")
-
-        val member = (repo.findById(id) ?: throw LanglezException(404, "member.not-found"))
-            .apply { tracker.toOnline(username) }
-            .apply { changeUsername(newUsername) }
-
-        return runCatching { repo.save(member) }
-            .getOrElse { e -> throw LanglezException(409, "member.username.duplicated", e) }
-            .also { publisher.publishEvent(MemberUsernameChangedEvent(id, member.username)) }
-    }
-
-    @Transactional
-    fun updateNickname(id: Long, newNickname: String): Member =
-        (repo.findById(id) ?: throw LanglezException(404, "member.not-found"))
-            .apply { changeNickname(newNickname) }
-            .also(repo::save)
-            .also { publisher.publishEvent(MemberNicknameChangedEvent(id, newNickname)) }
-
-    @Transactional
     fun updateFcmToken(id: Long, token: String) {
-        (repo.findById(id) ?: throw LanglezException(404, "member.not-found"))
-            .apply { fcm = token }
+        findOrThrow(id).apply { fcm = token }
             .also(repo::save)
     }
 
@@ -109,4 +115,10 @@ class MemberService(
     fun withdrawMember(id: Long) {
         TODO()
     }
+
+    private fun findOrThrow(id: Long) = repo.find(id)
+        ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
+
+    private fun findOrThrow(username: String) = repo.find(username)
+        ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 }

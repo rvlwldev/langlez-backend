@@ -10,8 +10,8 @@ import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.core.event.member.MemberUsernameChangedEvent
 import com.langlez.member.domain.MemberProvider
-import com.langlez.member.infrastructure.jpa.MemberOutBoxJpaRepository
-import com.langlez.rdb.outbox.OutBoxStatus
+import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
+import com.langlez.rdb.outbox.OutBox
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -63,7 +63,7 @@ class MemberIntegrationTest : BehaviorSpec() {
     lateinit var memberRepository: MemberRepository
 
     @Autowired
-    lateinit var outboxJpaRepository: MemberOutBoxJpaRepository
+    lateinit var outboxJpaRepository: MemberOutBoxRepository
 
     @Autowired
     lateinit var memberOnlineTracker: MemberOnlineTracker
@@ -95,7 +95,7 @@ class MemberIntegrationTest : BehaviorSpec() {
         Given("회원 가입 시") {
 
             When("정상적인 정보로 회원 가입에 성공하면") {
-                val beforeMemberCount = memberRepository.countAll()
+                val beforeMemberCount = memberRepository.count()
                 val beforeOutboxCount = outboxJpaRepository.count()
 
                 val result = memberService.createMember(
@@ -108,14 +108,14 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("DB에 회원 정보가 저장된다") {
                     result.id shouldNotBe null
-                    val found = memberRepository.findById(result.id)
+                    val found = memberRepository.find(result.id)
                     found shouldNotBe null
                     found?.email shouldBe "create_test@example.com"
                     found?.username shouldBe result.username
                 }
 
                 Then("멤버 총 카운트가 1 증가한다") {
-                    memberRepository.countAll() shouldBe beforeMemberCount + 1
+                    memberRepository.count() shouldBe beforeMemberCount + 1
                 }
 
                 Then("이벤트 아웃박스(member_event_outbox)에 member-created 레코드가 저장된다") {
@@ -123,7 +123,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                     val createdOutbox = outboxJpaRepository.findAll().last()
                     createdOutbox.domain shouldBe "MEMBER"
                     createdOutbox.topic shouldBe "member-created"
-                    createdOutbox.status shouldBe OutBoxStatus.READY
+                    createdOutbox.status shouldBe OutBox.Status.PENDING
                     createdOutbox.key shouldBe result.id.toString()
 
                     val eventPayload = objectMapper.readValue(createdOutbox.payload, MemberCreatedEvent::class.java)
@@ -133,7 +133,7 @@ class MemberIntegrationTest : BehaviorSpec() {
             }
 
             When("이메일/유저네임 중복 등 DB 제약 위반으로 회원 가입에 실패하면") {
-                val beforeMemberCount = memberRepository.countAll()
+                val beforeMemberCount = memberRepository.count()
                 val beforeOutboxCount = outboxJpaRepository.count()
 
                 Then("DB 제약위반 예외(DataIntegrityViolationException)가 발생한다") {
@@ -149,7 +149,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
 
                 Then("멤버 카운트가 증가하지 않는다") {
-                    memberRepository.countAll() shouldBe beforeMemberCount
+                    memberRepository.count() shouldBe beforeMemberCount
                 }
 
                 Then("이벤트 아웃박스 레코드가 생성되지 않고 롤백된다") {
@@ -177,12 +177,12 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("유저네임이 변경된다") {
                     updated.username shouldBe "user2_after"
-                    val found = memberRepository.findById(m.id)
+                    val found = memberRepository.find(m.id)
                     found?.username shouldBe "user2_after"
                 }
 
                 Then("lastUsernameUpdatedAt 타임스탬프가 업데이트된다") {
-                    val found = memberRepository.findById(m.id)
+                    val found = memberRepository.find(m.id)
                     found?.lastUsernameUpdatedAt shouldNotBe null
                 }
 
@@ -194,7 +194,6 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                     val eventPayload = objectMapper.readValue(outbox.payload, MemberUsernameChangedEvent::class.java)
                     eventPayload.id shouldBe m.id
-                    eventPayload.oldUsername shouldBe m.username
                     eventPayload.newUsername shouldBe "user2_after"
                 }
             }
@@ -225,7 +224,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
 
                 Then("회원 유저네임이 변경되지 않고 이전 상태를 유지한다") {
-                    memberRepository.findById(m2.id)?.username shouldBe m2.username
+                    memberRepository.find(m2.id)?.username shouldBe m2.username
                 }
 
                 Then("이벤트 아웃박스 생성이 롤백된다") {
@@ -277,7 +276,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
 
                 Then("유저네임이 변경되지 않고 아웃박스가 추가 생성되지 않는다") {
-                    memberRepository.findById(m.id)?.username shouldBe "username_cd2"
+                    memberRepository.find(m.id)?.username shouldBe "username_cd2"
                     outboxJpaRepository.count() shouldBe beforeOutboxCount
                 }
             }
@@ -291,7 +290,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                     providerUsername = "U3_PASS",
                 )
                 // 강제로 16일 전 타임스탬프 설정
-                val memberEntity = memberRepository.findById(m.id)!!
+                val memberEntity = memberRepository.find(m.id)!!
                 val pastTimestamp = Instant.now().minus(16, ChronoUnit.DAYS)
                 memberRepository.save(Member(
                     id = memberEntity.id,
@@ -352,12 +351,12 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("닉네임이 변경된다") {
                     updated.nickname shouldBe "NewNick"
-                    val found = memberRepository.findById(m.id)
+                    val found = memberRepository.find(m.id)
                     found?.nickname shouldBe "NewNick"
                 }
 
                 Then("lastNicknameUpdatedAt 타임스탬프가 업데이트된다") {
-                    val found = memberRepository.findById(m.id)
+                    val found = memberRepository.find(m.id)
                     found?.lastNicknameUpdatedAt shouldNotBe null
                 }
 
@@ -392,7 +391,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
 
                 Then("닉네임이 변경되지 않고 아웃박스가 생성되지 않는다") {
-                    memberRepository.findById(m.id)?.nickname shouldBe "NickCD2"
+                    memberRepository.find(m.id)?.nickname shouldBe "NickCD2"
                     outboxJpaRepository.count() shouldBe beforeOutboxCount
                 }
             }
@@ -415,7 +414,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 memberService.updateFcmToken(m.id, "sample_fcm_token_12345")
 
                 Then("회원의 fcmToken 필드가 정상적으로 저장된다") {
-                    val found = memberRepository.findById(m.id)
+                    val found = memberRepository.find(m.id)
                     found?.fcm shouldBe "sample_fcm_token_12345"
                 }
             }

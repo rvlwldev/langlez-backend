@@ -2,11 +2,12 @@ package com.langlez.auth.api
 
 import com.langlez.auth.api.AuthRequest.RefreshToken
 import com.langlez.auth.application.AuthService
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
+import org.springframework.http.HttpStatus
 
 class AuthControllerTest : BehaviorSpec({
 
@@ -33,7 +34,7 @@ class AuthControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.refresh(RefreshToken("invalid-token"))
                 }
-                ex.status shouldBe 401
+                ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
             }
         }
@@ -45,7 +46,7 @@ class AuthControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.refresh(RefreshToken("expired-token"))
                 }
-                ex.status shouldBe 401
+                ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
             }
         }
