@@ -1,10 +1,13 @@
 package com.langlez.member.application
 
+import com.langlez.core.Storage
 import com.langlez.core.event.member.MemberHandleChangedEvent
 import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberSuspendHistory
+import com.langlez.member.domain.MemberSuspendHistoryRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -18,7 +21,9 @@ class MemberService(
     private val repo: MemberRepository,
     private val creator: MemberCreator,
     private val tracker: MemberOnlineTracker,
-    private val publisher: ApplicationEventPublisher
+    private val storage: Storage,
+    private val publisher: ApplicationEventPublisher,
+    private val suspendHistoryRepo: MemberSuspendHistoryRepository,
 ) {
 
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
@@ -94,12 +99,13 @@ class MemberService(
             .also(repo::save)
     }
 
-    fun presignProfileUrl(id: Long) {
-        TODO()
-    }
+    fun presignProfileUrl(id: Long, filename: String) = storage.presign(id, "member", Storage.Type.IMAGE, filename)
 
-    fun updateProfileUrl(id: Long, url: String) {
-        TODO()
+    @Transactional
+    fun updateProfileUrl(id: Long, key: String): Member {
+        val member = findOrThrow(id)
+        member.imageUrl = storage.attach(key, id)
+        return member.also(repo::save)
     }
 
     @Transactional
@@ -108,12 +114,24 @@ class MemberService(
             .also(repo::save)
     }
 
+    @Transactional
     fun suspendMember(id: Long, reason: String? = null) {
-        TODO()
+        val member = findOrThrow(id)
+
+        try {
+            member.suspend()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        repo.save(member)
+        suspendHistoryRepo.save(MemberSuspendHistory(member, reason, null))
     }
 
+    @Transactional
     fun withdrawMember(id: Long) {
-        TODO()
+        findOrThrow(id).apply { withdraw() }
+            .also(repo::save)
     }
 
     private fun findOrThrow(id: Long) = repo.find(id)

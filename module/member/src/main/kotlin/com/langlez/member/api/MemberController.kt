@@ -1,9 +1,11 @@
 package com.langlez.member.api
 
 import com.langlez.annotation.MemberId
+import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
 import com.langlez.member.api.request.MemberUpdateHandleRequest
+import com.langlez.member.api.request.MemberUpdateImageRequest
 import com.langlez.member.api.request.MemberUpdateNicknameRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
@@ -12,11 +14,13 @@ import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberRepository
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
@@ -52,6 +56,25 @@ class MemberController(private val service: MemberService, private val repo: Mem
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun patchFcmToken(@MemberId memberId: Long, @RequestBody @Valid request: MemberUpdateFcmTokenRequest) {
         service.updateFcmToken(memberId, request.token)
+    }
+
+    @GetMapping("/me/image/upload-url")
+    fun getImageUploadUrl(@MemberId memberId: Long, @RequestParam filename: String): Storage.PresignedResult =
+        service.presignProfileUrl(memberId, filename)
+
+    @PatchMapping("/me/image")
+    fun patchImage(
+        @MemberId memberId: Long,
+        @RequestBody @Valid request: MemberUpdateImageRequest
+    ): MemberMeResponse {
+        val member = service.updateProfileUrl(memberId, request.key)
+        return MemberMeResponse(member)
+    }
+
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun withdraw(@MemberId memberId: Long) {
+        service.withdrawMember(memberId)
     }
 
     @GetMapping("/{handle}")

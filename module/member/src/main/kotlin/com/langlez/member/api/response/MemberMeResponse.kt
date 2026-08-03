@@ -8,6 +8,7 @@ data class MemberMeResponse(
     val handle: String,
     val nickname: String,
     val role: String,
+    val imageUrl: String?,
     val createdAt: Instant,
     val lastAccessedAt: Instant?,
 ) {
@@ -16,6 +17,7 @@ data class MemberMeResponse(
         handle = member.handle,
         nickname = member.nickname,
         role = member.role.name,
+        imageUrl = member.imageUrl,
         createdAt = member.createdAt,
         lastAccessedAt = member.audit.lastAccessedAt,
     )

@@ -28,7 +28,7 @@ class Member(
     val email: String,
 
     @Column(length = 20) var handle: String = randomHandle(),
-    @Column(length = 20) var nickname: String,
+    @Column(length = 20) var nickname: String, // 삭제예정
     @Enumerated(STRING) var status: Status = Status.CREATED,
     @Enumerated(STRING) var role: Role = Role.MEMBER,
 
@@ -88,6 +88,15 @@ class Member(
 
         nickname = newNickname
         audit.lastNicknameUpdatedAt = now
+    }
+
+    fun suspend() {
+        require(status != Status.WITHDRAWN) { "member.already-withdrawn" }
+        status = Status.SUSPENDED
+    }
+
+    fun withdraw() {
+        status = Status.WITHDRAWN
     }
 
     enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
