@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 
-@Tag(name = "Member", description = "회원 프로필/계정 관리 API")
+@Tag(name = "Member", description = "회원 계정 관리 API")
 interface MemberAPI {
 
     @Operation(summary = "내 정보 조회", description = "로그인한 회원 본인의 정보를 조회한다.")
