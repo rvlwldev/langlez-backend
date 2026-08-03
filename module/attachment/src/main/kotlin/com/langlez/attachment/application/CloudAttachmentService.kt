@@ -57,7 +57,7 @@ class CloudAttachmentService(
             throw LanglezException(HttpStatus.NOT_FOUND, "attachment.file-not-found", e)
         }
 
-        if (head.contentType() == null || !head.contentType().startsWith(attachment.fileType.mimePrefix))
+        if (head.contentType() == null || !head.contentType().startsWith(attachment.type.mime))
             throw LanglezException(HttpStatus.BAD_REQUEST, "attachment.invalid-content-type")
 
         attachment.attach(sourceId?.toString())

@@ -36,7 +36,7 @@ class AttachmentRepositoryImpl(
             cursor?.let { attachment.id.lt(it) },
             source?.let { attachment.source.eq(it) },
             status?.let { attachment.status.eq(it) },
-            fileType?.let { attachment.fileType.eq(it) },
+            fileType?.let { attachment.type.eq(it) },
         ).reduceOrNull(BooleanExpression::and)
 
         return dsl.selectFrom(attachment)

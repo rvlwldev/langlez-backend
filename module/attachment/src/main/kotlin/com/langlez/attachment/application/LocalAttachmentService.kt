@@ -49,7 +49,7 @@ class LocalAttachmentService(
         if (attachment.status != Attachment.Status.PENDING)
             throw LanglezException(HttpStatus.BAD_REQUEST, "common.bad-request")
 
-        if (!contentType.startsWith(attachment.fileType.mimePrefix))
+        if (!contentType.startsWith(attachment.type.mime))
             throw LanglezException(HttpStatus.BAD_REQUEST, "attachment.invalid-content-type")
 
         val target = resolve(key)

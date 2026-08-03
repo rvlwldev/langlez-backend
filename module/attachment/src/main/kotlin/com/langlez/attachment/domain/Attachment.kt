@@ -30,7 +30,7 @@ class Attachment(
     val uploaderId: Long,
     val source: String,
     var sourceId: String? = null,
-    @Enumerated(STRING) val fileType: Type,
+    @Enumerated(STRING) val type: Type,
 
     @Column(length = 1000) val key: String,
     @Enumerated(STRING) var status: Status = Status.PENDING,
@@ -59,14 +59,14 @@ class Attachment(
     enum class Type {
         IMAGE, VIDEO, AUDIO;
 
-        val mimePrefix: String get() = "${name.lowercase()}/"
+        val mime: String get() = "${name.lowercase()}/"
     }
 
     enum class Status { PENDING, ATTACHED, DELETED }
 
     companion object {
-        fun create(uploaderId: Long, source: String, fileType: Type, key: String) =
-            Attachment(uploaderId = uploaderId, source = source, fileType = fileType, key = key)
+        fun create(uploaderId: Long, source: String, type: Type, key: String) =
+            Attachment(uploaderId = uploaderId, source = source, type = type, key = key)
 
         fun buildKey(source: String, filename: String): String {
             val date = LocalDate.now(ZoneOffset.UTC).format(DATE_FORMATTER)
