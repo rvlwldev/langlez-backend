@@ -22,19 +22,19 @@ class AttachmentRepositoryImpl(
 
     override fun find(id: Long): Attachment? = jpa.findByIdOrNull(id)
     override fun find(key: String): Attachment? = jpa.findByKey(key)
-    override fun find(sourceType: Attachment.SourceType, sourceId: String): List<Attachment> =
-        jpa.findAllBySourceTypeAndSourceId(sourceType, sourceId)
+    override fun find(source: String, sourceId: String): List<Attachment> =
+        jpa.findAllBySourceAndSourceId(source, sourceId)
 
     override fun findAll(
         cursor: Long?,
         size: Int,
-        sourceType: Attachment.SourceType?,
+        source: String?,
         status: Attachment.Status?,
         fileType: Attachment.Type?,
     ): List<Attachment> {
         val condition = listOfNotNull(
             cursor?.let { attachment.id.lt(it) },
-            sourceType?.let { attachment.sourceType.eq(it) },
+            source?.let { attachment.source.eq(it) },
             status?.let { attachment.status.eq(it) },
             fileType?.let { attachment.fileType.eq(it) },
         ).reduceOrNull(BooleanExpression::and)

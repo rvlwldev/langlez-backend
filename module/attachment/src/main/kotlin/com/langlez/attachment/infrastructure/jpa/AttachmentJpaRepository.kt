@@ -5,5 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface AttachmentJpaRepository : JpaRepository<Attachment, Long> {
     fun findByKey(key: String): Attachment?
-    fun findAllBySourceTypeAndSourceId(sourceType: Attachment.SourceType, sourceId: String): List<Attachment>
+    fun findAllBySourceAndSourceId(source: String, sourceId: String): List<Attachment>
 }

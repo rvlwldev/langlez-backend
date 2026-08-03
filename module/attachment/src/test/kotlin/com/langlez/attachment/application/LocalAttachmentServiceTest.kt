@@ -49,7 +49,7 @@ class LocalAttachmentServiceTest : BehaviorSpec({
 
         When("DB엔 있지만 실제 파일이 업로드되지 않았으면") {
             val key = "chat/2026-08-03/missing.jpg"
-            val attachment = Attachment.create(1L, Attachment.SourceType.CHAT, Attachment.Type.IMAGE, key)
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
 
             Then("attachment.file-not-found 예외가 발생한다") {
@@ -61,7 +61,7 @@ class LocalAttachmentServiceTest : BehaviorSpec({
             val key = "chat/2026-08-03/${System.nanoTime()}_exists.jpg"
             service.store(key, ByteArrayInputStream("data".toByteArray()))
 
-            val attachment = Attachment.create(1L, Attachment.SourceType.CHAT, Attachment.Type.IMAGE, key)
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
             every { repo.save(any()) } answers { firstArg() }
 

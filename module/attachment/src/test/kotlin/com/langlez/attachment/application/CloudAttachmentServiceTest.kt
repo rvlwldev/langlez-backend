@@ -47,7 +47,7 @@ class CloudAttachmentServiceTest : BehaviorSpec({
             Then("S3 presigned PUT URL과 key를 반환하고 PENDING 상태로 저장한다") {
                 result.presigned shouldBe "https://langlez.s3.amazonaws.com/presigned"
                 result.key shouldContain "chat/"
-                verify { repo.save(match { it.status == Attachment.Status.PENDING && it.sourceType == Attachment.SourceType.CHAT }) }
+                verify { repo.save(match { it.status == Attachment.Status.PENDING && it.source == "chat" }) }
             }
         }
     }
@@ -64,7 +64,7 @@ class CloudAttachmentServiceTest : BehaviorSpec({
 
         When("DB엔 있지만 S3에 실제 업로드되지 않았으면") {
             val key = "chat/2026-08-03/missing.jpg"
-            val attachment = Attachment.create(1L, Attachment.SourceType.CHAT, Attachment.Type.IMAGE, key)
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
             every { client.headObject(any<HeadObjectRequest>()) } throws NoSuchKeyException.builder().build()
 
@@ -75,7 +75,7 @@ class CloudAttachmentServiceTest : BehaviorSpec({
 
         When("S3에 실제로 업로드되어 있으면") {
             val key = "chat/2026-08-03/uuid_exists.jpg"
-            val attachment = Attachment.create(1L, Attachment.SourceType.CHAT, Attachment.Type.IMAGE, key)
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
             every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().build()
             every { repo.save(any()) } answers { firstArg() }

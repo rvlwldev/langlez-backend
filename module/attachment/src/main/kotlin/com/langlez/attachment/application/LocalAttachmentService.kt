@@ -20,11 +20,10 @@ class LocalAttachmentService(
     private val root = File("attachments")
 
     override fun presign(id: Long, source: String, type: Storage.Type, filename: String): Storage.PresignedResult {
-        val sourceType = Attachment.SourceType.valueOf(source.uppercase())
         val fileType = Attachment.Type.valueOf(type.name)
-        val key = Attachment.buildKey(sourceType, filename)
+        val key = Attachment.buildKey(source, filename)
 
-        repo.save(Attachment.create(id, sourceType, fileType, key))
+        repo.save(Attachment.create(id, source, fileType, key))
 
         return Storage.PresignedResult(key, "$baseUrl/$key")
     }

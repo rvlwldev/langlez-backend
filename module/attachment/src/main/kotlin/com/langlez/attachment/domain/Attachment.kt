@@ -21,14 +21,14 @@ import java.util.UUID
     name = "attachments",
     uniqueConstraints = [UniqueConstraint(name = "UNQ_ATTACHMENT_KEY", columnNames = ["key"])],
     indexes = [
-        Index(name = "IDX_ATTACHMENT_SOURCE", columnList = "source_type, source_id, status"),
+        Index(name = "IDX_ATTACHMENT_SOURCE", columnList = "source, source_id, status"),
         Index(name = "IDX_ATTACHMENT_UPLOADER", columnList = "uploader_id, id"),
         Index(name = "IDX_ATTACHMENT_UNATTACHED", columnList = "status, created_at"),
     ]
 )
 class Attachment(
     val uploaderId: Long,
-    @Enumerated(STRING) val sourceType: SourceType,
+    val source: String,
     var sourceId: String? = null,
     @Enumerated(STRING) val fileType: Type,
 
@@ -56,17 +56,16 @@ class Attachment(
         this.deletedAt = Instant.now()
     }
 
-    enum class SourceType { PROFILE, CHAT, ECHO }
     enum class Type { IMAGE, VIDEO, AUDIO }
     enum class Status { PENDING, ATTACHED, DELETED }
 
     companion object {
-        fun create(uploaderId: Long, sourceType: SourceType, fileType: Type, key: String) =
-            Attachment(uploaderId = uploaderId, sourceType = sourceType, fileType = fileType, key = key)
+        fun create(uploaderId: Long, source: String, fileType: Type, key: String) =
+            Attachment(uploaderId = uploaderId, source = source, fileType = fileType, key = key)
 
-        fun buildKey(sourceType: SourceType, filename: String): String {
+        fun buildKey(source: String, filename: String): String {
             val date = LocalDate.now(ZoneOffset.UTC).format(DATE_FORMATTER)
-            return "${sourceType.name.lowercase()}/$date/${UUID.randomUUID()}_$filename"
+            return "${source.lowercase()}/$date/${UUID.randomUUID()}_$filename"
         }
 
         private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
