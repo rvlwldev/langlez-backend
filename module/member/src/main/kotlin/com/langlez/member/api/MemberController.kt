@@ -26,16 +26,16 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/v1/members")
-class MemberController(private val service: MemberService, private val repo: MemberRepository) {
+class MemberController(private val service: MemberService, private val repo: MemberRepository) : MemberAPI {
 
     @GetMapping("/me")
-    fun getMe(@MemberId memberId: Long): MemberMeResponse {
+    override fun getMe(@MemberId memberId: Long): MemberMeResponse {
         val member = repo.find(memberId) ?: throw LanglezException(404, "member.not-found")
         return MemberMeResponse(member)
     }
 
     @PatchMapping("/me/handle")
-    fun patchHandle(
+    override fun patchHandle(
         @MemberId memberId: Long,
         @RequestBody @Valid request: MemberUpdateHandleRequest
     ): MemberMeResponse {
@@ -44,7 +44,7 @@ class MemberController(private val service: MemberService, private val repo: Mem
     }
 
     @PatchMapping("/me/nickname")
-    fun patchNickname(
+    override fun patchNickname(
         @MemberId memberId: Long,
         @RequestBody @Valid request: MemberUpdateNicknameRequest
     ): MemberMeResponse {
@@ -54,16 +54,16 @@ class MemberController(private val service: MemberService, private val repo: Mem
 
     @PatchMapping("/me/fcm-token")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun patchFcmToken(@MemberId memberId: Long, @RequestBody @Valid request: MemberUpdateFcmTokenRequest) {
+    override fun patchFcmToken(@MemberId memberId: Long, @RequestBody @Valid request: MemberUpdateFcmTokenRequest) {
         service.updateFcmToken(memberId, request.token)
     }
 
     @GetMapping("/me/image/upload-url")
-    fun getImageUploadUrl(@MemberId memberId: Long, @RequestParam filename: String): Storage.PresignedResult =
+    override fun getImageUploadUrl(@MemberId memberId: Long, @RequestParam filename: String): Storage.PresignedResult =
         service.presignProfileUrl(memberId, filename)
 
     @PatchMapping("/me/image")
-    fun patchImage(
+    override fun patchImage(
         @MemberId memberId: Long,
         @RequestBody @Valid request: MemberUpdateImageRequest
     ): MemberMeResponse {
@@ -73,18 +73,18 @@ class MemberController(private val service: MemberService, private val repo: Mem
 
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun withdraw(@MemberId memberId: Long) {
+    override fun withdraw(@MemberId memberId: Long) {
         service.withdrawMember(memberId)
     }
 
     @GetMapping("/{handle}")
-    fun getMember(@PathVariable handle: String): MemberPublicResponse {
+    override fun getMember(@PathVariable handle: String): MemberPublicResponse {
         val member = repo.find(handle) ?: throw LanglezException(404, "member.not-found")
         return MemberPublicResponse(member)
     }
 
     @GetMapping("/{handle}/online-status")
-    fun getOnlineStatus(@PathVariable handle: String): MemberOnlineStatusResponse {
+    override fun getOnlineStatus(@PathVariable handle: String): MemberOnlineStatusResponse {
         val online = service.isOnline(handle)
         return MemberOnlineStatusResponse(online)
     }
