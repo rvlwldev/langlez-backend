@@ -56,7 +56,12 @@ class Attachment(
         this.deletedAt = Instant.now()
     }
 
-    enum class Type { IMAGE, VIDEO, AUDIO }
+    enum class Type {
+        IMAGE, VIDEO, AUDIO;
+
+        val mimePrefix: String get() = "${name.lowercase()}/"
+    }
+
     enum class Status { PENDING, ATTACHED, DELETED }
 
     companion object {

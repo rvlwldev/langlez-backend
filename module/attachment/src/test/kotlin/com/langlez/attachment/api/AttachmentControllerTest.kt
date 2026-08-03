@@ -15,12 +15,12 @@ class AttachmentControllerTest : BehaviorSpec({
     afterEach { clearMocks(service, answers = false) }
 
     Given("파일 업로드 요청 시") {
-        When("앞에 슬래시가 붙은 key와 body를 전달하면") {
+        When("앞에 슬래시가 붙은 key와 Content-Type, body를 전달하면") {
             val body = ByteArrayInputStream("data".toByteArray())
-            controller.upload("/chat/2026-08-03/uuid_photo.jpg", body)
+            controller.upload("/chat/2026-08-03/uuid_photo.jpg", "image/jpeg", body)
 
-            Then("LocalAttachmentService.store에 슬래시가 제거된 key로 위임한다") {
-                verify { service.store("chat/2026-08-03/uuid_photo.jpg", body) }
+            Then("LocalAttachmentService.store에 슬래시가 제거된 key와 Content-Type을 그대로 위임한다") {
+                verify { service.store("chat/2026-08-03/uuid_photo.jpg", "image/jpeg", body) }
             }
         }
     }

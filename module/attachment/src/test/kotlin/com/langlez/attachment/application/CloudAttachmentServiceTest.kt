@@ -73,11 +73,22 @@ class CloudAttachmentServiceTest : BehaviorSpec({
             }
         }
 
+        When("S3에 업로드된 Content-Type이 선언한 fileType과 다르면") {
+            val key = "chat/2026-08-03/mismatch.jpg"
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
+            every { repo.find(key) } returns attachment
+            every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().contentType("video/mp4").build()
+
+            Then("attachment.invalid-content-type 예외가 발생한다") {
+                shouldThrow<LanglezException> { service.attach(key, 1L) }
+            }
+        }
+
         When("S3에 실제로 업로드되어 있으면") {
             val key = "chat/2026-08-03/uuid_exists.jpg"
             val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
-            every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().build()
+            every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().contentType("image/jpeg").build()
             every { repo.save(any()) } answers { firstArg() }
 
             val url = service.attach(key, 777L)

@@ -51,11 +51,14 @@ class CloudAttachmentService(
         val attachment = repo.find(key)
             ?: throw LanglezException(HttpStatus.NOT_FOUND, "attachment.not-found")
 
-        try {
+        val head = try {
             client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build())
         } catch (e: NoSuchKeyException) {
             throw LanglezException(HttpStatus.NOT_FOUND, "attachment.file-not-found", e)
         }
+
+        if (head.contentType() == null || !head.contentType().startsWith(attachment.fileType.mimePrefix))
+            throw LanglezException(HttpStatus.BAD_REQUEST, "attachment.invalid-content-type")
 
         attachment.attach(sourceId?.toString())
         repo.save(attachment)

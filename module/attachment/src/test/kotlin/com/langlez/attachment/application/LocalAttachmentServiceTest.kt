@@ -59,12 +59,11 @@ class LocalAttachmentServiceTest : BehaviorSpec({
 
         When("파일이 실제로 업로드되어 있으면") {
             val key = "chat/2026-08-03/${System.nanoTime()}_exists.jpg"
-            service.store(key, ByteArrayInputStream("data".toByteArray()))
-
             val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
             every { repo.find(key) } returns attachment
             every { repo.save(any()) } answers { firstArg() }
 
+            service.store(key, "image/jpeg", ByteArrayInputStream("data".toByteArray()))
             val url = service.attach(key, 555L)
 
             Then("ATTACHED 상태로 전환되고 조회 URL을 반환한다") {
@@ -76,10 +75,35 @@ class LocalAttachmentServiceTest : BehaviorSpec({
     }
 
     Given("store 호출 시") {
+
+        When("presign된 적 없는 key로 요청하면") {
+            every { repo.find("unknown-key") } returns null
+
+            Then("attachment.not-found 예외가 발생한다") {
+                shouldThrow<LanglezException> {
+                    service.store("unknown-key", "image/jpeg", ByteArrayInputStream("x".toByteArray()))
+                }
+            }
+        }
+
+        When("선언한 fileType과 다른 Content-Type으로 요청하면") {
+            val key = "chat/2026-08-03/${System.nanoTime()}_video.mp4"
+            every { repo.find(key) } returns Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
+
+            Then("attachment.invalid-content-type 예외가 발생한다") {
+                shouldThrow<LanglezException> {
+                    service.store(key, "video/mp4", ByteArrayInputStream("x".toByteArray()))
+                }
+            }
+        }
+
         When("경로 조작(path traversal) key로 요청하면") {
+            val maliciousKey = "../../etc/passwd"
+            every { repo.find(maliciousKey) } returns Attachment.create(1L, "chat", Attachment.Type.IMAGE, maliciousKey)
+
             Then("common.bad-request 예외가 발생한다") {
                 shouldThrow<LanglezException> {
-                    service.store("../../etc/passwd", ByteArrayInputStream("x".toByteArray()))
+                    service.store(maliciousKey, "image/jpeg", ByteArrayInputStream("x".toByteArray()))
                 }
             }
         }

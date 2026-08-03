@@ -42,7 +42,16 @@ class LocalAttachmentService(
     }
 
     /** AttachmentController가 로컬 업로드(PUT) 받을 때 호출. Storage 인터페이스엔 없는 로컬 전용 메서드. */
-    fun store(key: String, input: InputStream) {
+    fun store(key: String, contentType: String, input: InputStream) {
+        val attachment = repo.find(key)
+            ?: throw LanglezException(HttpStatus.NOT_FOUND, "attachment.not-found")
+
+        if (attachment.status != Attachment.Status.PENDING)
+            throw LanglezException(HttpStatus.BAD_REQUEST, "common.bad-request")
+
+        if (!contentType.startsWith(attachment.fileType.mimePrefix))
+            throw LanglezException(HttpStatus.BAD_REQUEST, "attachment.invalid-content-type")
+
         val target = resolve(key)
         target.parentFile.mkdirs()
         input.use { it.copyTo(target.outputStream()) }
