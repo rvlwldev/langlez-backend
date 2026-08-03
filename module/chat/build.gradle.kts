@@ -12,7 +12,6 @@ dependencies {
     implementation(project(":infra:redis"))
 
     implementation(project(":module:member"))
-    implementation(project(":infra:files"))
 
     implementation(libs.dependency.springboot.websocket)
 

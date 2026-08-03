@@ -75,6 +75,14 @@ app:
     # TODO: 프로덕션 프론트엔드 허용 오리진 리스트 설정 (예: CORS_ALLOWED_ORIGINS 또는 명시적 도메인)
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
+# TODO : S3나 CloudFlare 설정 추가
+storage:
+  bucket: langlez
+  region: ${STORAGE_REGION}
+  base-url: ${STORAGE_BASE_URL}
+  access-key: ${STORAGE_ACCESS_KEY_ID}
+  secret-key: ${STORAGE_SECRET_ACCESS_KEY}
+
 logging:
   level:
     root: INFO

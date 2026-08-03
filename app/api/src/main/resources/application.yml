@@ -114,6 +114,13 @@ spring:
         multiline: true
         logging: none
 
+storage:
+  bucket: langlez
+  region: local
+  base-url: "http://localhost:${server.port:8080}/attachments"
+  access-key: "STORAGE_ACCESS_KEY_ID"
+  secret-key: "STORAGE_SECRET_ACCESS_KEY"
+
 logging:
   level:
     org.hibernate.SQL: OFF

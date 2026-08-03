@@ -19,7 +19,6 @@ dependencies {
 
     implementation(libs.dependency.springboot.websocket)
 
-    testImplementation(project(":infra:files"))
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.mockk)
