@@ -1,5 +1,6 @@
 package com.langlez.member.application
 
+import com.langlez.core.OnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.redisson.api.RedissonClient
@@ -9,81 +10,75 @@ import java.time.Duration
 import java.time.Instant
 
 @Component
-class MemberOnlineTracker(private val redisson: RedissonClient, private val repo: MemberRepository) {
+class MemberOnlineTracker(
+    private val redisson: RedissonClient,
+    private val repo: MemberRepository,
+) : OnlineTracker {
 
-    fun toOnline(handle: String) {
-        redisson.getBucket<String>(key(handle)).set("1", Duration.ofMinutes(TTL))
-        redisson.getScoredSortedSet<String>(ZSET_KEY).add(now(), handle)
+    override fun toOnline(id: Long) {
+        redisson.getBucket<String>(key(id)).set("1", TTL)
+        redisson.getScoredSortedSet<String>(PING_ZSET_KEY).add(now(), id.toString())
     }
 
-    fun toOffline(handle: String) {
-        redisson.getBucket<String>(key(handle)).delete()
-        redisson.getScoredSortedSet<String>(ZSET_KEY).remove(handle)
+    override fun toOffline(id: Long) {
+        redisson.getBucket<String>(key(id)).delete()
+        redisson.getScoredSortedSet<String>(PING_ZSET_KEY).remove(id.toString())
     }
 
-    fun checkStatus(handle: String): Boolean? {
-        val isOnline = redisson.getBucket<String>(key(handle)).isExists
-        if (isOnline) return true
+    override fun checkOnline(id: Long): Map<Long, Boolean> = checkOnline(listOf(id))
 
-        repo.find(handle) ?: return null
-        return false
-    }
+    // 레디스에 키가 없으면(TTL 만료 포함) 그냥 오프라인이다. DB는 안 본다.
+    override fun checkOnline(id: Collection<Long>): Map<Long, Boolean> {
+        if (id.isEmpty()) return emptyMap()
 
-    fun checkStatus(handles: Collection<String>): Map<String, Boolean?> {
-        if (handles.isEmpty()) return emptyMap()
-
-        val targets = handles.toSet()
-        val keymap = targets.associateBy { key(it) } // key to handle
+        val targets = id.toSet()
+        val keymap = targets.associateBy { key(it) } // bucket key -> member id
 
         val buckets = redisson.buckets.get<String>(*keymap.keys.toTypedArray())
-        val onlineMap = keymap.entries.associate { (key, handle) -> handle to (buckets[key] != null) }
-
-        val offlines = onlineMap.filterValues { !it }.keys.toList()
-        val presences = repo.findAllByHandles(offlines).map { it.handle }
-
-        return targets.associateWith { handle ->
-            when {
-                onlineMap[handle] == true -> true
-                presences.contains(handle) -> false
-                else -> null
-            }
-        }
+        return keymap.entries.associate { (bucketKey, memberId) -> memberId to (buckets[bucketKey] != null) }
     }
 
-    fun countOnline(): Long = redisson.getScoredSortedSet<String>(ZSET_KEY).size().toLong()
-
-    @Scheduled(cron = "0 */5 * * * *")
-    @DistributedLock(prefix = "lock:clear-offlines")
-    fun clearOfflines() {
-        val cutoff = (now() - Duration.ofMinutes(TTL).toMillis())
-        redisson.getScoredSortedSet<String>(ZSET_KEY).removeRangeByScore(0.0, true, cutoff, false)
+    // 개별 키 TTL 만료 여부를 셀 방법이 없어(SCAN은 못 씀), 같은 핑을 스코어=시각으로 한 번 더 ZSET에 남겨
+    // 최근 TTL 이내 스코어 개수를 센다. toOffline이 즉시 지워주니 로그아웃 반영도 바로 된다.
+    override fun countOnline(): Long {
+        val cutoff = now() - TTL.toMillis()
+        return redisson.getScoredSortedSet<String>(PING_ZSET_KEY)
+            .count(cutoff, true, now(), true).toLong()
     }
 
-    @Scheduled(cron = "0 */15 * * * *")
+    /**
+     * OnlineTracker 인터페이스엔 없는 member 전용 부가기능. 접속 핑마다 DB를 치면 감당이
+     * 안 되니, 위 ZSET에 쌓인 핑을 모아 주기적으로만 lastAccessedAt에 반영한다.
+     * 처리한 구간은 지워서 ZSET이 무한정 늘어나지 않게 한다(예전 clearOfflines가 하던 청소 역할을 겸함).
+     */
+    @Scheduled(cron = "0 */10 * * * *")
     @DistributedLock(transactional = true, prefix = "lock:update-access-at")
     fun updateAccessedAt() {
-        val cutoff = now() - Duration.ofMinutes(SYNC_INTERVAL_MINUTES).toMillis()
-        val entries = redisson.getScoredSortedSet<String>(ZSET_KEY)
-            .entryRange(cutoff, true, now(), true)
+        val end = now()
+        val start = end - Duration.ofMinutes(SYNC_INTERVAL_MINUTES).toMillis()
+        val zset = redisson.getScoredSortedSet<String>(PING_ZSET_KEY)
+        val entries = zset.entryRange(start, true, end, true)
 
         if (entries.isEmpty()) return
 
-        val accessedAtByHandle = entries.associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
-        val members = repo.findAllByHandles(accessedAtByHandle.keys.toList())
+        val accessedAtById = entries.associate { it.value.toLong() to Instant.ofEpochMilli(it.score.toLong()) }
+        val members = repo.findAll(accessedAtById.keys)
 
         members.forEach { member ->
-            val accessedAt = accessedAtByHandle[member.handle] ?: return@forEach
+            val accessedAt = accessedAtById[member.id] ?: return@forEach
             member.updateAccessedAt(accessedAt)
             repo.save(member)
         }
+
+        zset.removeRangeByScore(start, true, end, true)
     }
 
-    private fun key(handle: String): String = "online:$handle"
+    private fun key(id: Long): String = "online:$id"
     private fun now() = System.currentTimeMillis().toDouble()
 
     companion object {
-        private const val ZSET_KEY = "member:online"
-        private const val TTL = 15L
-        private const val SYNC_INTERVAL_MINUTES = 15L
+        private const val PING_ZSET_KEY = "member:online-pings"
+        private val TTL: Duration = Duration.ofSeconds(10)
+        private const val SYNC_INTERVAL_MINUTES = 10L
     }
 }

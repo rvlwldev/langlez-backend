@@ -1,5 +1,6 @@
 package com.langlez.member.application
 
+import com.langlez.core.OnlineTracker
 import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
@@ -16,7 +17,7 @@ class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val creator = mockk<MemberCreator>()
-    val tracker = mockk<MemberOnlineTracker>()
+    val tracker = mockk<OnlineTracker>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val suspendHistoryRepo = mockk<MemberSuspendHistoryRepository>()
@@ -41,15 +42,34 @@ class MemberServiceTest : BehaviorSpec({
             every { repo.find("newhandle") } returns null
             every { repo.find(1L) } returns target
             every { repo.save(any()) } answers { firstArg() }
-            every { tracker.toOffline(any()) } just runs
-            every { tracker.toOnline(any()) } just runs
 
-            service.updateHandle(1L, "newhandle")
+            val updated = service.updateHandle(1L, "newhandle")
 
-            Then("온라인 표시가 이전 핸들에서 내려가고 새 핸들로 올라간다") {
-                verify { tracker.toOffline("user1") }
-                verify { tracker.toOnline("newhandle") }
-                verify(exactly = 0) { tracker.toOnline("user1") }
+            Then("핸들만 바뀌고 온라인 상태 트래커는 건드리지 않는다 (id로 keying하므로)") {
+                updated.handle shouldBe "newhandle"
+                verify(exactly = 0) { tracker.toOffline(any()) }
+                verify(exactly = 0) { tracker.toOnline(any()) }
+            }
+        }
+    }
+
+    Given("온라인 상태 조회 시") {
+
+        When("레디스에 온라인으로 표시되어 있으면") {
+            every { repo.find("user1") } returns member()
+            every { tracker.checkOnline(1L) } returns mapOf(1L to true)
+
+            Then("true를 반환한다") {
+                service.isOnline("user1") shouldBe true
+            }
+        }
+
+        When("레디스에 없으면(TTL 만료 포함)") {
+            every { repo.find("user1") } returns member()
+            every { tracker.checkOnline(1L) } returns mapOf(1L to false)
+
+            Then("false를 반환한다") {
+                service.isOnline("user1") shouldBe false
             }
         }
     }

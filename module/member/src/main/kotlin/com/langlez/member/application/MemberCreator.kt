@@ -1,5 +1,6 @@
 package com.langlez.member.application
 
+import com.langlez.core.OnlineTracker
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -10,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 @Component
 class MemberCreator(
     private val repo: MemberRepository,
-    private val tracker: MemberOnlineTracker,
+    private val tracker: OnlineTracker,
     private val publisher: ApplicationEventPublisher,
 ) {
 
@@ -31,7 +32,7 @@ class MemberCreator(
 
         val saved = repo.save(member)
             .apply { publisher.publishEvent(MemberCreatedEvent(id, email, handle)) }
-            .apply { runCatching { tracker.toOnline(handle) } }
+            .apply { runCatching { tracker.toOnline(id) } }
 
         return saved
     }

@@ -404,7 +404,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                     providerId = "p5",
                     providerUsername = "U5",
                 )
-                every { memberOnlineTracker.checkStatus(m.handle) } returns true
+                every { memberOnlineTracker.checkOnline(m.id) } returns mapOf(m.id to true)
 
                 Then("MemberOnlineTracker 트래커 상태값(true)을 반환한다") {
                     memberService.isOnline(m.handle) shouldBe true

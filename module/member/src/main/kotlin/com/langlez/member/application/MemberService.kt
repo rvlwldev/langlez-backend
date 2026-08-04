@@ -1,5 +1,6 @@
 package com.langlez.member.application
 
+import com.langlez.core.OnlineTracker
 import com.langlez.core.Storage
 import com.langlez.core.event.member.MemberHandleChangedEvent
 import com.langlez.exception.LanglezException
@@ -20,7 +21,7 @@ import java.time.Duration
 class MemberService(
     private val repo: MemberRepository,
     private val creator: MemberCreator,
-    private val tracker: MemberOnlineTracker,
+    private val tracker: OnlineTracker,
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
     private val suspendRepo: MemberSuspendHistoryRepository,
@@ -50,7 +51,6 @@ class MemberService(
             throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated")
 
         val member = findOrThrow(id)
-        val oldHandle = member.handle
 
         try {
             member.changeHandle(newHandle)
@@ -60,15 +60,13 @@ class MemberService(
 
         return runCatching { repo.save(member) }
             .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
-            // 온라인 표시는 핸들로 keying 한다. 바꾼 뒤에 옮겨 달지 않으면 옛 핸들이 온라인으로 남는다.
-            .also { tracker.toOffline(oldHandle) }
-            .also { tracker.toOnline(member.handle) }
+            // 온라인 표시는 id로 keying하니 handle이 바뀌어도 옮겨 달 필요가 없다.
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
 
     @Transactional(readOnly = true)
     fun isOnline(handle: String): Boolean = findOrThrow(handle)
-        .let { member -> tracker.checkStatus(member.handle) == true }
+        .let { member -> tracker.checkOnline(member.id)[member.id] == true }
 
     @Transactional
     fun verify(id: Long) = findOrThrow(id).apply { verify() }
@@ -84,7 +82,7 @@ class MemberService(
     fun updateLastAccess(id: Long) {
         (repo.find(id) ?: return)
             .apply { updateAccessedAt() }
-            .apply { runCatching { tracker.toOnline(handle) } }
+            .apply { runCatching { tracker.toOnline(this.id) } }
             .also(repo::save)
     }
 
