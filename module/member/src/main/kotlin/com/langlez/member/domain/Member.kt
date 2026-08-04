@@ -51,6 +51,7 @@ class Member(
     @Version var version: Long = 0
 ) {
 
+    // 백킹 필드가 없는 파생 프로퍼티라 @field: 는 컴파일이 안 된다. getter 를 막아야 한다.
     @get:Transient
     var locale: Locale?
         get() = country?.let { Locale.of("", it) }
@@ -100,7 +101,14 @@ class Member(
     }
 
     enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
-    enum class Role { MEMBER, PREMIUM, ADMIN }
+
+    enum class Role {
+        MEMBER, PREMIUM, ADMIN;
+
+        /** Spring Security 권한 문자열. JWT role 클레임도 이 값으로 통일한다. */
+        val authority: String get() = "ROLE_$name"
+    }
+
     enum class Provider { GOOGLE, APPLE }
 
     companion object {

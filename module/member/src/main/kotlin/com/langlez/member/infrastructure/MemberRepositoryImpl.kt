@@ -78,9 +78,20 @@ class MemberRepositoryImpl(
         find(id)?.let(::delete)
     }
 
-    override fun delete(ids: List<Long>) = jpa.deleteAllById(ids).also { ids.forEach(::evictCaches) }
+    /**
+     * 캐시 무효화에 필요한 email/handle/provider 키는 멤버를 읽어야 알 수 있다.
+     * DB 를 먼저 지우면 그 조회가 실패해 캐시에 고아 키가 영구히 남는다. 반드시 먼저 읽는다.
+     */
+    override fun delete(ids: List<Long>) = delete(findAll(ids))
+
     override fun delete(member: Member) = jpa.delete(member).also { evictCaches(member) }
-    override fun delete(members: Collection<Member>) = members.map { member -> member.id }.run(::delete)
+
+    override fun delete(members: Collection<Member>) {
+        if (members.isEmpty()) return
+
+        jpa.deleteAllById(members.map { it.id })
+        members.forEach(::evictCaches)
+    }
 
     private fun updateCaches(member: Member) {
         val id = member.id.toString()
@@ -97,5 +108,4 @@ class MemberRepositoryImpl(
         providers.evict(with(member) { "$provider:$providerId" })
     }
 
-    private fun evictCaches(id: Long) = find(id)?.run(::evictCaches)
 }

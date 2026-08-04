@@ -1,10 +1,13 @@
 package com.langlez.kafka.config
 
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.SerializationException
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.annotation.EnableKafka
+import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
 import org.springframework.kafka.listener.DefaultErrorHandler
 import org.springframework.util.backoff.ExponentialBackOff
 
@@ -29,9 +32,12 @@ class KafkaConfiguration {
      *
      * 역직렬화 실패는 재시도해도 영원히 같은 결과라 즉시 건너뛴다. 안 그러면 그 파티션이
      * 문제 메시지 하나에 막혀 뒤가 전부 정체된다(poison pill).
+     *
+     * 재시도까지 실패한 메시지는 `<원본토픽>.DLT` 로 넘긴다. 로그만 남기면 recoverer 가
+     * 정상 처리로 간주해 오프셋이 커밋되고 메시지는 그대로 사라져 되살릴 방법이 없다.
      */
     @Bean
-    fun kafkaErrorHandler(): DefaultErrorHandler {
+    fun kafkaErrorHandler(template: KafkaTemplate<String, String>): DefaultErrorHandler {
         val backOff = ExponentialBackOff().apply {
             initialInterval = 1_000
             multiplier = 2.0
@@ -39,11 +45,16 @@ class KafkaConfiguration {
             maxElapsedTime = 300_000 // 5분까지 재시도 후 포기
         }
 
+        val recoverer = DeadLetterPublishingRecoverer(template) { record, _ ->
+            TopicPartition("${record.topic()}.DLT", record.partition())
+        }
+
         return DefaultErrorHandler({ record, e ->
             logger.error(
-                "Kafka message handling finally failed: topic={} partition={} offset={} key={}",
+                "Kafka message handling finally failed, routing to DLT: topic={} partition={} offset={} key={}",
                 record.topic(), record.partition(), record.offset(), record.key(), e,
             )
+            recoverer.accept(record, e)
         }, backOff).apply {
             addNotRetryableExceptions(SerializationException::class.java)
         }

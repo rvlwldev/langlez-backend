@@ -3,12 +3,14 @@ package com.langlez.auth.oauth2
 import com.langlez.auth.application.AuthService
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.Authentication
+import java.time.Duration
 
 class OAuth2SuccessHandlerTest : BehaviorSpec({
 
@@ -28,6 +30,8 @@ class OAuth2SuccessHandlerTest : BehaviorSpec({
 
         every { auth.principal } returns user
         every { service.issueTokens(memberId, handle, role) } returns ("mock-refresh-token" to "mock-access-token")
+        every { service.accessTokenTtl } returns Duration.ofHours(1)
+        every { service.refreshTokenTtl } returns Duration.ofDays(14)
 
         When("OAuth2SuccessHandler가 실행되면") {
             val req = MockHttpServletRequest()
@@ -41,6 +45,12 @@ class OAuth2SuccessHandlerTest : BehaviorSpec({
                 val setCookieHeaders = res.getHeaders("Set-Cookie")
                 setCookieHeaders.any { it.contains("accessToken=mock-access-token") && it.contains("HttpOnly") && it.contains("Secure") && it.contains("SameSite=Lax") } shouldBe true
                 setCookieHeaders.any { it.contains("refreshToken=mock-refresh-token") && it.contains("HttpOnly") && it.contains("Secure") && it.contains("SameSite=Lax") } shouldBe true
+            }
+
+            Then("Max-Age가 설정되어 세션 쿠키로 만료되지 않는다") {
+                val setCookieHeaders = res.getHeaders("Set-Cookie")
+                setCookieHeaders.first { it.startsWith("accessToken=") } shouldContain "Max-Age=3600"
+                setCookieHeaders.first { it.startsWith("refreshToken=") } shouldContain "Max-Age=1209600"
             }
         }
     }

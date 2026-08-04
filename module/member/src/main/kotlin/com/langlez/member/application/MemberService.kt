@@ -50,7 +50,8 @@ class MemberService(
         if (repo.find(newHandle) != null)
             throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated")
 
-        val member = findOrThrow(id).apply { tracker.toOnline(handle) }
+        val member = findOrThrow(id)
+        val oldHandle = member.handle
 
         try {
             member.changeHandle(newHandle)
@@ -60,6 +61,9 @@ class MemberService(
 
         return runCatching { repo.save(member) }
             .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
+            // 온라인 표시는 핸들로 keying 한다. 바꾼 뒤에 옮겨 달지 않으면 옛 핸들이 온라인으로 남는다.
+            .also { tracker.toOffline(oldHandle) }
+            .also { tracker.toOnline(member.handle) }
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
 

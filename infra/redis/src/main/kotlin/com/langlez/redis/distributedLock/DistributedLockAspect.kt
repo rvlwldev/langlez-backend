@@ -60,17 +60,25 @@ class DistributedLockAspect(
         }
     }
 
-    /** SpEL 표현식 파싱하여 값 추출 */
+    /**
+     * SpEL 표현식 파싱하여 값 추출.
+     *
+     * 실패를 삼키면 키가 비어 메서드 전역 락으로 떨어진다. 엔티티별로 걸려던 락이
+     * 조용히 전역 직렬화로 바뀌어 처리량만 무너지고 원인은 로그 한 줄로 묻힌다.
+     * 잘못 건 락으로 도는 것보다 즉시 실패하는 편이 낫다.
+     */
     private fun parseSpELKeys(method: Method, args: Array<Any?>, keys: Array<String>): List<String> {
         if (keys.isEmpty()) return emptyList()
 
         val context = StandardEvaluationContext()
         paramDiscoverer.getParameterNames(method)?.forEachIndexed { i, name -> context.setVariable(name, args[i]) }
 
-        return keys.mapNotNull { key ->
+        return keys.map { key ->
             runCatching { parser.parseExpression(key).getValue(context, String::class.java) }
-                .onFailure { logger.warn("Failed to parse SpEL key: $key", it) }
-                .getOrNull()
+                .getOrElse { e ->
+                    throw IllegalStateException("Failed to evaluate @DistributedLock SpEL key '$key' on ${method.declaringClass.simpleName}.${method.name}", e)
+                }
+                ?: throw IllegalStateException("@DistributedLock SpEL key '$key' evaluated to null on ${method.declaringClass.simpleName}.${method.name}")
         }
     }
 

@@ -26,7 +26,7 @@ abstract class OutBoxHistoryProcessor<T : OutBox, H : OutBoxHistory>(private val
                 if (completes.isEmpty()) return@execute 0
 
                 completes.forEach { entityManager.persist(toHistory(it)) }
-                repo.deleteAll(completes)
+                repo.deleteAllInBatch(completes) // deleteAll 은 건별 DELETE 라 청크 크기만큼 쿼리가 나간다
 
                 return@execute completes.size
             } ?: 0

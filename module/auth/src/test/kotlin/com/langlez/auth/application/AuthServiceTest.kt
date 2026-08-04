@@ -23,7 +23,11 @@ class AuthServiceTest : BehaviorSpec({
     val bucket = mockk<RBucket<String>>()
     val tokenBlacklist = mockk<com.langlez.core.TokenBlacklist>()
 
-    val service = AuthService(jwt, memberService, redisson, tokenBlacklist)
+    val service = AuthService(
+        jwt, memberService, redisson, tokenBlacklist,
+        accessTokenTtlSecs = 3600,
+        refreshTokenTtlSecs = 1209600,
+    )
 
     afterEach { clearMocks(jwt, memberService, redisson, bucket, tokenBlacklist, answers = false) }
 
@@ -49,8 +53,9 @@ class AuthServiceTest : BehaviorSpec({
             every { jwt.extractId(validRefreshToken) } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns validRefreshToken
-            every { jwt.createRefreshToken(memberId, "tester", "MEMBER") } returns newRefreshToken
-            every { jwt.createAccessToken(memberId, "tester", "MEMBER") } returns newAccessToken
+            // 갱신 토큰의 role 도 최초 로그인과 같은 ROLE_ 접두사여야 한다. 안 그러면 hasRole 검사가 깨진다.
+            every { jwt.createRefreshToken(memberId, "tester", "ROLE_MEMBER") } returns newRefreshToken
+            every { jwt.createAccessToken(memberId, "tester", "ROLE_MEMBER") } returns newAccessToken
             every { bucket.set(any(), any<Duration>()) } just runs
 
             Then("새로운 토큰 쌍이 반환되고 Redis에 저장된다") {

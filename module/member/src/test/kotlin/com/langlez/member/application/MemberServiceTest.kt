@@ -35,6 +35,26 @@ class MemberServiceTest : BehaviorSpec({
         providerId = "p$id",
     )
 
+    Given("핸들 변경 시") {
+
+        When("핸들을 바꾸면") {
+            val target = member()
+            every { repo.find("newhandle") } returns null
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+            every { tracker.toOffline(any()) } just runs
+            every { tracker.toOnline(any()) } just runs
+
+            service.updateHandle(1L, "newhandle")
+
+            Then("온라인 표시가 이전 핸들에서 내려가고 새 핸들로 올라간다") {
+                verify { tracker.toOffline("user1") }
+                verify { tracker.toOnline("newhandle") }
+                verify(exactly = 0) { tracker.toOnline("user1") }
+            }
+        }
+    }
+
     Given("회원 정지 시") {
 
         When("존재하는 활성 회원을 정지하면") {

@@ -8,6 +8,7 @@ import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.utility.JwtTokenProvider
 import org.redisson.api.RedissonClient
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest
@@ -22,7 +23,12 @@ class AuthService(
     private val service: MemberService,
     private val redisson: RedissonClient,
     private val tokenBlacklist: TokenBlacklist,
+    @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTtlSecs: Long,
+    @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTtlSecs: Long,
 ) : OAuth2UserService<OAuth2UserRequest, OAuth2User> {
+
+    val accessTokenTtl: Duration get() = Duration.ofSeconds(accessTokenTtlSecs)
+    val refreshTokenTtl: Duration get() = Duration.ofSeconds(refreshTokenTtlSecs)
 
     private val delegate = DefaultOAuth2UserService()
 
@@ -50,7 +56,7 @@ class AuthService(
         return OAuth2LanglezUser(
             member.id,
             member.handle,
-            "ROLE_${member.role.name.uppercase()}",
+            member.role.authority,
             profile.rawAttributes,
             profile.providerKey
         )
@@ -60,7 +66,7 @@ class AuthService(
         val refreshToken = jwt.createRefreshToken(id, handle, role)
         val accessToken = jwt.createAccessToken(id, handle, role)
 
-        redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, REFRESH_TOKEN_TTL)
+        redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, refreshTokenTtl)
 
         return refreshToken to accessToken
     }
@@ -78,7 +84,7 @@ class AuthService(
             throw LanglezException(401, "auth.token-expired")
         }
 
-        return issueTokens(id, member.handle, member.role.name)
+        return issueTokens(id, member.handle, member.role.authority)
     }
 
     fun logout(memberId: Long, accessToken: String) {
@@ -87,7 +93,6 @@ class AuthService(
     }
 
     companion object {
-        private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(14)
         private fun refreshTokenKey(id: Long) = "refresh_token:$id"
     }
 }
