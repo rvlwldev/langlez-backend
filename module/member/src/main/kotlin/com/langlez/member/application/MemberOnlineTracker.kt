@@ -17,12 +17,12 @@ class MemberOnlineTracker(
 
     override fun toOnline(id: Long) {
         redisson.getBucket<String>(key(id)).set("1", TTL)
-        redisson.getScoredSortedSet<String>(PING_ZSET_KEY).add(now(), id.toString())
+        redisson.getScoredSortedSet<Long>(PING_ZSET_KEY).add(now(), id)
     }
 
     override fun toOffline(id: Long) {
         redisson.getBucket<String>(key(id)).delete()
-        redisson.getScoredSortedSet<String>(PING_ZSET_KEY).remove(id.toString())
+        redisson.getScoredSortedSet<Long>(PING_ZSET_KEY).remove(id)
     }
 
     override fun checkOnline(id: Long): Map<Long, Boolean> = checkOnline(listOf(id))
@@ -42,7 +42,7 @@ class MemberOnlineTracker(
     // 최근 TTL 이내 스코어 개수를 센다. toOffline이 즉시 지워주니 로그아웃 반영도 바로 된다.
     override fun countOnline(): Long {
         val cutoff = now() - TTL.toMillis()
-        return redisson.getScoredSortedSet<String>(PING_ZSET_KEY)
+        return redisson.getScoredSortedSet<Long>(PING_ZSET_KEY)
             .count(cutoff, true, now(), true).toLong()
     }
 
@@ -56,12 +56,12 @@ class MemberOnlineTracker(
     fun updateAccessedAt() {
         val end = now()
         val start = end - Duration.ofMinutes(SYNC_INTERVAL_MINUTES).toMillis()
-        val zset = redisson.getScoredSortedSet<String>(PING_ZSET_KEY)
+        val zset = redisson.getScoredSortedSet<Long>(PING_ZSET_KEY)
         val entries = zset.entryRange(start, true, end, true)
 
         if (entries.isEmpty()) return
 
-        val accessedAtById = entries.associate { it.value.toLong() to Instant.ofEpochMilli(it.score.toLong()) }
+        val accessedAtById = entries.associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
         val members = repo.findAll(accessedAtById.keys)
 
         members.forEach { member ->
