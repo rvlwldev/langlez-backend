@@ -14,6 +14,7 @@ import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 
 @Service
 class MemberService(
@@ -22,7 +23,7 @@ class MemberService(
     private val tracker: MemberOnlineTracker,
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
-    private val suspendHistoryRepo: MemberSuspendHistoryRepository,
+    private val suspendRepo: MemberSuspendHistoryRepository,
 ) {
 
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
@@ -87,9 +88,11 @@ class MemberService(
             .also(repo::save)
     }
 
-    fun presignProfileUrl(id: Long, filename: String) = storage.presign(id, "member", Storage.Type.IMAGE, filename)
+    fun presignProfileUrl(id: Long, filename: String) =
+        storage.presign(id, "member", Storage.Type.IMAGE, filename)
 
-    @Transactional
+    // storage.attach()가 S3 HeadObject/파일존재확인 등 블로킹 I/O라 트랜잭션 밖에서 먼저 끝낸다.
+    // repo.save() 자체가 자기 트랜잭션을 가지니 여기서 따로 @Transactional을 걸 필요 없다.
     fun updateProfileUrl(id: Long, key: String): Member {
         val member = findOrThrow(id)
         member.imageUrl = storage.attach(key, id)
@@ -103,7 +106,7 @@ class MemberService(
     }
 
     @Transactional
-    fun suspendMember(id: Long, reason: String? = null) {
+    fun suspendMember(id: Long, reason: String? = null, days: Long? = null) {
         val member = findOrThrow(id)
 
         try {
@@ -113,7 +116,7 @@ class MemberService(
         }
 
         repo.save(member)
-        suspendHistoryRepo.save(MemberSuspendHistory(member, reason, null))
+        suspendRepo.save(MemberSuspendHistory(member, reason, days?.let { Duration.ofDays(it) }))
     }
 
     @Transactional
