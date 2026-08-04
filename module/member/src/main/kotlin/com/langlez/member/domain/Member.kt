@@ -14,7 +14,6 @@ import java.util.Locale
 @EntityListeners(AuditingEntityListener::class)
 @Table(
     name = "members",
-    indexes = [Index("IDX_MEMBER_NICKNAME", "nickname")],
     uniqueConstraints = [
         UniqueConstraint("UNQ_MEMBER_PROVIDER", ["provider_id", "provider_type"]),
         UniqueConstraint("UNQ_MEMBER_EMAIL", ["email"]),
@@ -28,7 +27,6 @@ class Member(
     val email: String,
 
     @Column(length = 20) var handle: String = randomHandle(),
-    @Column(length = 20) var nickname: String, // 삭제예정
     @Enumerated(STRING) var status: Status = Status.CREATED,
     @Enumerated(STRING) var role: Role = Role.MEMBER,
 
@@ -79,16 +77,6 @@ class Member(
 
         handle = newHandle
         audit.lastHandleUpdatedAt = now
-    }
-
-    fun canChangeNickname(now: Instant = Instant.now()): Boolean =
-        audit.lastNicknameUpdatedAt == null || Duration.between(audit.lastNicknameUpdatedAt, now) >= CHANGE_COOLDOWN
-
-    fun changeNickname(newNickname: String, now: Instant = Instant.now()) {
-        require(canChangeNickname(now)) { "member.nickname.cooldown" }
-
-        nickname = newNickname
-        audit.lastNicknameUpdatedAt = now
     }
 
     fun suspend() {

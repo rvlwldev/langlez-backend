@@ -2,7 +2,6 @@ package com.langlez.member.application
 
 import com.langlez.core.Storage
 import com.langlez.core.event.member.MemberHandleChangedEvent
-import com.langlez.core.event.member.MemberNicknameChangedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -32,8 +31,7 @@ class MemberService(
         providerId: String,
         email: String,
         providerUsername: String,
-        nickname: String
-    ): Member = creator.create(providerType, providerId, email, providerUsername, nickname)
+    ): Member = creator.create(providerType, providerId, email, providerUsername)
 
     @Transactional(readOnly = true)
     fun findById(id: Long): Member? = repo.find(id)
@@ -65,20 +63,6 @@ class MemberService(
             .also { tracker.toOffline(oldHandle) }
             .also { tracker.toOnline(member.handle) }
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
-    }
-
-    @Transactional
-    fun updateNickname(id: Long, newNickname: String): Member {
-        val member = findOrThrow(id)
-
-        try {
-            member.changeNickname(newNickname)
-        } catch (e: IllegalArgumentException) {
-            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
-        }
-
-        return member.also(repo::save)
-            .also { publisher.publishEvent(MemberNicknameChangedEvent(id, newNickname)) }
     }
 
     @Transactional(readOnly = true)

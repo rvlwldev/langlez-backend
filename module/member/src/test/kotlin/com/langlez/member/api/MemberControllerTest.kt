@@ -24,7 +24,6 @@ class MemberControllerTest : BehaviorSpec({
         id = id,
         email = "user$id@test.com",
         handle = "user$id",
-        nickname = "User$id",
         provider = Member.Provider.GOOGLE,
         providerId = "p$id",
     )

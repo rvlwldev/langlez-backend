@@ -50,7 +50,7 @@ class AuthService(
             if (service.findByEmail(email) != null) throw LanglezException(HttpStatus.CONFLICT, "auth.email-conflict")
             val name = (profile.displayName).take(20)
 
-            return@run service.createMember(type, id, email, name, name)
+            return@run service.createMember(type, id, email, name)
         }
 
         return OAuth2LanglezUser(

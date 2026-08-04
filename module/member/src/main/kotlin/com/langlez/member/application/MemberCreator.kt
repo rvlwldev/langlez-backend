@@ -20,19 +20,17 @@ class MemberCreator(
         providerId: String,
         email: String,
         providerUsername: String,
-        nickname: String,
     ): Member {
         val member = Member(
             email = email,
             handle = Member.randomHandle(),
-            nickname = nickname.take(20),
             provider = providerType,
             providerId = providerId,
             providerDisplayName = providerUsername
         ).apply { updateAccessedAt() }
 
         val saved = repo.save(member)
-            .apply { publisher.publishEvent(MemberCreatedEvent(id, email, handle, nickname)) }
+            .apply { publisher.publishEvent(MemberCreatedEvent(id, email, handle)) }
             .apply { runCatching { tracker.toOnline(handle) } }
 
         return saved

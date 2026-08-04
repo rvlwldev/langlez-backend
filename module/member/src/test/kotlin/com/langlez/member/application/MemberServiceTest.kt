@@ -29,7 +29,6 @@ class MemberServiceTest : BehaviorSpec({
         id = id,
         email = "user$id@test.com",
         handle = "user$id",
-        nickname = "User$id",
         status = status,
         provider = Member.Provider.GOOGLE,
         providerId = "p$id",

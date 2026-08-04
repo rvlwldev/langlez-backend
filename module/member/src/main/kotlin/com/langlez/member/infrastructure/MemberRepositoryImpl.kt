@@ -5,14 +5,15 @@ import com.langlez.core.cache.get
 import com.langlez.core.cache.getMany
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.infrastructure.jpa.MemberJpaRepository
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.repository.findByIdOrNull
+import com.langlez.member.domain.QMember.Companion.member as qMember
+import com.querydsl.jpa.impl.JPAQueryFactory
+import jakarta.persistence.EntityManager
 import org.springframework.stereotype.Repository
 
 @Repository
 class MemberRepositoryImpl(
-    private val jpa: MemberJpaRepository,
+    private val em: EntityManager,
+    private val dsl: JPAQueryFactory,
     caches: CacheProvider,
 ) : MemberRepository {
 
@@ -21,23 +22,27 @@ class MemberRepositoryImpl(
     private val handles = caches.getCache("member-handle")
     private val providers = caches.getCache("member-provider")
 
-    override fun save(member: Member): Member = jpa.save(member).also(::updateCaches)
+    // id == 0 이면 아직 IDENTITY 채번 전인 신규 엔티티. em.persist가 즉시 INSERT하며 id를 채워준다.
+    override fun save(member: Member): Member =
+        (if (member.id == 0L) member.also(em::persist) else em.merge(member)).also(::updateCaches)
 
-    override fun find(id: Long): Member? = members.get<Member>(id) ?: jpa.findByIdOrNull(id)
-        ?.also(::updateCaches)
+    override fun find(id: Long): Member? = members.get<Member>(id)
+        ?: dsl.selectFrom(qMember).where(qMember.id.eq(id)).fetchOne()?.also(::updateCaches)
 
     override fun find(handle: String): Member? = handles.get<String>(handle)?.toLongOrNull()
         ?.let(::find)?.takeIf { it.handle == handle }
-        ?: jpa.findByHandle(handle)?.also(::updateCaches)
+        ?: dsl.selectFrom(qMember).where(qMember.handle.eq(handle)).fetchOne()?.also(::updateCaches)
 
     override fun find(provider: Member.Provider, id: String): Member? = providers.get<String>("$provider:$id")
         ?.toLongOrNull()
         ?.let(::find)?.takeIf { it.provider == provider && it.providerId == id }
-        ?: jpa.findByProviderAndProviderId(provider, id)?.also(::updateCaches)
+        ?: dsl.selectFrom(qMember)
+            .where(qMember.provider.eq(provider), qMember.providerId.eq(id))
+            .fetchOne()?.also(::updateCaches)
 
     override fun findByEmail(email: String): Member? = emails.get<String>(email)?.toLongOrNull()
         ?.let(::find)?.takeIf { it.email == email }
-        ?: jpa.findByEmail(email)?.also(::updateCaches)
+        ?: dsl.selectFrom(qMember).where(qMember.email.eq(email)).fetchOne()?.also(::updateCaches)
 
     override fun findAll(ids: Collection<Long>): List<Member> {
         if (ids.isEmpty()) return emptyList()
@@ -47,7 +52,7 @@ class MemberRepositoryImpl(
         val missing = distinct.filter { it !in cached }
         if (missing.isEmpty()) return cached.values.toList()
 
-        val loaded = jpa.findAllById(missing)
+        val loaded = dsl.selectFrom(qMember).where(qMember.id.`in`(missing)).fetch()
         members.putMany(loaded.associateBy { it.id })
 
         return cached.values + loaded
@@ -62,17 +67,17 @@ class MemberRepositoryImpl(
         val missing = distinct - cached.mapTo(mutableSetOf()) { it.handle }
         if (missing.isEmpty()) return cached.toList()
 
-        return cached + jpa.findAllByHandleIn(missing).onEach(::updateCaches)
+        val loaded = dsl.selectFrom(qMember).where(qMember.handle.`in`(missing)).fetch()
+        return cached + loaded.onEach(::updateCaches)
     }
 
     override fun findAll(size: Int, cursor: Long?): List<Member> {
-        val pageable = PageRequest.of(0, size)
-
-        return if (cursor == null) jpa.findAllByOrderByIdDesc(pageable)
-        else jpa.findByIdLessThanOrderByIdDesc(cursor, pageable)
+        val query = dsl.selectFrom(qMember).orderBy(qMember.id.desc()).limit(size.toLong())
+        if (cursor != null) query.where(qMember.id.lt(cursor))
+        return query.fetch()
     }
 
-    override fun count(): Long = jpa.count()
+    override fun count(): Long = dsl.select(qMember.count()).from(qMember).fetchOne() ?: 0L
 
     override fun delete(id: Long) {
         find(id)?.let(::delete)
@@ -84,12 +89,15 @@ class MemberRepositoryImpl(
      */
     override fun delete(ids: List<Long>) = delete(findAll(ids))
 
-    override fun delete(member: Member) = jpa.delete(member).also { evictCaches(member) }
+    override fun delete(member: Member) {
+        dsl.delete(qMember).where(qMember.id.eq(member.id)).execute()
+        evictCaches(member)
+    }
 
     override fun delete(members: Collection<Member>) {
         if (members.isEmpty()) return
 
-        jpa.deleteAllById(members.map { it.id })
+        dsl.delete(qMember).where(qMember.id.`in`(members.map { it.id })).execute()
         members.forEach(::evictCaches)
     }
 

@@ -18,7 +18,6 @@ class MemberAudit(
     var verifiedAt: Instant? = null,
     var agreedTermsAt: Instant? = null,
     var lastHandleUpdatedAt: Instant? = null,
-    var lastNicknameUpdatedAt: Instant? = null,
     var lastAccessedAt: Instant? = null,
     var suspendedAt: Instant? = null,
     var withdrawnAt: Instant? = null,

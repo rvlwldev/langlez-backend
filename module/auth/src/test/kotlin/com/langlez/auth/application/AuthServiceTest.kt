@@ -37,7 +37,6 @@ class AuthServiceTest : BehaviorSpec({
             id = memberId,
             email = "test@example.com",
             handle = "tester",
-            nickname = "tester",
             provider = Member.Provider.GOOGLE,
             providerId = "g123",
             providerDisplayName = "tester"
