@@ -5,23 +5,15 @@ import com.langlez.core.cache.get
 import com.langlez.core.cache.getMany
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.QMember.Companion.member as QMember
+import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
-import jakarta.persistence.EntityManager
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.annotation.Transactional
+import com.langlez.member.domain.QMember.Companion.member as QMember
 
-/**
- * JpaRepository를 안 쓰므로(QueryDSL만) SimpleJpaRepository가 공짜로 주던
- * 메서드별 트랜잭션이 없다. 쓰기 메서드에 직접 걸어준다 — 안 걸면 persist/merge/delete가
- * 트랜잭션 없이 호출돼 터진다. 서비스 레이어는 이 덕분에 단건 저장에 굳이
- * @Transactional을 안 걸어도 되고, 그만큼 서비스 메서드 안에서 트랜잭션이
- * 불필요하게 길어지는 걸(예: 저장 앞뒤로 네트워크 호출) 피할 수 있다.
- */
 @Repository
-@Transactional(readOnly = true)
 class MemberRepositoryImpl(
-    private val em: EntityManager,
+    private val jpa: MemberJpaRepository,
     private val dsl: JPAQueryFactory,
     caches: CacheProvider,
 ) : MemberRepository {
@@ -31,28 +23,41 @@ class MemberRepositoryImpl(
     private val handles = caches.getCache("member-handle")
     private val providers = caches.getCache("member-provider")
 
-    // id == 0 이면 아직 IDENTITY 채번 전인 신규 엔티티. em.persist가 즉시 INSERT하며 id를 채워준다.
-    @Transactional
-    override fun save(member: Member): Member =
-        (if (member.id == 0L) member.also(em::persist) else em.merge(member)).also(::updateCaches)
+    override fun save(member: Member): Member = jpa.save(member).also(::updateCaches)
 
-    override fun find(id: Long): Member? = members.get<Member>(id)
-        ?: dsl.selectFrom(QMember).where(QMember.id.eq(id)).fetchOne()?.also(::updateCaches)
+    override fun find(id: Long): Member? {
+        val member = members.get<Member>(id) ?: jpa.findByIdOrNull(id)
+        return member?.also(::updateCaches)
+    }
 
-    override fun find(handle: String): Member? = handles.get<String>(handle)?.toLongOrNull()
-        ?.let(::find)?.takeIf { it.handle == handle }
-        ?: dsl.selectFrom(QMember).where(QMember.handle.eq(handle)).fetchOne()?.also(::updateCaches)
+    override fun find(handle: String): Member? {
+        val id = handles.get<String>(handle)?.toLongOrNull()
 
-    override fun find(provider: Member.Provider, id: String): Member? = providers.get<String>("$provider:$id")
-        ?.toLongOrNull()
-        ?.let(::find)?.takeIf { it.provider == provider && it.providerId == id }
-        ?: dsl.selectFrom(QMember)
+        val member = if (id != null) jpa.findByIdOrNull(id)
+        else dsl.selectFrom(QMember).where(QMember.handle.eq(handle)).fetchOne()
+
+        return member?.also(::updateCaches)
+    }
+
+    override fun find(provider: Member.Provider, id: String): Member? {
+        val memberId = providers.get<String>("$provider:$id")?.toLongOrNull()
+
+        val member = if (memberId != null) jpa.findByIdOrNull(memberId)
+        else dsl.selectFrom(QMember)
             .where(QMember.provider.eq(provider), QMember.providerId.eq(id))
-            .fetchOne()?.also(::updateCaches)
+            .fetchOne()
 
-    override fun findByEmail(email: String): Member? = emails.get<String>(email)?.toLongOrNull()
-        ?.let(::find)?.takeIf { it.email == email }
-        ?: dsl.selectFrom(QMember).where(QMember.email.eq(email)).fetchOne()?.also(::updateCaches)
+        return member?.also(::updateCaches)
+    }
+
+    override fun findByEmail(email: String): Member? {
+        val id = emails.get<String>(email)?.toLongOrNull()
+
+        val member = if (id != null) jpa.findByIdOrNull(id)
+        else dsl.selectFrom(QMember).where(QMember.email.eq(email)).fetchOne()
+
+        return member?.also(::updateCaches)
+    }
 
     override fun findAll(ids: Collection<Long>): List<Member> {
         if (ids.isEmpty()) return emptyList()
@@ -87,36 +92,25 @@ class MemberRepositoryImpl(
         return query.fetch()
     }
 
-    override fun count(): Long = dsl.select(QMember.count()).from(QMember).fetchOne() ?: 0L
+    override fun count(): Long = jpa.count()
 
-    /**
-     * delete(id) -> delete(member) 처럼 같은 클래스 안에서 this로 호출하는 건
-     * 프록시를 안 거쳐서 @Transactional이 안 먹는다(self-invocation). 그래서
-     * 델리게이션하는 쪽도 전부 각자 @Transactional을 직접 달아야 한다.
-     */
-    @Transactional
     override fun delete(id: Long) {
         find(id)?.let(::delete)
     }
 
-    /**
-     * 캐시 무효화에 필요한 email/handle/provider 키는 멤버를 읽어야 알 수 있다.
-     * DB 를 먼저 지우면 그 조회가 실패해 캐시에 고아 키가 영구히 남는다. 반드시 먼저 읽는다.
-     */
-    @Transactional
-    override fun delete(ids: List<Long>) = delete(findAll(ids))
+    override fun delete(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        delete(findAll(ids))
+    }
 
-    @Transactional
     override fun delete(member: Member) {
-        dsl.delete(QMember).where(QMember.id.eq(member.id)).execute()
+        jpa.delete(member)
         evictCaches(member)
     }
 
-    @Transactional
     override fun delete(members: Collection<Member>) {
         if (members.isEmpty()) return
-
-        dsl.delete(QMember).where(QMember.id.`in`(members.map { it.id })).execute()
+        jpa.deleteAllInBatch(members)
         members.forEach(::evictCaches)
     }
 
