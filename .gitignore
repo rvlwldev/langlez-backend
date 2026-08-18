@@ -41,12 +41,9 @@ out/
 
 .gemini/
 GEMINI.md
-CLAUDE.md
 AGENTS.md
-
-# .claude 는 개인 설정이라 무시하되, 코드 규약 문서만 예외로 추적한다.
-.claude/*
-!.claude/CLAUDE.md
+# CLAUDE.md 는 코드 규약 문서라 추적한다. .claude/ 개인 설정만 무시.
+.claude/
 **/**/**.log
 
 .env

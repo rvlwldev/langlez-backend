@@ -3,8 +3,8 @@
 현재 상태와 남은 작업. 최종 갱신 2026-08-18.
 
 관련 문서:
-- `.claude/CLAUDE.md` — **코드 규약** (`module/member` 기준). 구 `CODE-CONVENTION.md` 를 여기로 옮겼다
-- `docs/superpowers/plans/` — 단위 작업별 상세 계획서 (이력. 안의 `CODE-CONVENTION.md` 언급은 `.claude/CLAUDE.md` 로 읽는다)
+- `CLAUDE.md` — **코드 규약** (`module/member` 기준). 구 `CODE-CONVENTION.md` 를 여기로 옮겼다
+- `docs/superpowers/plans/` — 단위 작업별 상세 계획서 (이력. 안의 `CODE-CONVENTION.md` 언급은 `CLAUDE.md` 로 읽는다)
 
 구 `REVIEW.md`(확정 결함 7건)는 전부 조치돼 삭제했다. 조치 내역은 2절 끝에 요약해 뒀다.
 
