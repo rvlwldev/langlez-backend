@@ -20,7 +20,8 @@ dependencies {
     // security + jwt
     api(libs.dependency.springboot.security)
     api(libs.dependency.springboot.oauth2.client)
-    implementation(libs.bundles.jjwt)
+    // JwtTokenProvider 가 io.jsonwebtoken.Claims 를 공개 시그니처로 노출한다
+    api(libs.bundles.jjwt)
 
     // observability
     api(libs.dependency.springboot.actuator)

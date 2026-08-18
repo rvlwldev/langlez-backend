@@ -1,72 +1,16 @@
 package com.langlez.redis.config
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.github.benmanes.caffeine.cache.Caffeine
-import com.langlez.redis.cache.ResilientCacheManager
-import org.slf4j.LoggerFactory
-import org.springframework.cache.caffeine.CaffeineCacheManager
+import com.langlez.core.cache.CacheProvider
+import com.langlez.redis.cache.ResilientCacheProvider
+import io.micrometer.core.instrument.MeterRegistry
+import org.redisson.api.RedissonClient
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Primary
-import org.springframework.data.redis.cache.RedisCacheConfiguration
-import org.springframework.data.redis.cache.RedisCacheManager
-import org.springframework.data.redis.cache.RedisCacheWriter
-import org.springframework.data.redis.connection.RedisConnectionFactory
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
-import org.springframework.data.redis.serializer.RedisSerializationContext
-import org.springframework.scheduling.annotation.EnableScheduling
-import java.time.Duration
-import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 @Configuration
-@EnableScheduling
 class ResilientCacheConfiguration {
-    private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    fun caffeineCacheManager(): CaffeineCacheManager {
-        val caffeineBuilder = Caffeine
-            .newBuilder()
-            .expireAfterWrite(1, TimeUnit.HOURS)
-            .maximumSize(10000)
-
-        return CaffeineCacheManager().apply { setCaffeine(caffeineBuilder) }
-    }
-
-    @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory, objectMapper: ObjectMapper): RedisCacheManager {
-        val serializer = RedisSerializationContext.SerializationPair
-            .fromSerializer(GenericJackson2JsonRedisSerializer(objectMapper))
-
-        val config = RedisCacheConfiguration
-            .defaultCacheConfig()
-            .disableCachingNullValues()
-            .serializeValuesWith(serializer)
-            .entryTtl(Duration.ofMinutes(10))
-
-        val defaultWriter = RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory)
-        val jitteredWriter = object : RedisCacheWriter by defaultWriter {
-            override fun put(name: String, key: ByteArray, value: ByteArray, ttl: Duration?) {
-                val jitteredTtl = Duration.ofMinutes(10).plusSeconds(Random.nextLong(0, 60))
-                defaultWriter.put(name, key, value, jitteredTtl)
-            }
-        }
-
-        return RedisCacheManager
-            .builder(jitteredWriter)
-            .cacheDefaults(config)
-            .transactionAware()
-            .build()
-    }
-
-    @Bean
-    @Primary
-    fun cacheManager(
-        redisCacheManager: RedisCacheManager,
-        caffeineCacheManager: CaffeineCacheManager,
-        connectionFactory: RedisConnectionFactory,
-        redissonClient: org.redisson.api.RedissonClient,
-    ): ResilientCacheManager = ResilientCacheManager(redisCacheManager, caffeineCacheManager, connectionFactory, redissonClient)
-
+    fun cacheProvider(redisson: RedissonClient, meterRegistry: MeterRegistry): CacheProvider =
+        ResilientCacheProvider(redisson, meterRegistry)
 }

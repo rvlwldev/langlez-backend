@@ -9,11 +9,10 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
 
     implementation(project(":module:member"))
-    implementation(project(":module:interest"))
 
     ksp(libs.dependency.querydsl.ksp)
 

@@ -1,6 +1,5 @@
 package com.langlez.wave.domain
 
-import com.langlez.core.LanglezException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -12,6 +11,12 @@ import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Instant
 
+/**
+ * 음성 라운지.
+ *
+ * 방의 생명주기(누가 열었고 언제 끝났는가)만 영속한다. 방 안에서 오간 대화와 지금 누가 있는지는
+ * 레디스에만 있고 방이 끝나면 사라진다(`WaveSessionRepository`).
+ */
 @Entity
 @EntityListeners(AuditingEntityListener::class)
 @Table(name = "wave_rooms")
@@ -36,12 +41,8 @@ class WaveRoom(
     var endedAt: Instant? = null,
 ) {
     init {
-        if (title.isBlank()) {
-            throw LanglezException(400, "wave.invalid-title")
-        }
-        if (maxParticipants !in MIN_PARTICIPANTS..MAX_PARTICIPANTS) {
-            throw LanglezException(400, "wave.invalid-max-participants")
-        }
+        require(title.isNotBlank()) { "wave.title.invalid" }
+        require(maxParticipants in MIN_PARTICIPANTS..MAX_PARTICIPANTS) { "wave.max-participants.invalid" }
     }
 
     fun isEnded(): Boolean = endedAt != null
@@ -53,12 +54,9 @@ class WaveRoom(
     }
 
     fun updateTitle(newTitle: String) {
-        if (isEnded()) {
-            throw LanglezException(409, "wave.already-ended")
-        }
-        if (newTitle.isBlank()) {
-            throw LanglezException(400, "wave.invalid-title")
-        }
+        require(!isEnded()) { "wave.room.already-ended" }
+        require(newTitle.isNotBlank()) { "wave.title.invalid" }
+
         this.title = newTitle
     }
 

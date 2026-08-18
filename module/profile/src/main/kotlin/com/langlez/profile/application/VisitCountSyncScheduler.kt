@@ -13,7 +13,7 @@ class VisitCountSyncScheduler(
 ) {
 
     @Scheduled(fixedDelay = 60_000)
-    @DistributedLock(prefix = "lock:visit-count-sync", ttl = 30, wait = 0, retries = 0, throwOnFailure = false)
+    @DistributedLock(prefix = "lock:visit-count-sync", leaseSecs = 30, waitMs = 0, retries = 0, throwOnFailure = false)
     fun syncVisitCounts() {
         val counts = repo.beginVisitCountFlush()
         if (counts.isEmpty()) return

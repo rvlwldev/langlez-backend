@@ -1,284 +1,202 @@
 package com.langlez.wave.application
 
-import com.langlez.core.LanglezException
-import com.langlez.core.Notificator
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
-import com.langlez.relationship.domain.Follow
-import com.langlez.relationship.domain.RelationshipRepository
+import com.langlez.core.MessageBroadcaster
+import com.langlez.exception.LanglezException
+import com.langlez.wave.domain.WaveChat
+import com.langlez.wave.domain.WaveRepository
 import com.langlez.wave.domain.WaveRoom
-import com.langlez.wave.domain.WaveRoomRepository
-import com.langlez.wave.infrastructure.WaveViewerTracker
+import com.langlez.wave.domain.WaveSessionRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
-import io.mockk.*
+import io.mockk.clearMocks
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 
 class WaveServiceTest : BehaviorSpec({
 
-    val waveRoomRepository = mockk<WaveRoomRepository>()
-    val memberRepository = mockk<MemberRepository>()
-    val relationshipRepository = mockk<RelationshipRepository>()
-    val viewerTracker = mockk<WaveViewerTracker>(relaxed = true)
-    val notificator = mockk<Notificator>(relaxed = true)
-    val broadcaster = mockk<WaveBroadcaster>(relaxed = true)
+    val repo = mockk<WaveRepository>()
+    val sessions = mockk<WaveSessionRepository>(relaxed = true)
+    val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
 
-    val service = WaveService(
-        waveRoomRepository,
-        memberRepository,
-        relationshipRepository,
-        viewerTracker,
-        notificator,
-        broadcaster
-    )
+    val service = WaveService(repo, sessions, broadcaster)
 
-    afterEach {
-        clearMocks(waveRoomRepository, memberRepository, relationshipRepository, viewerTracker, notificator, broadcaster, answers = false)
-    }
+    afterEach { clearMocks(repo, sessions, broadcaster, answers = false) }
 
-    fun createMember(id: Long, role: Member.Role = Member.Role.MEMBER, username: String = "user$id") = Member(
-        id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = "Nick $id",
-        provider = Member.Provider.GOOGLE,
-        providerId = "p$id",
-        providerDisplayName = "Nick $id",
-        role = role
-    )
+    val host = 1L
+    val roomId = 100L
 
-    Given("startLive 호출 시") {
-        val broadcasterId = 1L
-        val title = "Enjoy Live Audio"
-        val maxParticipants = 6
+    fun room(maxParticipants: Int = 4, ended: Boolean = false) =
+        WaveRoom(id = roomId, broadcasterId = host, title = "영어 수다방", maxParticipants = maxParticipants)
+            .apply { if (ended) end() }
 
-        When("요청자가 MEMBER(무료 회원)이면") {
-            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, Member.Role.MEMBER)
-
-            Then("403 예외가 발생하고 방이 생성되지 않는다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.startLive(broadcasterId, title, maxParticipants)
-                }
-                ex.status shouldBe 403
-                verify(exactly = 0) { waveRoomRepository.save(any()) }
+    Given("방을 만들 때") {
+        When("제목이 비어 있으면") {
+            Then("400 으로 변환해 돌려준다") {
+                // 도메인의 IllegalArgumentException 을 그대로 흘리면 500 이 된다.
+                shouldThrow<LanglezException> { service.createRoom(host, " ", 4) }.status.value() shouldBe 400
             }
         }
 
-        When("인원수가 4~8 범위를 벗어나면(e.g., 2 또는 10)") {
-            every { memberRepository.findById(broadcasterId) } returns createMember(broadcasterId, Member.Role.PREMIUM)
+        When("정상 입력이면") {
+            Then("방을 저장하고 만든 사람이 바로 참여자가 된다") {
+                every { repo.save(any()) } answers { firstArg() }
 
-            Then("400 예외가 발생하고 방이 생성되지 않는다") {
-                val ex2 = shouldThrow<LanglezException> {
-                    service.startLive(broadcasterId, title, 2)
-                }
-                ex2.status shouldBe 400
+                val created = service.createRoom(host, "영어 수다방", 4)
 
-                val ex10 = shouldThrow<LanglezException> {
-                    service.startLive(broadcasterId, title, 10)
-                }
-                ex10.status shouldBe 400
-
-                verify(exactly = 0) { waveRoomRepository.save(any()) }
-            }
-        }
-
-        When("요청자가 PREMIUM이면") {
-            val savedRoom = WaveRoom(id = 10L, broadcasterId = broadcasterId, title = title, maxParticipants = maxParticipants)
-            val broadcasterMember = createMember(broadcasterId, Member.Role.PREMIUM)
-            every { memberRepository.findById(broadcasterId) } returns broadcasterMember
-            every { waveRoomRepository.save(any()) } returns savedRoom
-            every { relationshipRepository.findFollowers(broadcasterId, null, any()) } returns listOf(
-                Follow(followerId = 2L, followedId = broadcasterId),
-                Follow(followerId = 3L, followedId = broadcasterId)
-            )
-
-            Then("방을 생성하고 팔로워 목록을 조회한다") {
-                val result = service.startLive(broadcasterId, title, maxParticipants)
-                result shouldBe savedRoom
-                result.title shouldBe title
-                result.maxParticipants shouldBe maxParticipants
-                verify(exactly = 1) { waveRoomRepository.save(any()) }
-                verify(exactly = 1) { relationshipRepository.findFollowers(broadcasterId, null, any()) }
-                verify(exactly = 1) {
-                    notificator.notify(2L, "wave.live-started", "${broadcasterMember.nickname}님이 라이브를 시작했어요", "지금 바로 들어와보세요!")
-                    notificator.notify(3L, "wave.live-started", "${broadcasterMember.nickname}님이 라이브를 시작했어요", "지금 바로 들어와보세요!")
-                }
+                created.broadcasterId shouldBe host
+                verify { sessions.join(created.id, host) }
             }
         }
     }
 
-    Given("updateTitle 호출 시") {
-        val broadcasterId = 1L
-        val roomId = 100L
+    Given("방에 입장할 때") {
 
-        When("호스트가 제목을 변경하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Old Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
-            every { waveRoomRepository.save(any()) } answers { firstArg() }
+        When("정원이 이미 찼으면") {
+            Then("409 로 거부한다") {
+                every { repo.find(roomId) } returns room(maxParticipants = 4)
+                every { sessions.isParticipant(roomId, 9L) } returns false
+                every { sessions.participants(roomId) } returns setOf(1L, 2L, 3L, 4L)
 
-            Then("제목이 성공적으로 변경된다") {
-                val updated = service.updateTitle(broadcasterId, roomId, "New Title")
-                updated.title shouldBe "New Title"
-                verify(exactly = 1) { waveRoomRepository.save(room) }
+                shouldThrow<LanglezException> { service.join(roomId, 9L) }.status.value() shouldBe 409
+                verify(exactly = 0) { sessions.join(roomId, 9L) }
             }
         }
 
-        When("호스트가 아닌 유저가 제목 변경을 시도하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Old Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
+        When("자리가 남아 있으면") {
+            Then("참여자로 등록한다") {
+                every { repo.find(roomId) } returns room(maxParticipants = 4)
+                every { sessions.isParticipant(roomId, 9L) } returns false
+                every { sessions.participants(roomId) } returns setOf(1L, 2L)
 
-            Then("403 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateTitle(999L, roomId, "New Title")
-                }
-                ex.status shouldBe 403
-                ex.message shouldBe "wave.not-broadcaster"
-            }
-        }
+                service.join(roomId, 9L)
 
-        When("종료된 방의 제목 변경을 시도하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Old Title", maxParticipants = 6, endedAt = java.time.Instant.now())
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("409 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateTitle(broadcasterId, roomId, "New Title")
-                }
-                ex.status shouldBe 409
-                ex.message shouldBe "wave.already-ended"
-            }
-        }
-    }
-
-    Given("muteMember 호출 시") {
-        val broadcasterId = 1L
-        val roomId = 100L
-        val targetMemberId = 5L
-
-        When("호스트가 참여자 음소거 명령을 보내면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("대상 유저에게 음소거 명령이 전송된다") {
-                service.muteMember(broadcasterId, roomId, targetMemberId)
-                verify(exactly = 1) {
-                    broadcaster.sendMuteToUser(targetMemberId, WaveMutePayload(roomId))
-                }
-            }
-        }
-
-        When("호스트가 아닌 유저가 음소거를 시도하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("403 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.muteMember(999L, roomId, targetMemberId)
-                }
-                ex.status shouldBe 403
-                ex.message shouldBe "wave.not-broadcaster"
-            }
-        }
-    }
-
-    Given("kickMember 호출 시") {
-        val broadcasterId = 1L
-        val roomId = 100L
-        val targetMemberId = 5L
-
-        When("호스트가 참여자 강퇴를 요청하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("viewerTracker에서 kick 처리되고 WebSocket으로 강퇴 명령이 전달된다") {
-                service.kickMember(broadcasterId, roomId, targetMemberId)
-                verify(exactly = 1) { viewerTracker.kickUser(roomId, targetMemberId) }
-                verify(exactly = 1) { broadcaster.sendKickToUser(targetMemberId, WaveKickPayload(roomId)) }
-            }
-        }
-
-        When("호스트가 아닌 유저가 강퇴를 시도하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, title = "Title", maxParticipants = 6)
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("403 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.kickMember(999L, roomId, targetMemberId)
-                }
-                ex.status shouldBe 403
-                ex.message shouldBe "wave.not-broadcaster"
-            }
-        }
-    }
-
-    Given("endLive 호출 시") {
-        val broadcasterId = 1L
-        val roomId = 100L
-
-        When("방이 존재하지 않으면") {
-            every { waveRoomRepository.findById(roomId) } returns null
-
-            Then("404 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.endLive(broadcasterId, roomId)
-                }.status shouldBe 404
-            }
-        }
-
-        When("요청자가 방송자가 아니면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId)
-            every { waveRoomRepository.findById(roomId) } returns room
-
-            Then("403 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.endLive(999L, roomId)
-                }.status shouldBe 403
+                verify { sessions.join(roomId, 9L) }
             }
         }
 
         When("이미 종료된 방이면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId, endedAt = java.time.Instant.now())
-            every { waveRoomRepository.findById(roomId) } returns room
+            Then("409 로 거부한다") {
+                every { repo.find(roomId) } returns room(ended = true)
 
-            Then("409 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.endLive(broadcasterId, roomId)
-                }.status shouldBe 409
+                shouldThrow<LanglezException> { service.join(roomId, 9L) }.status.value() shouldBe 409
             }
         }
 
-        When("방송자 본인이 정상적으로 종료하면") {
-            val room = WaveRoom(id = roomId, broadcasterId = broadcasterId)
-            every { waveRoomRepository.findById(roomId) } returns room
-            every { waveRoomRepository.save(any()) } answers { firstArg() }
+        When("없는 방이면") {
+            Then("404 로 거부한다") {
+                every { repo.find(roomId) } returns null
 
-            Then("방이 종료 처리된다") {
-                val result = service.endLive(broadcasterId, roomId)
-                result.isEnded() shouldBe true
-                verify { waveRoomRepository.save(room) }
+                shouldThrow<LanglezException> { service.join(roomId, 9L) }.status.value() shouldBe 404
             }
         }
     }
 
-    Given("getActiveRooms 호출 시") {
-        Then("진행 중인 방 목록을 반환한다") {
-            val rooms = listOf(WaveRoom(id = 1L, broadcasterId = 1L), WaveRoom(id = 2L, broadcasterId = 2L))
-            every { waveRoomRepository.findActive(null, 20) } returns rooms
+    Given("채팅을 보낼 때") {
 
-            val result = service.getActiveRooms(null, 20)
-            result shouldHaveSize 2
+        When("참여자가 아니면") {
+            Then("403 으로 거부하고 아무것도 남기지 않는다") {
+                every { repo.find(roomId) } returns room()
+                every { sessions.isParticipant(roomId, 9L) } returns false
+
+                shouldThrow<LanglezException> { service.chat(roomId, 9L, "안녕") }.status.value() shouldBe 403
+                verify(exactly = 0) { sessions.appendChat(any(), any()) }
+                verify(exactly = 0) { broadcaster.broadcast(any(), any()) }
+            }
+        }
+
+        When("참여자가 보내면") {
+            Then("링버퍼에 쌓고 방 토픽으로 브로드캐스트한다") {
+                every { repo.find(roomId) } returns room()
+                every { sessions.isParticipant(roomId, host) } returns true
+
+                val chat = service.chat(roomId, host, "안녕")
+
+                chat.content shouldBe "안녕"
+                verify { sessions.appendChat(roomId, chat) }
+                // SimpMessagingTemplate 직접 호출은 다중 인스턴스에서 조용히 누락된다.
+                verify { broadcaster.broadcast("/topic/wave/$roomId/chat", chat) }
+            }
+        }
+
+        When("본문이 비어 있으면") {
+            Then("400 으로 거부한다") {
+                shouldThrow<LanglezException> { service.chat(roomId, host, "   ") }.status.value() shouldBe 400
+            }
         }
     }
 
-    Given("getRoom 호출 시") {
-        When("존재하지 않는 방이면") {
-            every { waveRoomRepository.findById(500L) } returns null
+    Given("최근 대화를 볼 때") {
+        When("참여자가 아니면") {
+            Then("403 으로 거부한다") {
+                every { sessions.isParticipant(roomId, 9L) } returns false
 
-            Then("404 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.getRoom(500L)
-                }.status shouldBe 404
+                shouldThrow<LanglezException> { service.recentChats(roomId, 9L) }.status.value() shouldBe 403
+            }
+        }
+
+        When("늦게 들어온 참여자가 보면") {
+            Then("링버퍼에 남은 최근 대화를 그대로 돌려준다") {
+                every { sessions.isParticipant(roomId, 9L) } returns true
+                every { sessions.recentChats(roomId) } returns listOf(WaveChat(roomId, host, "먼저 온 말"))
+
+                service.recentChats(roomId, 9L) shouldHaveSize 1
+            }
+        }
+    }
+
+    Given("방을 종료할 때") {
+
+        When("방장이 아니면") {
+            Then("403 으로 거부하고 대화도 지우지 않는다") {
+                every { repo.find(roomId) } returns room()
+
+                shouldThrow<LanglezException> { service.end(roomId, 9L) }.status.value() shouldBe 403
+                verify(exactly = 0) { sessions.clear(roomId) }
+            }
+        }
+
+        When("방장이 종료하면") {
+            Then("방이 닫히고 대화·참여자가 즉시 사라진다") {
+                val target = room()
+                every { repo.find(roomId) } returns target
+                every { repo.save(any()) } answers { firstArg() }
+
+                service.end(roomId, host)
+
+                target.isEnded() shouldBe true
+                // 사라지는 채팅이다. 방이 끝나면 대화도 함께 끝난다.
+                verify { sessions.clear(roomId) }
+            }
+        }
+    }
+
+    Given("방에서 나갈 때") {
+
+        When("아직 남은 사람이 있으면") {
+            Then("방은 그대로 둔다") {
+                every { sessions.participants(roomId) } returns setOf(host)
+
+                service.leave(roomId, 9L)
+
+                verify { sessions.leave(roomId, 9L) }
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+
+        When("마지막 사람이 나가면") {
+            Then("빈 방이 목록에 남지 않도록 방을 닫는다") {
+                val target = room()
+                every { sessions.participants(roomId) } returns emptySet()
+                every { repo.find(roomId) } returns target
+                every { repo.save(any()) } answers { firstArg() }
+
+                service.leave(roomId, host)
+
+                target.isEnded() shouldBe true
+                verify { sessions.clear(roomId) }
             }
         }
     }

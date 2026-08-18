@@ -1,243 +1,158 @@
 package com.langlez.member.application
 
-import com.langlez.core.LanglezException
+import com.langlez.core.OnlineTracker
+import com.langlez.core.Storage
+import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.infrastructure.outbox.MemberOutBoxRepository
+import com.langlez.member.domain.MemberSuspendHistory
+import com.langlez.member.domain.MemberSuspendHistoryRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
-import org.springframework.dao.DataIntegrityViolationException
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
-    val outbox = mockk<MemberOutBoxRepository>(relaxed = true)
+    val creator = mockk<MemberCreator>()
+    val tracker = mockk<OnlineTracker>()
+    val storage = mockk<Storage>()
+    val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
+    val suspendHistoryRepo = mockk<MemberSuspendHistoryRepository>()
 
-    // OutBoxRepository가 제네릭 인터페이스라 relaxed mock이 반환 타입을 상위 타입(AbstractOutBox)으로
-    // 추론해 ClassCastException이 난다. 구체 타입을 명시적으로 stub 해 준다.
-    every { outbox.save(any(), any(), any(), any()) } returns
-        com.langlez.member.infrastructure.outbox.MemberOutBox("MEMBER", "0", "stub", "{}")
-    val memberPresenceTracker = mockk<com.langlez.core.MemberPresenceTracker>()
-    val service = MemberService(repo, outbox, memberPresenceTracker)
+    // updateProfileUrl 이 TransactionTemplate 으로 읽기+쓰기를 묶는다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
 
-    afterEach { clearMocks(repo, outbox, memberPresenceTracker, answers = false) }
+    val service = MemberService(repo, creator, tracker, storage, publisher, suspendHistoryRepo, tx)
 
-    fun createMember(
-        id: Long = 1L,
-        username: String = "testuser",
-        nickname: String = "Test User",
-        lastUsernameUpdatedAt: Instant? = null,
-        lastNicknameUpdatedAt: Instant? = null,
-    ) = Member(
+    afterEach { clearMocks(repo, creator, tracker, storage, publisher, suspendHistoryRepo, answers = false) }
+
+    fun member(id: Long = 1L, status: Member.Status = Member.Status.ACTIVE) = Member(
         id = id,
-        email = "test@example.com",
-        username = username,
-        nickname = nickname,
+        email = "user$id@test.com",
+        handle = "user$id",
+        status = status,
         provider = Member.Provider.GOOGLE,
-        providerId = "g123",
-        providerDisplayName = nickname,
-        lastUsernameUpdatedAt = lastUsernameUpdatedAt,
-        lastNicknameUpdatedAt = lastNicknameUpdatedAt,
+        providerId = "p$id",
     )
 
-    Given("회원 생성 시") {
-        When("정상적으로 회원을 생성하면") {
-            val providerCmd = MemberCommand.Provider("g123", Member.Provider.GOOGLE, "Test User")
-            val command = MemberCommand.Create("test@example.com", "testuser", "Test User")
+    Given("핸들 변경 시") {
 
-            every { repo.save(any()) } answers {
-                val m = firstArg<Member>()
-                Member(
-                    id = 1L,
-                    email = m.email,
-                    username = m.username,
-                    nickname = m.nickname,
-                    provider = m.provider,
-                    providerId = m.providerId,
-                    providerDisplayName = m.providerDisplayName
-                )
-            }
+        When("핸들을 바꾸면") {
+            val target = member()
+            every { repo.find("newhandle") } returns null
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
 
-            Then("회원이 저장되고 outbox.save가 호출된다") {
-                val result = service.createMember(providerCmd, command)
-                result.id shouldBe 1L
-                verify { repo.save(match { it.email == "test@example.com" }) }
-                verify {
-                    outbox.save("MEMBER", "1", "member-created", match<MemberEvent.Created> {
-                        it.id == 1L && it.email == "test@example.com" && it.username == "testuser" && it.nickname == "Test User"
-                    })
-                }
+            val updated = service.updateHandle(1L, "newhandle")
+
+            Then("핸들만 바뀌고 온라인 상태 트래커는 건드리지 않는다 (id로 keying하므로)") {
+                updated.handle shouldBe "newhandle"
+                verify(exactly = 0) { tracker.toOffline(any()) }
+                verify(exactly = 0) { tracker.toOnline(any()) }
             }
         }
     }
 
-    Given("유저네임 변경 시") {
-        When("유효한 유저네임으로 변경하면") {
-            val member = createMember()
-            every { repo.findById(1L) } returns member
-            every { repo.findByUsername("newuser123") } returns null
-            every { repo.save(any()) } answers { firstArg() }
+    Given("온라인 상태 조회 시") {
 
-            Then("유저네임이 변경되고 타임스탬프가 기록된다") {
-                val result = service.updateUsername(1L, "newuser123")
-                result.username shouldBe "newuser123"
-                verify { repo.save(match { it.username == "newuser123" && it.lastUsernameUpdatedAt != null }) }
-                verify { outbox.save("MEMBER", "1", "member-username-changed", match<MemberEvent.UsernameChanged> { it.id == 1L && it.newUsername == "newuser123" }) }
-            }
-        }
-
-        When("유효하지 않은 유저네임으로 변경하면") {
-            val member = createMember()
-            every { repo.findById(1L) } returns member
-
-            Then("BAD_REQUEST 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateUsername(1L, "ab")
-                }
-                ex.status shouldBe 400
-                ex.message shouldBe "member.username.invalid"
-            }
-        }
-
-        When("이미 사용 중인 유저네임으로 변경하면") {
-            val member = createMember()
-            val other = createMember(id = 2L, username = "taken_user")
-            every { repo.findById(1L) } returns member
-            every { repo.findByUsername("taken_user") } returns other
-
-            Then("CONFLICT 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateUsername(1L, "taken_user")
-                }
-                ex.status shouldBe 409
-                ex.message shouldBe "member.username.duplicated"
-            }
-        }
-
-        When("저장 중 DB 제약 위반(경쟁 조건)이 발생하면") {
-            val member = createMember()
-            every { repo.findById(1L) } returns member
-            every { repo.findByUsername("taken_user") } returns null
-            every { repo.save(any()) } throws DataIntegrityViolationException("Duplicate entry")
-
-            Then("CONFLICT 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateUsername(1L, "taken_user")
-                }
-                ex.status shouldBe 409
-                ex.message shouldBe "member.username.duplicated"
-            }
-        }
-
-        When("쿨다운 기간 내에 변경하면") {
-            val member = createMember(lastUsernameUpdatedAt = Instant.now().minus(5, ChronoUnit.DAYS))
-            every { repo.findById(1L) } returns member
-
-            Then("BAD_REQUEST 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateUsername(1L, "newuser123")
-                }
-                ex.status shouldBe 400
-                ex.message shouldBe "member.username.cooldown"
-            }
-        }
-
-        When("쿨다운 기간이 지난 후 변경하면") {
-            val member = createMember(lastUsernameUpdatedAt = Instant.now().minus(16, ChronoUnit.DAYS))
-            every { repo.findById(1L) } returns member
-            every { repo.findByUsername("newuser123") } returns null
-            every { repo.save(any()) } answers { firstArg() }
-
-            Then("유저네임이 변경된다") {
-                val result = service.updateUsername(1L, "newuser123")
-                result.username shouldBe "newuser123"
-            }
-        }
-
-        When("회원이 존재하지 않으면") {
-            every { repo.findById(999L) } returns null
-
-            Then("NOT_FOUND 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.updateUsername(999L, "newuser123")
-                }.status shouldBe 404
-            }
-        }
-    }
-
-    Given("닉네임 변경 시") {
-        When("정상적으로 변경하면") {
-            val member = createMember()
-            every { repo.findById(1L) } returns member
-            every { repo.save(any()) } answers { firstArg() }
-
-            Then("닉네임이 변경되고 타임스탬프가 기록된다") {
-                val result = service.updateNickname(1L, "New Name")
-                result.nickname shouldBe "New Name"
-                verify { repo.save(match { it.nickname == "New Name" && it.lastNicknameUpdatedAt != null }) }
-                verify { outbox.save("MEMBER", "1", "member-nickname-changed", match<MemberEvent.NicknameChanged> { it.id == 1L && it.newNickname == "New Name" }) }
-            }
-        }
-
-        When("쿨다운 기간 내에 변경하면") {
-            val member = createMember(lastNicknameUpdatedAt = Instant.now().minus(5, ChronoUnit.DAYS))
-            every { repo.findById(1L) } returns member
-
-            Then("BAD_REQUEST 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.updateNickname(1L, "New Name")
-                }
-                ex.status shouldBe 400
-                ex.message shouldBe "member.nickname.cooldown"
-            }
-        }
-
-        When("쿨다운 기간이 지난 후 변경하면") {
-            val member = createMember(lastNicknameUpdatedAt = Instant.now().minus(16, ChronoUnit.DAYS))
-            every { repo.findById(1L) } returns member
-            every { repo.save(any()) } answers { firstArg() }
-
-            Then("닉네임이 변경된다") {
-                val result = service.updateNickname(1L, "New Name")
-                result.nickname shouldBe "New Name"
-            }
-        }
-    }
-
-    Given("온라인 상태 확인 시") {
-        val member = createMember(id = 1L, username = "onlineuser")
-
-        When("존재하지 않는 회원인 경우") {
-            every { repo.findByUsername("offlineuser") } returns null
-
-            Then("NOT_FOUND 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.isOnline("offlineuser")
-                }
-                ex.status shouldBe 404
-                ex.message shouldBe "member.not-found"
-            }
-        }
-
-        When("회원이 존재하고 온라인 상태인 경우") {
-            every { repo.findByUsername("onlineuser") } returns member
-            every { memberPresenceTracker.isOnline(1L) } returns true
+        When("레디스에 온라인으로 표시되어 있으면") {
+            every { repo.find("user1") } returns member()
+            every { tracker.checkOnline(1L) } returns mapOf(1L to true)
 
             Then("true를 반환한다") {
-                service.isOnline("onlineuser") shouldBe true
+                service.isOnline("user1") shouldBe true
             }
         }
 
-        When("회원이 존재하고 오프라인 상태인 경우") {
-            every { repo.findByUsername("onlineuser") } returns member
-            every { memberPresenceTracker.isOnline(1L) } returns false
+        When("레디스에 없으면(TTL 만료 포함)") {
+            every { repo.find("user1") } returns member()
+            every { tracker.checkOnline(1L) } returns mapOf(1L to false)
 
             Then("false를 반환한다") {
-                service.isOnline("onlineuser") shouldBe false
+                service.isOnline("user1") shouldBe false
+            }
+        }
+    }
+
+    Given("회원 정지 시") {
+
+        When("존재하는 활성 회원을 정지하면") {
+            val target = member(status = Member.Status.ACTIVE)
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+            every { suspendHistoryRepo.save(any()) } answers { firstArg() }
+
+            service.suspendMember(1L, "policy violation")
+
+            Then("상태가 SUSPENDED로 바뀌어 저장되고 정지 이력이 남는다") {
+                verify { repo.save(match { it.status == Member.Status.SUSPENDED }) }
+                verify { suspendHistoryRepo.save(match<MemberSuspendHistory> { it.reason == "policy violation" }) }
+            }
+        }
+
+        When("이미 탈퇴한 회원을 정지하려 하면") {
+            every { repo.find(2L) } returns member(id = 2L, status = Member.Status.WITHDRAWN)
+
+            Then("400 LanglezException이 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.suspendMember(2L) }
+                ex.status.value() shouldBe 400
+            }
+        }
+
+        When("존재하지 않는 회원을 정지하려 하면") {
+            every { repo.find(999L) } returns null
+
+            Then("404 LanglezException이 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.suspendMember(999L) }
+                ex.status.value() shouldBe 404
+            }
+        }
+    }
+
+    Given("회원 탈퇴 시") {
+        When("존재하는 회원을 탈퇴 처리하면") {
+            val target = member()
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+
+            service.withdrawMember(1L)
+
+            Then("상태가 WITHDRAWN으로 바뀌어 저장된다") {
+                verify { repo.save(match { it.status == Member.Status.WITHDRAWN }) }
+            }
+        }
+    }
+
+    Given("프로필 이미지 업로드 시") {
+
+        When("presignProfileUrl을 호출하면") {
+            val result = Storage.PresignedResult(key = "member/2026-08-03/uuid_photo.jpg", presigned = "https://presigned.url")
+            every { storage.presign(1L, "member", Storage.Type.IMAGE, "photo.jpg") } returns result
+
+            val presigned = service.presignProfileUrl(1L, "photo.jpg")
+
+            Then("Storage가 반환한 결과를 그대로 반환한다") {
+                presigned shouldBe result
+            }
+        }
+
+        When("updateProfileUrl을 호출하면") {
+            val target = member()
+            every { repo.find(1L) } returns target
+            every { storage.attach("key123", 1L) } returns "https://cdn.langlez.com/key123"
+            every { repo.save(any()) } answers { firstArg() }
+
+            val updated = service.updateProfileUrl(1L, "key123")
+
+            Then("member.imageUrl에 attach 결과 URL이 반영되어 저장된다") {
+                updated.imageUrl shouldBe "https://cdn.langlez.com/key123"
+                verify { repo.save(match { it.imageUrl == "https://cdn.langlez.com/key123" }) }
             }
         }
     }

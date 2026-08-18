@@ -1,7 +1,8 @@
 package com.langlez.profile.api
 
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
+import com.langlez.member.domain.Member.Provider
 import com.langlez.profile.application.ProfileService
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -20,21 +21,19 @@ class ProfileControllerTest : BehaviorSpec({
 
     afterEach { clearMocks(service, answers = false) }
 
-    fun createMember(id: Long = 1L, username: String = "testuser", nickname: String = "Test User") = Member(
+    fun createMember(id: Long = 1L, handle: String = "testuser", displayName: String = "Test User") = Member(
         id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = nickname,
+        email = "$handle@example.com",
+        handle = handle,
         provider = Member.Provider.GOOGLE,
         providerId = "g$id",
-        providerDisplayName = nickname
+        providerDisplayName = displayName
     )
 
     Given("프로필 상세 조회 시") {
         When("존재하는 username을 조회하면") {
             val detail = ProfileResponse.Detail(
-                username = "target",
-                nickname = "Target User",
+                handle = "target",
                 bio = "hello",
                 goal = "goal",
                 want = "want",
@@ -48,8 +47,7 @@ class ProfileControllerTest : BehaviorSpec({
 
             Then("서비스 결과가 그대로 반환된다") {
                 val result = controller.getProfile(1L, "target", locale)
-                result.username shouldBe "target"
-                result.nickname shouldBe "Target User"
+                result.handle shouldBe "target"
                 result.visitCount shouldBe 5L
             }
         }
@@ -61,7 +59,7 @@ class ProfileControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.getProfile(1L, "ghost", locale)
                 }
-                ex.status shouldBe 404
+                ex.status.value() shouldBe 404
             }
         }
     }
@@ -69,7 +67,8 @@ class ProfileControllerTest : BehaviorSpec({
     Given("내 프로필 수정 시") {
         When("서비스가 정상 처리하면") {
             val member = createMember()
-            val profile = Profile(id = 1L, member = member, bio = "new bio", gender = Profile.Gender.MALE)
+            val member2 = createMember().apply { gender = Member.Gender.MALE }
+            val profile = Profile(id = 1L, member = member2, bio = "new bio")
             val request = ProfileRequest.Update(bio = "new bio")
             val detail = ProfileResponse.ProfileDetail(profile)
             every { service.updateProfile(1L, request, locale) } returns detail
@@ -84,22 +83,24 @@ class ProfileControllerTest : BehaviorSpec({
 
     Given("이미지 업로드 URL 발급 시") {
         When("정상적인 contentType으로 요청하면") {
-            every { service.generateImageUploadUrl("photo.jpg", "image/jpeg") } returns "https://cdn/upload/photo.jpg"
+            every { service.generateImageUploadUrl(1L, "photo.jpg", "image/jpeg") } returns
+                com.langlez.core.Storage.PresignedResult(key = "profiles/photo.jpg", presigned = "https://cdn/upload/photo.jpg")
 
             Then("업로드 URL이 반환된다") {
                 val result = controller.getImageUploadUrl(1L, "photo.jpg", "image/jpeg")
-                result["uploadUrl"] shouldBe "https://cdn/upload/photo.jpg"
+                result.presigned shouldBe "https://cdn/upload/photo.jpg"
+                result.key shouldBe "profiles/photo.jpg"
             }
         }
 
         When("이미지가 아닌 contentType으로 요청하면") {
-            every { service.generateImageUploadUrl("video.mp4", "video/mp4") } throws LanglezException(400, "file.unsupported-content-type")
+            every { service.generateImageUploadUrl(1L, "video.mp4", "video/mp4") } throws LanglezException(400, "file.unsupported-content-type")
 
             Then("BAD_REQUEST 예외가 전파된다") {
                 val ex = shouldThrow<LanglezException> {
                     controller.getImageUploadUrl(1L, "video.mp4", "video/mp4")
                 }
-                ex.status shouldBe 400
+                ex.status.value() shouldBe 400
             }
         }
     }
@@ -136,7 +137,7 @@ class ProfileControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> {
                     controller.confirmAdditionalImage(1L, ProfileRequest.ImageConfirm("https://cdn/over.jpg"))
                 }
-                ex.status shouldBe 400
+                ex.status.value() shouldBe 400
             }
         }
     }
@@ -147,9 +148,9 @@ class ProfileControllerTest : BehaviorSpec({
 
             Then("NOT_FOUND 예외가 전파된다") {
                 val ex = shouldThrow<LanglezException> {
-                    controller.changeRepresentImage(1L, ProfileRequest.ImageConfirm("https://cdn/ghost.jpg"))
+                    controller.changeRepresentImage(1L, ProfileRequest.ImageSelect("https://cdn/ghost.jpg"))
                 }
-                ex.status shouldBe 404
+                ex.status.value() shouldBe 404
             }
         }
 
@@ -158,7 +159,7 @@ class ProfileControllerTest : BehaviorSpec({
             every { service.changeRepresentImage(1L, "https://cdn/new.jpg") } returns image
 
             Then("변경된 대표 사진이 반환된다") {
-                val result = controller.changeRepresentImage(1L, ProfileRequest.ImageConfirm("https://cdn/new.jpg"))
+                val result = controller.changeRepresentImage(1L, ProfileRequest.ImageSelect("https://cdn/new.jpg"))
                 result.represent shouldBe true
                 result.url shouldBe "https://cdn/new.jpg"
             }

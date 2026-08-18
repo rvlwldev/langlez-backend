@@ -45,4 +45,8 @@
 
     <!-- macOS 네이티브 DNS resolver 미존재 경고: 로컬(macOS)에서만 뜨는 무해한 노이즈, 의존성 추가는 프로덕션(Linux)에 안 맞아서 로그만 숨김 -->
     <logger name="io.netty.resolver.dns.DnsServerAddressStreamProviders" level="ERROR"/>
+
+    <!-- spy.properties 의 appender=Slf4JLogger 가 여기로 쏜다. 커스텀 JdbcEventListener 가
+         이미 같은 쿼리를 로깅하므로, 여기서 완전히 죽여 중복 로그를 막는다. -->
+    <logger name="p6spy" level="OFF"/>
 </configuration>

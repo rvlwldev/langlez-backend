@@ -1,16 +1,14 @@
 package com.langlez.member.infrastructure.outbox
 
-import com.langlez.mysql.outbox.AbstractOutBox
+import com.langlez.rdb.outbox.OutBox
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
-import java.time.Instant
 
 @Entity
 @Table(name = "member_event_outbox")
 class MemberOutBox(
-    aggregateType: String,
-    aggregateId: String,
-    eventName: String,
+    domain: String,
+    topic: String,
     payload: String,
-    createdAt: Instant = Instant.now(),
-) : AbstractOutBox(aggregateType, aggregateId, eventName, payload, createdAt)
+    key: String? = null
+) : OutBox(domain, topic, payload, key)

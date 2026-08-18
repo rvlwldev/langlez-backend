@@ -3,14 +3,18 @@ package com.langlez.member.domain
 interface MemberRepository {
     fun save(member: Member): Member
 
-    fun findById(id: Long): Member?
+    fun find(id: Long): Member?
+    fun find(handle: String): Member?
+    fun find(provider: Member.Provider, id: String): Member?
     fun findByEmail(email: String): Member?
-    fun findByUsername(username: String): Member?
-    fun findByUsernames(usernames: List<String>): List<Member>
-    fun findByProvider(id: String, type: Member.Provider): Member?
-    fun findByIds(ids: List<Long>): List<Member>
-    fun countAll(): Long
-    fun findAll(cursor: Long?, size: Int): List<Member>
 
-    fun deleteAll(members: List<Member>)
+    fun findAll(ids: Collection<Long>): List<Member>
+    fun findAll(size: Int, cursor: Long?): List<Member>
+    fun findAllByHandles(handles: Collection<String>): List<Member>
+    fun count(): Long
+
+    fun delete(id: Long)
+    fun delete(ids: List<Long>)
+    fun delete(member: Member)
+    fun delete(members: Collection<Member>)
 }

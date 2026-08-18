@@ -9,8 +9,10 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":infra:mysql"))
+    implementation(project(":core"))
+    implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
+    implementation(project(":infra:kafka"))
 
     implementation(libs.dependency.spring.retry)
 

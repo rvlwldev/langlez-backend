@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.redis.distributedLock.DistributedLock
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component
 class ProfileImageLocker(
     private val repo: ProfileRepository,
 ) {
-    @DistributedLock(prefix = "lock:profile-image:", ttl = 5, retries = 20, wait = 100, transactional = true)
+    @DistributedLock(prefix = "lock:profile-image:", leaseSecs = 5, retries = 20, waitMs = 100, transactional = true)
     fun confirmAdditionalImage(@LockKey memberId: Long, fileUrl: String): ProfileImage {
         val count = repo.countImages(memberId)
         if (count >= MAX_IMAGES) {

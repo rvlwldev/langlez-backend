@@ -1,30 +1,11 @@
 package com.langlez.chat.infrastructure.outbox
 
-import com.langlez.mysql.outbox.AbstractOutBoxHistory
+import com.langlez.rdb.outbox.OutBox
+import com.langlez.rdb.outbox.OutBoxHistory
 import jakarta.persistence.Entity
+import jakarta.persistence.Index
 import jakarta.persistence.Table
-import java.time.Instant
 
 @Entity
-@Table(name = "chat_event_outbox_history")
-class ChatOutBoxHistory(
-    id: Long,
-    aggregateType: String,
-    aggregateId: String,
-    eventName: String,
-    payload: String,
-    attempts: Int,
-    createdAt: Instant,
-    processedAt: Instant = Instant.now(),
-) : AbstractOutBoxHistory(id, aggregateType, aggregateId, eventName, payload, attempts, createdAt, processedAt) {
-
-    constructor(o: ChatOutBox) : this(
-        id = o.id,
-        aggregateType = o.aggregateType,
-        aggregateId = o.aggregateId,
-        eventName = o.eventName,
-        payload = o.payload,
-        attempts = o.attempts,
-        createdAt = o.createdAt,
-    )
-}
+@Table(name = "chat_event_outbox_history", indexes = [Index(name = "IDX_CHAT_OUTBOX_DOMAIN", columnList = "domain")])
+class ChatOutBoxHistory(outbox: OutBox) : OutBoxHistory(outbox)

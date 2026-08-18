@@ -3,29 +3,29 @@ package com.langlez.notification.infrastructure
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import com.langlez.notification.infrastructure.jpa.NotificationJpaRepository
-import org.springframework.data.domain.PageRequest
+import com.querydsl.jpa.impl.JPAQueryFactory
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.annotation.Transactional
+import com.langlez.notification.domain.QNotification.Companion.notification as QNotification
 
+/**
+ * 캐시를 두지 않는다. 읽음 표시로 계속 바뀌는 데다, 목록은 커서마다 달라 적중률이 사실상 없다.
+ */
 @Repository
 class NotificationRepositoryImpl(
-    private val notificationJpaRepository: NotificationJpaRepository
+    private val jpa: NotificationJpaRepository,
+    private val dsl: JPAQueryFactory,
 ) : NotificationRepository {
 
-    override fun save(notification: Notification): Notification =
-        notificationJpaRepository.save(notification)
+    override fun save(notification: Notification): Notification = jpa.save(notification)
 
-    override fun saveAll(notifications: List<Notification>): List<Notification> =
-        notificationJpaRepository.saveAll(notifications)
+    override fun find(id: Long): Notification? = jpa.findByIdOrNull(id)
 
-    override fun findByRecipient(recipientId: Long, cursor: Long?, size: Int): List<Notification> =
-        notificationJpaRepository.findByRecipient(recipientId, cursor, PageRequest.of(0, size))
-
-    @Transactional
-    override fun markAsRead(recipientId: Long, notificationId: Long): Boolean =
-        notificationJpaRepository.markAsRead(recipientId, notificationId) > 0
-
-    @Transactional
-    override fun markAllAsRead(recipientId: Long): Int =
-        notificationJpaRepository.markAllAsRead(recipientId)
+    /** 정렬·커서를 created_at 이 아니라 id 로 잡는다. 서버 시계가 어긋나면 같은 시각이 겹쳐 페이지가 새거나 겹친다. */
+    override fun findAll(recipientId: Long, size: Int, cursor: Long?): List<Notification> =
+        dsl.selectFrom(QNotification)
+            .where(QNotification.recipientId.eq(recipientId), cursor?.let { QNotification.id.lt(it) })
+            .orderBy(QNotification.id.desc())
+            .limit(size.toLong())
+            .fetch()
 }

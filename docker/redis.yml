@@ -1,0 +1,28 @@
+name: langlez
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  redis:
+    image: redis:7.2
+    container_name: langlez-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./volume/redis/data:/data
+    command: [ "redis-server", "/etc/redis/redis.conf" ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - langlez-net

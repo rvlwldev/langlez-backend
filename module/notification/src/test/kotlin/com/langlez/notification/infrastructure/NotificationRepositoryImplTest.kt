@@ -1,28 +1,28 @@
 package com.langlez.notification.infrastructure
 
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.testcontainers.containers.MySQLContainer
+import org.testcontainers.containers.PostgreSQLContainer
 
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = [
         "jwt.secret=dGhpcy1pcy1hLXNlY3JldC1rZXktZm9yLWp3dC1zaWduaW5nLXBsZWFzZS1rZWVwLWl0LXNhZmUtYW5kLXNlY3VyZQ==",
         "jwt.access-token-ttl-secs=3600",
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "app.cors.allowed-origins=http://localhost:3000"
+        "spring.jpa.hibernate.ddl-auto=validate",
+        // 브로커가 없는 테스트다. 리스너를 띄우면 접속 재시도 로그만 쌓인다.
+        "spring.kafka.listener.auto-startup=false",
+        "app.cors.allowed-origins=http://localhost:3000",
     ]
 )
 class NotificationRepositoryImplTest : BehaviorSpec() {
@@ -30,14 +30,11 @@ class NotificationRepositoryImplTest : BehaviorSpec() {
     override fun extensions() = listOf(SpringExtension)
 
     @Autowired
-    lateinit var notificationRepository: NotificationRepository
-
-    @Autowired
-    lateinit var memberRepository: MemberRepository
+    lateinit var repo: NotificationRepository
 
     companion object {
         @JvmField
-        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+        val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
             .withDatabaseName("langlez_db")
             .withUsername("admin")
             .withPassword("admin")
@@ -46,76 +43,61 @@ class NotificationRepositoryImplTest : BehaviorSpec() {
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url") { mysql.jdbcUrl + "?serverTimezone=Asia/Seoul&characterEncoding=UTF-8" }
-            registry.add("spring.datasource.username") { mysql.username }
-            registry.add("spring.datasource.password") { mysql.password }
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
         }
     }
 
     init {
-        Given("NotificationRepository 가 주어졌을 때") {
-            val user = memberRepository.save(
-                Member(
-                    email = "receiver@test.com",
-                    username = "receiver",
-                    nickname = "Receiver",
-                    provider = Member.Provider.GOOGLE,
-                    providerId = "g-receiver",
-                    providerDisplayName = "Receiver"
-                )
-            )
+        fun notification(recipientId: Long, body: String) = Notification(
+            recipientId = recipientId,
+            type = "CHAT_MESSAGE",
+            title = "notification.chat-message.title",
+            body = body,
+            data = """{"roomId":"7"}""",
+        )
 
-            When("알림들을 저장하고 조회할 때") {
-                val n1 = notificationRepository.save(
-                    Notification(
-                        recipientId = user.id,
-                        type = "type.a",
-                        title = "Title 1",
-                        body = "Body 1"
-                    )
-                )
-                val n2 = notificationRepository.save(
-                    Notification(
-                        recipientId = user.id,
-                        type = "type.b",
-                        title = "Title 2",
-                        body = "Body 2"
-                    )
-                )
-                val n3 = notificationRepository.save(
-                    Notification(
-                        recipientId = user.id,
-                        type = "type.c",
-                        title = "Title 3",
-                        body = "Body 3"
-                    )
-                )
+        Given("알림이 쌓여 있으면") {
+            val first = repo.save(notification(1L, "첫번째"))
+            val second = repo.save(notification(1L, "두번째"))
+            val third = repo.save(notification(1L, "세번째"))
+            repo.save(notification(2L, "남의 알림"))
 
-                Then("cursor 기반 페이지네이션이 역순(최신순)으로 정상 동작해야 한다") {
-                    val page1 = notificationRepository.findByRecipient(user.id, null, 2)
-                    page1 shouldHaveSize 2
-                    page1[0].id shouldBe n3.id
-                    page1[1].id shouldBe n2.id
+            When("첫 페이지를 조회하면") {
+                Then("최신순(id 내림차순)으로 내 알림만 나온다") {
+                    val page = repo.findAll(recipientId = 1L, size = 2, cursor = null)
 
-                    val page2 = notificationRepository.findByRecipient(user.id, page1.last().id, 2)
-                    page2 shouldHaveSize 1
-                    page2[0].id shouldBe n1.id
+                    page shouldHaveSize 2
+                    page[0].id shouldBe third.id
+                    page[1].id shouldBe second.id
                 }
+            }
 
-                Then("특정 알림을 읽음 처리(markAsRead)할 수 있어야 한다") {
-                    notificationRepository.markAsRead(user.id, n1.id)
-                    val readPage = notificationRepository.findByRecipient(user.id, null, 10)
-                    val updatedN1 = readPage.find { it.id == n1.id }
-                    updatedN1?.read shouldBe true
-                    readPage.find { it.id == n2.id }?.read shouldBe false
+            When("커서로 다음 페이지를 조회하면") {
+                Then("커서보다 오래된 것만 나온다") {
+                    val page = repo.findAll(recipientId = 1L, size = 10, cursor = second.id)
+
+                    page shouldHaveSize 1
+                    page[0].id shouldBe first.id
                 }
+            }
 
-                Then("모든 알림을 읽음 처리(markAllAsRead)할 수 있어야 한다") {
-                    notificationRepository.markAllAsRead(user.id)
-                    val readPage = notificationRepository.findByRecipient(user.id, null, 10)
-                    readPage.forEach {
-                        it.read shouldBe true
-                    }
+            When("단건을 조회하면") {
+                Then("읽음 상태와 데이터가 그대로 남아 있다") {
+                    val found = repo.find(first.id)
+
+                    found.shouldNotBeNull()
+                    found.read shouldBe false
+                    found.data shouldBe """{"roomId":"7"}"""
+                }
+            }
+
+            When("읽음으로 바꿔 저장하면") {
+                Then("다시 조회해도 읽음이다") {
+                    repo.save(repo.find(third.id)!!.apply { read = true })
+
+                    repo.find(third.id)!!.read shouldBe true
                 }
             }
         }

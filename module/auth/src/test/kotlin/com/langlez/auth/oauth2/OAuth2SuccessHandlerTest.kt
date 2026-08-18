@@ -1,59 +1,56 @@
 package com.langlez.auth.oauth2
 
-import com.langlez.security.util.JwtParser
+import com.langlez.auth.application.AccessContext
+import com.langlez.auth.application.AuthService
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import io.mockk.clearMocks
+import io.kotest.matchers.string.shouldContain
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.runs
 import io.mockk.verify
-import org.redisson.api.RBucket
-import org.redisson.api.RedissonClient
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.Authentication
-import java.util.concurrent.TimeUnit
 
+/** 모바일 앱 전용. 쿠키를 쓰지 않고 앱 딥링크로 토큰을 돌려준다. */
 class OAuth2SuccessHandlerTest : BehaviorSpec({
 
-    val jwt = mockk<JwtParser>()
-    val redisson = mockk<RedissonClient>()
-    val bucket = mockk<RBucket<String>>()
-    val redirectUri = "http://localhost:3000/oauth2/callback"
+    val service = mockk<AuthService>()
+    val redirectUri = "langlez://oauth2/callback"
+    val handler = OAuth2SuccessHandler(service, redirectUri)
 
-    val handler = OAuth2SuccessHandler(jwt, redisson, redirectUri)
+    val user = OAuth2LanglezUser(1L, "tester", "ROLE_MEMBER", mapOf("sub" to "123"), "sub")
+    val auth = mockk<Authentication>()
+    every { auth.principal } returns user
 
-    afterEach { clearMocks(jwt, redisson, bucket, answers = false) }
+    Given("OAuth2 로그인에 성공하면") {
+        every { service.issueTokens(1L, "tester", "ROLE_MEMBER", any()) } returns
+            ("mock-refresh-token" to "mock-access-token")
 
-    Given("OAuth2 성공 로그인 시") {
-        val memberId = 1L
-        val role = "ROLE_MEMBER"
-        val user = OAuth2LanglezUser(memberId, role, mapOf("sub" to "123"), "sub")
-        val auth = mockk<Authentication>()
+        val req = MockHttpServletRequest().apply {
+            remoteAddr = "10.0.0.1"
+            addHeader("X-Device-Id", "device-A")
+        }
+        val res = MockHttpServletResponse()
 
-        every { auth.principal } returns user
-        every { jwt.createRefreshToken(memberId, role) } returns "mock-refresh-token"
-        every { jwt.createAccessToken(memberId, role) } returns "mock-access-token"
-        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
-        every { bucket.set("mock-refresh-token", 14, TimeUnit.DAYS) } just runs
+        handler.onAuthenticationSuccess(req, res, auth)
 
-        When("OAuth2SuccessHandler가 실행되면") {
-            val req = MockHttpServletRequest()
-            val res = MockHttpServletResponse()
+        Then("앱 딥링크로 리다이렉트한다") {
+            res.redirectedUrl!! shouldContain redirectUri
+        }
 
-            handler.onAuthenticationSuccess(req, res, auth)
+        Then("토큰이 쿼리 파라미터로 전달된다") {
+            res.redirectedUrl!! shouldContain "accessToken=mock-access-token"
+            res.redirectedUrl!! shouldContain "refreshToken=mock-refresh-token"
+        }
 
-            Then("토큰은 HttpOnly Secure 쿠키로 헤더에 설정되고 URL 파라미터에는 포함되지 않는다") {
-                res.redirectedUrl shouldBe redirectUri
+        Then("쿠키는 설정하지 않는다") {
+            res.cookies.size shouldBe 0
+            res.getHeaders("Set-Cookie").size shouldBe 0
+        }
 
-                val setCookieHeaders = res.getHeaders("Set-Cookie")
-                setCookieHeaders.any { it.contains("accessToken=mock-access-token") && it.contains("HttpOnly") && it.contains("Secure") && it.contains("SameSite=Lax") } shouldBe true
-                setCookieHeaders.any { it.contains("refreshToken=mock-refresh-token") && it.contains("HttpOnly") && it.contains("Secure") && it.contains("SameSite=Lax") } shouldBe true
-
-                verify(exactly = 1) { bucket.set("mock-refresh-token", 14, TimeUnit.DAYS) }
-            }
+        Then("기기 id 와 IP 가 함께 기록된다") {
+            verify { service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("10.0.0.1", "device-A")) }
         }
     }
 })

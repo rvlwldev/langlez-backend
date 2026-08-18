@@ -1,49 +1,127 @@
 package com.langlez.notification.application
 
-import com.langlez.core.LanglezException
-import com.langlez.notification.api.NotificationResponse
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.core.MessageBroadcaster
+import com.langlez.core.Notificator
+import com.langlez.core.OnlineTracker
+import com.langlez.core.PushTokenQuery
+import com.langlez.core.event.chat.ChatMessageSentEvent
+import com.langlez.exception.LanglezException
+import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
+import com.langlez.notification.domain.PushSender
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus.FORBIDDEN
+import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 
+/**
+ * 알림 발송과 이력.
+ *
+ * `core.Notificator` 를 이 클래스가 직접 구현한다. 다른 모듈이 부르는 창구(notify)와
+ * 상태 판정·이력 저장이 같은 흐름이라, 위임만 하는 어댑터를 하나 더 두면 파일만 늘어난다.
+ */
 @Service
 class NotificationService(
-    private val notificationRepository: NotificationRepository
-) {
+    private val repo: NotificationRepository,
+    private val tracker: OnlineTracker,
+    private val broadcaster: MessageBroadcaster,
+    private val tokens: PushTokenQuery,
+    private val push: PushSender,
+    private val mapper: ObjectMapper,
+) : Notificator {
 
-    @Transactional(readOnly = true)
-    fun getNotifications(memberId: Long, cursor: Long?, size: Int): NotificationResponse.CursorList {
-        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        val notifications = notificationRepository.findByRecipient(memberId, cursor, boundedSize)
-        val dtos = notifications.map {
-            NotificationResponse.NotificationDto(
-                notificationId = it.id,
-                type = it.type,
-                title = it.title,
-                body = it.body,
-                read = it.read,
-                data = it.data,
-                createdAt = it.createdAt
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 이력을 먼저 남기고 전달한다. 전달이 실패해도 목록에는 남아야 한다.
+     *
+     * 트랜잭션을 걸지 않았다 — `repo.save` 가 자기 트랜잭션을 갖고, 뒤따르는 브로드캐스트와
+     * FCM 은 네트워크 I/O 라 DB 커넥션을 쥔 채 외부를 기다리면 풀이 마른다.
+     */
+    override fun notify(memberId: Long, type: String, title: String, body: String, data: Map<String, String>) {
+        val saved = repo.save(
+            Notification(
+                recipientId = memberId,
+                type = type,
+                title = title,
+                body = body,
+                data = data.takeIf { it.isNotEmpty() }?.let(mapper::writeValueAsString),
             )
+        )
+
+        // 앱이 켜져 있으면 푸시 대신 인앱으로 준다. 둘 다 보내면 같은 알림이 두 번 뜬다.
+        if (tracker.checkOnline(memberId)[memberId] == true) {
+            broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX$memberId", NotificationView(saved, data))
+            return
         }
-        val nextCursor = if (notifications.size == boundedSize) notifications.lastOrNull()?.id else null
-        return NotificationResponse.CursorList(nextCursor, dtos)
+
+        // 토큰이 없으면(로그아웃·푸시 거부) 보낼 곳이 없다. 이력은 이미 남았으니 조용히 끝낸다.
+        val token = tokens.findPushToken(memberId) ?: return
+
+        // 전송 실패로 컨슈머를 실패시키지 않는다. 죽은 토큰은 재시도해도 같은 결과인데,
+        // 그동안 파티션이 막혀 뒤에 쌓인 다른 사람 알림까지 늦어진다.
+        runCatching { push.send(token, title, body, data) }
+            .onFailure { logger.warn("FCM 푸시 실패, 알림 이력만 남는다: memberId={}", memberId, it) }
     }
 
-    @Transactional
-    fun markAsRead(memberId: Long, notificationId: Long) {
-        val updated = notificationRepository.markAsRead(memberId, notificationId)
-        if (!updated) {
-            throw LanglezException(404, "notification.not-found")
-        }
+    /**
+     * 그 방을 보고 있으면 아무것도 보내지 않는다. 메시지는 이미 화면에 떴다.
+     * chat 의 발행 폴러가 한 번 거르지만, 발행과 소비 사이에 방에 들어온 사람은 걸러지지 않아 여기서 다시 본다.
+     */
+    fun onChatMessage(event: ChatMessageSentEvent) {
+        if (event.recipientId in tracker.viewers("$CHAT_ROOM_TOPIC_PREFIX${event.roomId}")) return
+
+        notify(
+            memberId = event.recipientId,
+            type = TYPE_CHAT_MESSAGE,
+            // 발신자 표시명이 이벤트에 없고, 본문 미리보기도 "[IMAGE]" 처럼 클라이언트가 현지화하는 값이다.
+            // 제목도 같은 방식으로 메시지 키를 넘겨 클라이언트가 사용자 언어로 그린다.
+            title = TITLE_CHAT_MESSAGE,
+            body = event.preview,
+            data = mapOf(
+                "roomId" to event.roomId.toString(),
+                "messageId" to event.messageId,
+                "senderId" to event.senderId.toString(),
+            ),
+        )
     }
 
-    @Transactional
-    fun markAllAsRead(memberId: Long): Int {
-        return notificationRepository.markAllAsRead(memberId)
+    fun list(memberId: Long, size: Int, cursor: Long?): List<Notification> = repo.findAll(memberId, size, cursor)
+
+    fun markRead(memberId: Long, id: Long) {
+        val notification = repo.find(id) ?: throw LanglezException(NOT_FOUND, "notification.not-found")
+        // id 만 알면 남의 알림도 읽음 처리할 수 있다. 소유자를 반드시 확인한다.
+        if (notification.recipientId != memberId) throw LanglezException(FORBIDDEN, "notification.forbidden")
+
+        repo.save(notification.apply { read = true })
     }
 
     companion object {
-        private const val MAX_PAGE_SIZE = 100
+        const val TYPE_CHAT_MESSAGE = "CHAT_MESSAGE"
+        const val TITLE_CHAT_MESSAGE = "notification.chat-message.title"
+
+        private const val NOTIFICATION_TOPIC_PREFIX = "/topic/notification/"
+        private const val CHAT_ROOM_TOPIC_PREFIX = "/topic/chat/room/"
     }
+}
+
+/** 인앱 알림으로 밀어주는 실시간 페이로드. */
+data class NotificationView(
+    val id: Long,
+    val type: String,
+    val title: String,
+    val body: String,
+    val data: Map<String, String>,
+    val createdAt: Instant,
+) {
+    constructor(notification: Notification, data: Map<String, String>) : this(
+        id = notification.id,
+        type = notification.type,
+        title = notification.title,
+        body = notification.body,
+        data = data,
+        createdAt = notification.createdAt,
+    )
 }

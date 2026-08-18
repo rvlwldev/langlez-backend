@@ -1,67 +1,90 @@
 package com.langlez.relationship.api
 
+import com.langlez.annotation.MemberId
+import com.langlez.relationship.api.request.RelationshipReportRequest
+import com.langlez.relationship.api.response.RelationshipMemberResponse
 import com.langlez.relationship.application.RelationshipService
-import com.langlez.security.web.MemberID
-import org.springframework.http.HttpStatus
-import org.springframework.web.bind.annotation.*
+import com.langlez.relationship.domain.Report
+import jakarta.validation.Valid
+import org.springframework.http.HttpStatus.NO_CONTENT
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/v1/relationship")
-class RelationshipController(
-    private val service: RelationshipService,
-) {
+@RequestMapping("/api/v1/relationships")
+class RelationshipController(private val service: RelationshipService) : RelationshipAPI {
 
-    @PostMapping("/follow/@{followingUsername}")
-    @ResponseStatus(HttpStatus.CREATED)
-    fun follow(@MemberID followerId: Long, @PathVariable followingUsername: String) {
-        val followingId = resolveUsername(followingUsername)
-        service.follow(followerId, followingId)
+    @PostMapping("/follows/{targetId}")
+    @ResponseStatus(NO_CONTENT)
+    override fun follow(@MemberId memberId: Long, @PathVariable targetId: Long) {
+        service.follow(memberId, targetId)
     }
 
-    @DeleteMapping("/follow/@{followingUsername}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun unfollow(@MemberID followerId: Long, @PathVariable followingUsername: String) {
-        val followingId = resolveUsername(followingUsername)
-        service.unfollow(followerId, followingId)
+    @DeleteMapping("/follows/{targetId}")
+    @ResponseStatus(NO_CONTENT)
+    override fun unfollow(@MemberId memberId: Long, @PathVariable targetId: Long) {
+        service.unfollow(memberId, targetId)
     }
 
-    @PostMapping("/block/@{blockedUsername}")
-    @ResponseStatus(HttpStatus.CREATED)
-    fun block(@MemberID blockerId: Long, @PathVariable blockedUsername: String) {
-        val blockedId = resolveUsername(blockedUsername)
-        service.block(blockerId, blockedId)
-    }
-
-    @DeleteMapping("/block/@{blockedUsername}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun unblock(@MemberID blockerId: Long, @PathVariable blockedUsername: String) {
-        val blockedId = resolveUsername(blockedUsername)
-        service.unblock(blockerId, blockedId)
-    }
-
-    @GetMapping("/followings")
-    fun getFollowings(
-        @MemberID followerId: Long,
+    @GetMapping("/me/followers")
+    override fun listFollowers(
+        @MemberId memberId: Long,
+        @RequestParam(defaultValue = "$DEFAULT_SIZE") size: Int,
         @RequestParam(required = false) cursor: Long?,
-        @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList =
-        RelationshipResponse.CursorList.from(service.getFollowings(followerId, cursor, size))
+    ): List<RelationshipMemberResponse> =
+        service.listFollowers(memberId, size.coerceIn(1, MAX_SIZE), cursor).map(::RelationshipMemberResponse)
 
-    @GetMapping("/followers")
-    fun getFollowers(
-        @MemberID followedId: Long,
+    @GetMapping("/me/followings")
+    override fun listFollowings(
+        @MemberId memberId: Long,
+        @RequestParam(defaultValue = "$DEFAULT_SIZE") size: Int,
         @RequestParam(required = false) cursor: Long?,
-        @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList =
-        RelationshipResponse.CursorList.from(service.getFollowers(followedId, cursor, size))
+    ): List<RelationshipMemberResponse> =
+        service.listFollowings(memberId, size.coerceIn(1, MAX_SIZE), cursor).map(::RelationshipMemberResponse)
 
-    @GetMapping("/blocks")
-    fun getBlocks(
-        @MemberID blockerId: Long,
+    @PostMapping("/blocks/{targetId}")
+    @ResponseStatus(NO_CONTENT)
+    override fun block(@MemberId memberId: Long, @PathVariable targetId: Long) {
+        service.block(memberId, targetId)
+    }
+
+    @DeleteMapping("/blocks/{targetId}")
+    @ResponseStatus(NO_CONTENT)
+    override fun unblock(@MemberId memberId: Long, @PathVariable targetId: Long) {
+        service.unblock(memberId, targetId)
+    }
+
+    @GetMapping("/me/blocks")
+    override fun listBlocks(
+        @MemberId memberId: Long,
+        @RequestParam(defaultValue = "$DEFAULT_SIZE") size: Int,
         @RequestParam(required = false) cursor: Long?,
-        @RequestParam(defaultValue = "20") size: Int
-    ): RelationshipResponse.CursorList =
-        RelationshipResponse.CursorList.from(service.getBlocks(blockerId, cursor, size))
+    ): List<RelationshipMemberResponse> =
+        service.listBlocks(memberId, size.coerceIn(1, MAX_SIZE), cursor).map(::RelationshipMemberResponse)
 
-    private fun resolveUsername(username: String): Long = service.resolveUsername(username)
+    @PostMapping("/reports")
+    @ResponseStatus(NO_CONTENT)
+    override fun report(@MemberId memberId: Long, @RequestBody @Valid request: RelationshipReportRequest) {
+        service.report(
+            reporterId = memberId,
+            reportedUserId = request.authorId,
+            sourceType = Report.SourceType.ECHO_POST,
+            sourceId = request.postId.toString(),
+            reason = request.reason,
+        )
+    }
+
+    companion object {
+        private const val DEFAULT_SIZE = 20
+
+        // 상한이 없으면 size=1000000 한 방으로 팔로우 그래프를 통째로 긁어갈 수 있다.
+        private const val MAX_SIZE = 50
+    }
 }

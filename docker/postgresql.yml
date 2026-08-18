@@ -1,0 +1,28 @@
+name: langlez
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  postgresql:
+    image: postgres:16
+    container_name: langlez-postgresql
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: langlez_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      # 데이터 디렉터리를 하위 경로로 잡는다. 마운트 지점 바로 위에 initdb 를 돌리면
+      # 볼륨에 남은 항목(lost+found 등) 때문에 "directory not empty" 로 실패한다.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./volume/postgresql:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin -d langlez_db" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - langlez-net

@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
+    api(project(":core")) // Cache/CacheProvider 를 공개 시그니처로 노출한다
 
     implementation(libs.dependency.aspectj)
     implementation(libs.dependency.caffeine)
@@ -14,7 +15,8 @@ dependencies {
     runtimeOnly(libs.dependency.aspectj.runtime)
 
     api(libs.dependency.springboot.redis)
-    api(libs.dependency.springboot.cache)
+    // 브로드캐스터가 SimpMessagingTemplate 을 공개 생성자로 받는다
+    api(libs.dependency.springboot.websocket)
 
     testImplementation(libs.test.testcontainers)
     testImplementation(libs.test.kotest.spring)

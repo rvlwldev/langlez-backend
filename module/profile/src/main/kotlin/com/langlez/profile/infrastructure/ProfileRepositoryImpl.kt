@@ -8,8 +8,6 @@ import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
 import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import org.redisson.api.RedissonClient
-import org.springframework.cache.annotation.CacheEvict
-import org.springframework.cache.annotation.Cacheable
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
@@ -23,13 +21,18 @@ class ProfileRepositoryImpl(
 
     override fun saveImage(image: ProfileImage): ProfileImage = imageJpa.save(image)
 
-    override fun findRepresentImage(id: Long): ProfileImage? = imageJpa.findByIdAndRepresentTrue(id)
+    override fun findRepresentImage(id: Long): ProfileImage? = imageJpa.findByIdAndRepresentTrueAndDeletedAtIsNull(id)
 
-    override fun findImageByUrl(memberId: Long, url: String): ProfileImage? = imageJpa.findByIdAndUrl(memberId, url)
+    override fun findImageByUrl(memberId: Long, url: String): ProfileImage? = imageJpa.findByIdAndUrlAndDeletedAtIsNull(memberId, url)
 
-    override fun countImages(id: Long): Long = imageJpa.countById(id)
+    override fun countImages(id: Long): Long = imageJpa.countByIdAndDeletedAtIsNull(id)
 
-    @Cacheable(cacheNames = ["profile"], key = "#id")
+    /**
+     * 캐시하지 않는다. Profile 은 LAZY 로 Member 를 물고 있어서,
+     * 캐시에서 꺼내면 (1) detached 라 `profile.member` 변경이 merge 로 전파되지 않고
+     * (2) 초기화 안 된 프록시가 직렬화되며 (3) 오래된 visitCount/@Version 을 되쓴다.
+     * PK 조회라 캐시 이득도 작다.
+     */
     override fun findProfile(id: Long): Profile? = profileJpa.findByIdOrNull(id)
 
     override fun findProfiles(ids: List<Long>): List<Profile> {
@@ -40,12 +43,11 @@ class ProfileRepositoryImpl(
     override fun findProfileByUsername(username: String): Profile? =
         dsl.selectFrom(profile)
             .innerJoin(profile.member).fetchJoin()
-            .where(profile.member.username.eq(username))
+            .where(profile.member.handle.eq(username))
             .fetchOne()
 
     override fun findAllProfiles(): List<Profile> = profileJpa.findAll()
 
-    @CacheEvict(cacheNames = ["profile"], key = "#profile.id")
     override fun saveProfile(profile: Profile): Profile = profileJpa.save(profile)
 
     override fun increaseVisitCount(visitorId: Long, username: String) {
@@ -99,9 +101,17 @@ class ProfileRepositoryImpl(
     }
 
     override fun incrementVisitCountInDb(username: String, delta: Long) {
+        // 벌크 UPDATE 에 암시적 조인(profile.member.handle)을 쓰면 JPQL 상 불법이다.
+        // 서브쿼리로 대상 id 를 먼저 뽑는다.
+        val targetId = dsl.select(profile.id)
+            .from(profile)
+            .innerJoin(profile.member)
+            .where(profile.member.handle.eq(username))
+            .fetchOne() ?: return
+
         dsl.update(profile)
             .set(profile.visitCount, profile.visitCount.add(delta))
-            .where(profile.member.username.eq(username))
+            .where(profile.id.eq(targetId))
             .execute()
     }
 

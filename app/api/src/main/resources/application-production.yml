@@ -10,27 +10,45 @@ server:
     keep-alive-timeout: 60s
 
 spring:
+  threads:
+    virtual:
+      enabled: true
+
+  mvc:
+    throw-exception-if-no-handler-found: true
+
+  web:
+    resources:
+      add-mappings: false
+
   # Data Sources - TODO: Fill in production values or use environment variables
   datasource:
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/langlez_db}
-    username: ${MYSQL_USERNAME:admin}
-    password: ${MYSQL_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # TODO: reWriteBatchedInserts=true 파라미터 포함 여부 확인
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USERNAME}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
   
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb://localhost:27017/langlez_db}
+      uri: ${MONGO_URI}
     redis:
-      sentinel:
-        master: ${REDIS_MASTER:mymaster}
-        nodes: ${REDIS_SENTINEL_NODES:localhost:26380,localhost:26381,localhost:26382}
-      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
 
   jpa:
     hibernate:
-      ddl-auto: none
+      # none 이면 스키마가 어긋나도 런타임에야 터진다. validate 로 기동 시점에 잡는다.
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+        order_updates: true
+        order_inserts: true
 
   # Security & OAuth2
   security:
@@ -46,8 +64,8 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET_KEY}
-  access-token-ttl-secs: 3600
-  refresh-token-ttl-secs: 1209600
+  access-token-ttl-secs: 3600 # 1시간
+  refresh-token-ttl-secs: 1209600 #2주
 
 app:
   oauth2:
@@ -56,7 +74,15 @@ app:
     redirect-uri: ${OAUTH2_REDIRECT_URI}
   cors:
     # TODO: 프로덕션 프론트엔드 허용 오리진 리스트 설정 (예: CORS_ALLOWED_ORIGINS 또는 명시적 도메인)
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.langlez.com}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+# TODO : S3나 CloudFlare 설정 추가
+storage:
+  bucket: langlez
+  region: ${STORAGE_REGION}
+  base-url: ${STORAGE_BASE_URL}
+  access-key: ${STORAGE_ACCESS_KEY_ID}
+  secret-key: ${STORAGE_SECRET_ACCESS_KEY}
 
 logging:
   level:
@@ -84,11 +110,11 @@ management:
       probability: ${TRACING_SAMPLING:0.1}   # 운영: 10% 샘플링
   zipkin:
     tracing:
-      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+      endpoint: ${ZIPKIN_ENDPOINT}
 
 # 슬로우 쿼리 추적 임계값 (운영: 느린 쿼리만)
 logger:
-  mysql:
+  rdb:
     log-threshold-ms: 200
     warn-threshold-ms: 1000
   mongo:

@@ -1,287 +1,188 @@
 package com.langlez.relationship.application
 
-import com.langlez.core.LanglezException
+import com.langlez.core.BlockQuery
+import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
-import com.langlez.relationship.infrastructure.outbox.RelationshipOutBoxRepository
 import com.langlez.relationship.domain.RelationshipRepository
-import io.kotest.assertions.throwables.shouldNotThrowAny
+import com.langlez.relationship.domain.Report
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
-import io.mockk.*
+import io.mockk.clearMocks
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import org.springframework.context.ApplicationEventPublisher
 
 class RelationshipServiceTest : BehaviorSpec({
 
-    val repo = mockk<RelationshipRepository>()
-    val memberRepo = mockk<MemberRepository>()
-    val outbox = mockk<RelationshipOutBoxRepository>(relaxed = true)
-    val writer = mockk<RelationshipWriter>()
+    val repo = mockk<RelationshipRepository>(relaxed = true)
+    val members = mockk<MemberRepository>()
+    val blocks = mockk<BlockQuery>()
+    val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
-    val service = RelationshipService(repo, memberRepo, outbox, writer)
+    val service = RelationshipService(repo, members, blocks, publisher)
 
-    afterEach { clearMocks(repo, memberRepo, outbox, writer, answers = false) }
+    afterEach { clearMocks(repo, members, blocks, publisher, answers = false) }
 
-    fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
+    fun member(id: Long) = Member(
         id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = nickname,
+        email = "user$id@test.com",
+        handle = "user$id",
         provider = Member.Provider.GOOGLE,
         providerId = "p$id",
-        providerDisplayName = nickname
     )
 
     Given("팔로우 요청 시") {
-        val followerId = 1L
-        val followingId = 2L
-
-        When("정상적으로 팔로우하면") {
-            every { repo.findBlock(followingId, followerId) } returns null
-            every { repo.findBlock(followerId, followingId) } returns null
-            every { repo.findFollow(followerId, followingId) } returns null
-            every { writer.saveFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
-            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
-
-            Then("팔로우가 저장되고 이벤트가 발행된다") {
-                service.follow(followerId, followingId)
-                verify { writer.saveFollow(followerId, followingId) }
-                verify {
-                    outbox.save(
-                        "RELATIONSHIP", "10", "MEMBER_FOLLOW",
-                        match<RelationshipEvent.Follow> { it.followerId == followerId && it.followingId == followingId }
-                    )
-                }
-            }
-        }
-
-        When("이미 팔로우한 상태이면") {
-            every { repo.findBlock(followingId, followerId) } returns null
-            every { repo.findBlock(followerId, followingId) } returns null
-            every { repo.findFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
-
-            Then("아무 동작 없이 정상 반환한다 (멱등성)") {
-                shouldNotThrowAny { service.follow(followerId, followingId) }
-                verify(exactly = 0) { writer.saveFollow(any(), any()) }
-            }
-        }
 
         When("자기 자신을 팔로우하면") {
-            Then("BAD_REQUEST 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.follow(1L, 1L)
-                }
-                ex.status shouldBe 400
+            Then("400 이 난다") {
+                every { members.find(1L) } returns member(1L)
+                every { blocks.isBlockedBetween(any(), any()) } returns false
+                every { repo.findFollow(any(), any()) } returns null
+
+                val ex = shouldThrow<LanglezException> { service.follow(1L, 1L) }
+                ex.status.value() shouldBe 400
                 ex.message shouldBe "social.follow.self"
             }
         }
 
-        When("상대방이 나를 차단한 상태이면") {
-            every { repo.findBlock(followingId, followerId) } returns Block(id = 5, blockerId = followingId, blockedId = followerId)
+        When("차단 관계인 상대를 팔로우하면") {
+            Then("403 이 나고 저장하지 않는다") {
+                every { members.find(2L) } returns member(2L)
+                every { blocks.isBlockedBetween(1L, 2L) } returns true
 
-            Then("FORBIDDEN 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.follow(followerId, followingId)
-                }
-                ex.status shouldBe 403
+                val ex = shouldThrow<LanglezException> { service.follow(1L, 2L) }
+                ex.status.value() shouldBe 403
+
+                verify(exactly = 0) { repo.save(any<Follow>()) }
             }
         }
 
-        When("내가 상대방을 차단한 상태이면") {
-            every { repo.findBlock(followingId, followerId) } returns null
-            every { repo.findBlock(followerId, followingId) } returns Block(id = 6, blockerId = followerId, blockedId = followingId)
+        When("없는 회원을 팔로우하면") {
+            Then("404 가 난다") {
+                every { members.find(99L) } returns null
 
-            Then("FORBIDDEN 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.follow(followerId, followingId)
-                }
-                ex.status shouldBe 403
-            }
-        }
-    }
-
-    Given("언팔로우 요청 시") {
-        val followerId = 1L
-        val followingId = 2L
-
-        When("팔로우 관계가 존재하면") {
-            every { repo.findFollow(followerId, followingId) } returns Follow(id = 10, followerId = followerId, followedId = followingId)
-            every { repo.deleteFollow(followerId, followingId) } just runs
-            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
-
-            Then("팔로우가 삭제되고 이벤트가 발행된다") {
-                service.unfollow(followerId, followingId)
-                verify { repo.deleteFollow(followerId, followingId) }
-                verify {
-                    outbox.save(
-                        "RELATIONSHIP", "10", "MEMBER_UNFOLLOW",
-                        match<RelationshipEvent.Unfollow> { it.followerId == followerId && it.followingId == followingId }
-                    )
-                }
+                shouldThrow<LanglezException> { service.follow(1L, 99L) }.status.value() shouldBe 404
             }
         }
 
-        When("팔로우 관계가 없으면") {
-            every { repo.findFollow(followerId, followingId) } returns null
+        When("이미 팔로우 중인 상대를 다시 팔로우하면") {
+            Then("중복 저장도 중복 이벤트도 없다") {
+                every { members.find(2L) } returns member(2L)
+                every { blocks.isBlockedBetween(1L, 2L) } returns false
+                every { repo.findFollow(1L, 2L) } returns Follow(1L, 2L)
 
-            Then("아무 동작 없이 정상 반환한다") {
-                shouldNotThrowAny { service.unfollow(followerId, followingId) }
-                verify(exactly = 0) { repo.deleteFollow(any(), any()) }
+                service.follow(1L, 2L)
+
+                verify(exactly = 0) { repo.save(any<Follow>()) }
+                verify(exactly = 0) { publisher.publishEvent(any<Any>()) }
+            }
+        }
+
+        When("정상 팔로우하면") {
+            Then("저장하고 팔로우 이벤트를 발행한다") {
+                every { members.find(2L) } returns member(2L)
+                every { blocks.isBlockedBetween(1L, 2L) } returns false
+                every { repo.findFollow(1L, 2L) } returns null
+
+                service.follow(1L, 2L)
+
+                verify(exactly = 1) { repo.save(any<Follow>()) }
+                verify(exactly = 1) { publisher.publishEvent(MemberFollowedEvent(1L, 2L)) }
             }
         }
     }
 
     Given("차단 요청 시") {
-        val blockerId = 1L
-        val blockedId = 2L
-
-        When("정상적으로 차단하면") {
-            every { repo.findBlock(blockerId, blockedId) } returns null
-            every { writer.saveBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
-            every { repo.deleteFollow(blockerId, blockedId) } just runs
-            every { repo.deleteFollow(blockedId, blockerId) } just runs
-            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
-
-            Then("차단 저장, 양방향 팔로우 삭제, 이벤트 발행이 모두 수행된다") {
-                service.block(blockerId, blockedId)
-                verify { writer.saveBlock(blockerId, blockedId) }
-                verify { repo.deleteFollow(blockerId, blockedId) }
-                verify { repo.deleteFollow(blockedId, blockerId) }
-                verify {
-                    outbox.save(
-                        "RELATIONSHIP", "20", "MEMBER_BLOCK",
-                        match<RelationshipEvent.Block> { it.blockerId == blockerId && it.blockedId == blockedId }
-                    )
-                }
-            }
-        }
 
         When("자기 자신을 차단하면") {
-            Then("BAD_REQUEST 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.block(1L, 1L)
-                }
-                ex.status shouldBe 400
+            Then("400 이 난다") {
+                every { members.find(1L) } returns member(1L)
+                every { repo.findBlock(1L, 1L) } returns null
+
+                val ex = shouldThrow<LanglezException> { service.block(1L, 1L) }
+                ex.status.value() shouldBe 400
                 ex.message shouldBe "social.block.self"
             }
         }
 
-        When("이미 차단한 상태이면") {
-            every { repo.findBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
+        When("남을 차단하면") {
+            Then("차단을 저장하고 팔로우 관계를 양방향으로 끊는다") {
+                every { members.find(2L) } returns member(2L)
+                every { repo.findBlock(1L, 2L) } returns null
 
-            Then("아무 동작 없이 정상 반환한다 (멱등성)") {
-                shouldNotThrowAny { service.block(blockerId, blockedId) }
-                verify(exactly = 0) { writer.saveBlock(any(), any()) }
+                service.block(1L, 2L)
+
+                verify(exactly = 1) { repo.save(any<Block>()) }
+                verify(exactly = 1) { repo.deleteFollow(1L, 2L) }
+                verify(exactly = 1) { repo.deleteFollow(2L, 1L) }
+            }
+        }
+
+        When("이미 차단한 상대를 다시 차단하면") {
+            Then("중복 저장 없이 팔로우 해제만 다시 보장한다") {
+                every { members.find(2L) } returns member(2L)
+                every { repo.findBlock(1L, 2L) } returns Block(1L, 2L)
+
+                service.block(1L, 2L)
+
+                verify(exactly = 0) { repo.save(any<Block>()) }
+                verify(exactly = 1) { repo.deleteFollow(1L, 2L) }
+                verify(exactly = 1) { repo.deleteFollow(2L, 1L) }
             }
         }
     }
 
-    Given("차단 해제 요청 시") {
-        val blockerId = 1L
-        val blockedId = 2L
+    Given("신고 접수 시") {
 
-        When("차단 관계가 존재하면") {
-            every { repo.findBlock(blockerId, blockedId) } returns Block(id = 20, blockerId = blockerId, blockedId = blockedId)
-            every { repo.deleteBlock(blockerId, blockedId) } just runs
-            every { outbox.save(any(), any(), any(), any()) } returns mockk(relaxed = true)
+        When("같은 신고가 이미 있으면") {
+            Then("저장하지 않는다 (카프카 재전달 대비 멱등)") {
+                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "10", "m7") } returns true
 
-            Then("차단이 삭제되고 이벤트가 발행된다") {
-                service.unblock(blockerId, blockedId)
-                verify { repo.deleteBlock(blockerId, blockedId) }
-                verify {
-                    outbox.save(
-                        "RELATIONSHIP", "20", "MEMBER_UNBLOCK",
-                        match<RelationshipEvent.Unblock> { it.blockerId == blockerId && it.blockedId == blockedId }
-                    )
-                }
+                service.report(1L, 2L, Report.SourceType.CHAT_USER, "10", "욕설", "m7")
+
+                verify(exactly = 0) { repo.save(any<Report>()) }
             }
         }
 
-        When("차단 관계가 없으면") {
-            every { repo.findBlock(blockerId, blockedId) } returns null
+        When("처음 들어온 신고면") {
+            Then("Report 로 저장한다") {
+                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "10", "m7") } returns false
 
-            Then("아무 동작 없이 정상 반환한다") {
-                shouldNotThrowAny { service.unblock(blockerId, blockedId) }
-                verify(exactly = 0) { repo.deleteBlock(any(), any()) }
-            }
-        }
-    }
+                val saved = slot<Report>()
+                every { repo.save(capture(saved)) } answers { firstArg() }
 
-    Given("팔로잉 목록 조회 시") {
-        val followerId = 1L
+                service.report(1L, 2L, Report.SourceType.CHAT_USER, "10", "욕설", "m7")
 
-        When("팔로잉이 존재하면") {
-            val follows = listOf(
-                Follow(id = 30, followerId = followerId, followedId = 2L),
-                Follow(id = 20, followerId = followerId, followedId = 3L),
-                Follow(id = 10, followerId = followerId, followedId = 4L),
-            )
-            val members = listOf(createMember(2L), createMember(3L), createMember(4L))
-
-            every { repo.findFollowings(followerId, null, 20) } returns follows
-            every { memberRepo.findByIds(listOf(2L, 3L, 4L)) } returns members
-
-            Then("username/nickname 기반 목록이 반환된다") {
-                val result = service.getFollowings(followerId, null, 20)
-                result.members shouldHaveSize 3
-                result.members[0].username shouldBe "user2"
-                result.members[1].username shouldBe "user3"
-            }
-        }
-
-        When("결과 수가 size와 같으면") {
-            val follows = listOf(
-                Follow(id = 30, followerId = followerId, followedId = 5L),
-                Follow(id = 20, followerId = followerId, followedId = 4L),
-                Follow(id = 10, followerId = followerId, followedId = 3L),
-            )
-            val members = follows.map { createMember(it.followedId) }
-
-            every { repo.findFollowings(followerId, null, 3) } returns follows
-            every { memberRepo.findByIds(listOf(5L, 4L, 3L)) } returns members
-
-            Then("nextCursor는 마지막 Follow 엔티티의 ID이다") {
-                val result = service.getFollowings(followerId, null, 3)
-                result.nextCursor shouldBe 10L
-            }
-        }
-
-        When("결과 수가 size보다 적으면") {
-            val follows = listOf(
-                Follow(id = 20, followerId = followerId, followedId = 5L),
-            )
-            val members = listOf(createMember(5L))
-
-            every { repo.findFollowings(followerId, null, 20) } returns follows
-            every { memberRepo.findByIds(listOf(5L)) } returns members
-
-            Then("nextCursor는 null이다") {
-                val result = service.getFollowings(followerId, null, 20)
-                result.nextCursor shouldBe null
+                saved.captured.reporterId shouldBe 1L
+                saved.captured.reportedUserId shouldBe 2L
+                saved.captured.sourceId shouldBe "10"
+                saved.captured.triggerMessageId shouldBe "m7"
             }
         }
     }
 
-    Given("차단 목록 조회 시") {
-        val blockerId = 1L
+    Given("팔로워 목록 조회 시") {
 
-        When("차단한 사용자가 존재하면") {
-            val blocks = listOf(
-                Block(id = 50, blockerId = blockerId, blockedId = 10L),
-                Block(id = 40, blockerId = blockerId, blockedId = 11L),
-            )
-            val members = listOf(createMember(10L), createMember(11L))
+        When("탈퇴해서 사라진 회원이 섞여 있으면") {
+            Then("그 항목은 빠지고 커서는 팔로우 행 id 로 내려간다") {
+                every { repo.findFollowers(1L, 20, null) } returns listOf(
+                    RelationshipRepository.Edge(id = 30L, memberId = 2L),
+                    RelationshipRepository.Edge(id = 29L, memberId = 3L),
+                )
+                every { members.findAll(listOf(2L, 3L)) } returns listOf(member(2L))
 
-            every { repo.findBlocks(blockerId, null, 20) } returns blocks
-            every { memberRepo.findByIds(listOf(10L, 11L)) } returns members
+                val views = service.listFollowers(1L, 20, null)
 
-            Then("차단 목록이 반환된다") {
-                val result = service.getBlocks(blockerId, null, 20)
-                result.members shouldHaveSize 2
-                result.members[0].username shouldBe "user10"
+                views shouldHaveSize 1
+                views[0].memberId shouldBe 2L
+                views[0].cursor shouldBe 30L
             }
         }
     }

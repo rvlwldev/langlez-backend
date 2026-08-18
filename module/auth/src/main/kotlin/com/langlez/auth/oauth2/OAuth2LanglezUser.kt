@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User
 
 class OAuth2LanglezUser(
     val id: Long,
+    val handle: String,
     val role: String,
     private val attributes: Map<String, Any>,
     private val nameAttributeKey: String

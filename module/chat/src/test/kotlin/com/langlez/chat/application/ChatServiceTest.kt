@@ -1,431 +1,336 @@
 package com.langlez.chat.application
 
-import com.langlez.chat.api.ChatResponse
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
+import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
-import com.langlez.chat.domain.ChatRoomRepository
-import com.langlez.chat.infrastructure.outbox.ChatOutBoxRepository
-import com.langlez.core.FileStorage
-import com.langlez.core.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.chat.domain.ChatRoomMember
+import com.langlez.chat.domain.ChatRoomSummary
+import com.langlez.core.BlockQuery
+import com.langlez.core.MessageBroadcaster
+import com.langlez.core.Storage
+import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
-import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
-import io.mockk.*
+import io.mockk.clearMocks
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import io.mockk.verifyOrder
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 
 class ChatServiceTest : BehaviorSpec({
 
-    val chatRoomRepository = mockk<ChatRoomRepository>()
-    val chatMessageRepository = mockk<ChatMessageRepository>()
-    val memberRepository = mockk<MemberRepository>()
-    val fileStorage = mockk<FileStorage>()
-    val chatBroadcaster = mockk<ChatBroadcaster>(relaxed = true)
-    val chatRoomCreator = mockk<ChatRoomCreator>()
-    val chatOutBoxRepository = mockk<ChatOutBoxRepository>(relaxed = true)
+    val repo = mockk<ChatRepository>()
+    val messages = mockk<ChatMessageRepository>()
+    val blocks = mockk<BlockQuery>()
+    val storage = mockk<Storage>()
+    val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
+    val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
-    val service = ChatService(
-        chatRoomRepository,
-        chatMessageRepository,
-        memberRepository,
-        fileStorage,
-        chatBroadcaster,
-        chatRoomCreator,
-        chatOutBoxRepository
+    // send 는 첨부 확정(블로킹 I/O)을 트랜잭션 밖에서 끝내고 저장만 묶는다. 테스트에선 콜백을 그대로 실행한다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = ChatService(repo, messages, blocks, storage, broadcaster, publisher, tx)
+
+    afterEach { clearMocks(repo, messages, blocks, storage, broadcaster, publisher, answers = false) }
+
+    val me = 1L
+    val partner = 2L
+    val roomId = 100L
+
+    fun bothParticipants(left: Boolean = false) = listOf(
+        ChatRoomMember(roomId, me),
+        ChatRoomMember(roomId, partner).apply { if (left) leave(Instant.now()) },
     )
 
-    afterEach {
-        clearMocks(
-            chatRoomRepository,
-            chatMessageRepository,
-            memberRepository,
-            fileStorage,
-            chatBroadcaster,
-            chatRoomCreator,
-            chatOutBoxRepository,
-            answers = false
-        )
-    }
+    Given("방을 열 때") {
 
-    fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
-        id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = nickname,
-        provider = Member.Provider.GOOGLE,
-        providerId = "p$id",
-        providerDisplayName = nickname
-    )
+        When("아직 방이 없으면") {
+            Then("새로 만든다") {
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoomBetween(me, partner) } returns null
+                every { repo.createRoom(me, partner) } returns ChatRoom(id = roomId)
 
-    Given("getOrCreateRoom 호출 시") {
-        val memberId = 1L
-        val targetUsername = "target"
-        val targetMember = createMember(2L, targetUsername)
-
-        When("상대방이 존재하지 않으면") {
-            every { memberRepository.findByUsername(targetUsername) } returns null
-
-            Then("404 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.getOrCreateRoom(memberId, targetUsername)
-                }.status shouldBe 404
-                verify(exactly = 0) { chatRoomCreator.getOrCreateRoom(any(), any(), any()) }
+                service.getOrCreateRoom(me, partner).id shouldBe roomId
+                verify { repo.createRoom(me, partner) }
             }
         }
 
-        When("기존 방이 존재하면") {
-            val existingRoom = ChatRoom(id = "room1", participantIds = listOf(1L, 2L).sorted())
-            every { memberRepository.findByUsername(targetUsername) } returns targetMember
-            every { chatRoomRepository.findByParticipants(1L, 2L) } returns existingRoom
+        When("이미 방이 있으면") {
+            Then("기존 방을 그대로 쓴다 (방이 두 개 생기지 않는다)") {
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoomBetween(me, partner) } returns ChatRoom(id = roomId)
 
-            Then("기존 방을 반환하고 chatRoomCreator를 호출하지 않는다") {
-                val result = service.getOrCreateRoom(memberId, targetUsername)
-                result shouldBe existingRoom
-                verify(exactly = 0) { chatRoomCreator.getOrCreateRoom(any(), any(), any()) }
+                service.getOrCreateRoom(me, partner).id shouldBe roomId
+                verify(exactly = 0) { repo.createRoom(any(), any()) }
             }
         }
 
-        When("기존 방이 존재하지 않으면") {
-            val createdRoom = ChatRoom(id = "room1", participantIds = listOf(1L, 2L).sorted())
-            every { memberRepository.findByUsername(targetUsername) } returns targetMember
-            every { chatRoomRepository.findByParticipants(1L, 2L) } returns null
-            every { chatRoomCreator.getOrCreateRoom(memberId, 2L, 1L) } returns createdRoom
+        When("상대가 나 자신이면") {
+            Then("400 으로 거부한다") {
+                val ex = shouldThrow<LanglezException> { service.getOrCreateRoom(me, me) }
+                ex.status.value() shouldBe 400
+                ex.message shouldBe "chat.self-room"
+            }
+        }
 
-            Then("chatRoomCreator를 통해 방을 생성하고 반환한다") {
-                val result = service.getOrCreateRoom(memberId, targetUsername)
-                result shouldBe createdRoom
-                verify(exactly = 1) { chatRoomCreator.getOrCreateRoom(memberId, 2L, 1L) }
+        When("차단된 상대면") {
+            Then("403 으로 거부한다") {
+                every { blocks.isBlockedBetween(me, partner) } returns true
+
+                val ex = shouldThrow<LanglezException> { service.getOrCreateRoom(me, partner) }
+                ex.status.value() shouldBe 403
+                ex.message shouldBe "chat.blocked"
+                verify(exactly = 0) { repo.createRoom(any(), any()) }
             }
         }
     }
 
-    Given("sendMessage 호출 시") {
-        val memberId = 1L
-        val roomId = "room1"
+    Given("방 목록을 볼 때") {
 
-        When("방이 존재하지 않으면") {
-            every { chatRoomRepository.findById(roomId) } returns null
+        When("내가 나간 방이 섞여 있으면") {
+            Then("나간 방은 목록에서 빠진다") {
+                val stayed = ChatRoomSummary(ChatRoom(id = roomId), partner, 3)
+                val left = ChatRoomSummary(ChatRoom(id = 200L), 3L, 0)
 
-            Then("404 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "hello", null)
-                }.status shouldBe 404
-            }
-        }
+                every { repo.findRoomSummaries(me, 10, null) } returns listOf(stayed, left)
+                every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
+                every { repo.findParticipant(200L, me) } returns
+                    ChatRoomMember(200L, me).apply { leave(Instant.now()) }
 
-        When("호출자가 방의 참여자가 아니면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(2L, 3L))
-            every { chatRoomRepository.findById(roomId) } returns room
-
-            Then("403 예외가 발생한다") {
-                shouldThrow<LanglezException> {
-                    service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "hello", null)
-                }.status shouldBe 403
-            }
-        }
-
-        When("정상적인 전송 요청이면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            val sender = createMember(1L)
-            val savedMsg = ChatMessage(id = "msg1", roomId = roomId, senderId = memberId, type = ChatMessage.Type.TEXT, content = "hello")
-
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { memberRepository.findById(memberId) } returns sender
-            every { chatMessageRepository.save(any()) } returns savedMsg
-            every { chatRoomRepository.updateLastMessageAndReadStatus(roomId, "hello", any(), memberId) } just runs
-
-            Then("메시지를 저장하고 방의 lastMessageAt을 갱신하며 브로드캐스트한다") {
-                val result = service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "hello", null)
-                result shouldBe savedMsg
-                verify { chatMessageRepository.save(any()) }
-                verify { chatRoomRepository.updateLastMessageAndReadStatus(roomId, "hello", any(), memberId) }
-                verify { chatBroadcaster.broadcastMessage(roomId, any()) }
+                service.listRooms(me, 10, null).map { it.room.id } shouldBe listOf(roomId)
             }
         }
     }
 
-    Given("markAsRead 호출 시") {
-        val memberId = 1L
-        val roomId = "room1"
+    Given("메시지를 조회할 때") {
 
-        When("참여자가 읽음 처리하면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            val member = createMember(1L, "user1")
+        When("방 참여자가 아니면") {
+            Then("403 으로 거부한다 (남의 방을 훔쳐보지 못한다)") {
+                every { repo.findParticipant(roomId, 999L) } returns null
 
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { memberRepository.findById(memberId) } returns member
-            every { chatRoomRepository.updateReadStatus(roomId, memberId, any()) } just runs
+                val ex = shouldThrow<LanglezException> { service.listMessages(999L, roomId, 10, null) }
+                ex.status.value() shouldBe 403
+                ex.message shouldBe "chat.room.forbidden"
+            }
+        }
 
-            Then("readStatus를 갱신하고 읽음 이벤트를 브로드캐스트한다") {
-                service.markAsRead(memberId, roomId)
-                verify { chatRoomRepository.updateReadStatus(roomId, memberId, any()) }
-                verify { chatBroadcaster.broadcastRead(roomId, "user1", any()) }
+        When("참여자가 조회하면") {
+            Then("첨부가 임베드돼 있어 추가 조회 없이 URL 이 함께 나온다") {
+                val message = ChatMessage(
+                    roomId, partner, 1L, ChatMessage.Type.IMAGE,
+                    files = listOf(ChatMessage.Attachment("https://cdn/1.jpg", 0)),
+                ).apply { id = "m1" }
+
+                every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
+                every { messages.findByRoom(roomId, 10, null) } returns listOf(message)
+
+                val views = service.listMessages(me, roomId, 10, null)
+                views.single().fileUrls shouldBe listOf("https://cdn/1.jpg")
+                views.single().deleted shouldBe false
+            }
+        }
+
+        When("삭제된 메시지가 섞여 있으면") {
+            Then("내용도 첨부도 내보내지 않는다") {
+                val deleted = ChatMessage(roomId, partner, 1L, ChatMessage.Type.TEXT, "secret")
+                    .apply { id = "m1"; delete(partner) }
+
+                every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
+                every { messages.findByRoom(roomId, 10, null) } returns listOf(deleted)
+
+                val view = service.listMessages(me, roomId, 10, null).single()
+                view.deleted shouldBe true
+                view.content shouldBe null
+                view.fileUrls.shouldBeEmpty()
             }
         }
     }
 
-    Given("unreadCount 조회 시") {
-        val memberId = 1L
-        val roomId = "room1"
+    Given("메시지를 보낼 때") {
 
-        When("읽은 시점 이후의 메시지 개수를 세면") {
-            val room = ChatRoom(
-                id = roomId,
-                participantIds = listOf(1L, 2L),
-                readStatus = mutableMapOf(1L to Instant.now())
-            )
-            val target = createMember(2L, "target")
-            every { chatRoomRepository.findByParticipant(memberId, null, 20) } returns listOf(room)
-            every { memberRepository.findByIds(listOf(1L, 2L)) } returns listOf(createMember(1L), target)
-            every { chatMessageRepository.countUnreadBatch(listOf(room), memberId) } returns mapOf(roomId to 5L)
+        When("방 참여자가 아니면") {
+            Then("403 으로 거부한다") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
 
-            Then("정확한 unreadCount가 포함된 방 목록을 반환한다") {
-                val result = service.getRooms(memberId, null, 20)
-                result.rooms shouldHaveSize 1
-                result.rooms[0].unreadCount shouldBe 5
-            }
-        }
-    }
-
-    Given("deleteMessage 호출 시") {
-        val memberId = 1L
-        val roomId = "room1"
-        val messageId = "msg1"
-
-        When("정상 삭제 요청이면") {
-            val message = ChatMessage(id = messageId, roomId = roomId, senderId = memberId, type = ChatMessage.Type.TEXT, content = "hello")
-            every { chatMessageRepository.findById(messageId) } returns message
-            every { chatMessageRepository.markDeleted(messageId, any()) } just runs
-
-            Then("메시지를 삭제 처리하고 삭제 이벤트를 브로드캐스트한다") {
-                service.deleteMessage(memberId, roomId, messageId)
-                verify { chatMessageRepository.markDeleted(messageId, any()) }
-                verify { chatBroadcaster.broadcastMessageDeleted(roomId, messageId) }
-            }
-        }
-
-        When("본인이 작성하지 않은 메시지를 삭제하려고 하면") {
-            val message = ChatMessage(id = messageId, roomId = roomId, senderId = 2L, type = ChatMessage.Type.TEXT, content = "hello")
-            every { chatMessageRepository.findById(messageId) } returns message
-
-            Then("403 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> {
-                    service.deleteMessage(memberId, roomId, messageId)
+                    service.send(999L, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
                 }
-                ex.status shouldBe 403
-                ex.message shouldBe "chat.not-sender"
+                ex.status.value() shouldBe 403
+                ex.message shouldBe "chat.room.forbidden"
             }
         }
 
-        When("이미 삭제된 메시지를 다시 삭제하려고 하면") {
-            val message = ChatMessage(
-                id = messageId,
-                roomId = roomId,
-                senderId = memberId,
-                type = ChatMessage.Type.TEXT,
-                content = "hello",
-                deletedAt = Instant.now()
-            )
-            every { chatMessageRepository.findById(messageId) } returns message
-
-            Then("409 예외가 발생한다") {
+        When("내용도 첨부도 없으면") {
+            Then("400 으로 거부한다") {
                 val ex = shouldThrow<LanglezException> {
-                    service.deleteMessage(memberId, roomId, messageId)
+                    service.send(me, roomId, ChatMessage.Type.TEXT, "  ", emptyList())
                 }
-                ex.status shouldBe 409
-                ex.message shouldBe "chat.already-deleted"
-            }
-        }
-    }
-
-    Given("getMessages 호출 시") {
-        val memberId = 1L
-        val roomId = "room1"
-
-        When("삭제된 메시지가 포함되어 있으면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            val deletedMsg = ChatMessage(
-                id = "msg1",
-                roomId = roomId,
-                senderId = memberId,
-                type = ChatMessage.Type.TEXT,
-                content = "secret content",
-                fileUrl = "http://example.com/file",
-                deletedAt = Instant.now()
-            )
-            val normalMsg = ChatMessage(
-                id = "msg2",
-                roomId = roomId,
-                senderId = memberId,
-                type = ChatMessage.Type.TEXT,
-                content = "hello",
-                deletedAt = null
-            )
-
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { chatMessageRepository.findByRoom(roomId, null, 20) } returns listOf(deletedMsg, normalMsg)
-            every { chatMessageRepository.findByIds(emptyList()) } returns emptyList()
-            every { memberRepository.findByIds(listOf(memberId)) } returns listOf(createMember(memberId))
-
-            Then("삭제된 메시지도 목록에 포함되지만 content/fileUrl은 null이고 deleted=true이다") {
-                val result = service.getMessages(memberId, roomId, null, 20)
-                result.messages shouldHaveSize 2
-
-                val first = result.messages[0]
-                first.id shouldBe "msg1"
-                first.content shouldBe null
-                first.fileUrl shouldBe null
-                first.deleted shouldBe true
-
-                val second = result.messages[1]
-                second.id shouldBe "msg2"
-                second.content shouldBe "hello"
-                second.deleted shouldBe false
-            }
-        }
-    }
-
-    Given("sendMessage with replyToMessageId 호출 시") {
-        val memberId = 1L
-        val roomId = "room1"
-
-        When("정상적인 답장 전송 요청이면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            val targetMsg = ChatMessage(id = "target1", roomId = roomId, senderId = 2L, type = ChatMessage.Type.TEXT, content = "target content")
-            val savedMsg = ChatMessage(
-                id = "msg2",
-                roomId = roomId,
-                senderId = memberId,
-                type = ChatMessage.Type.TEXT,
-                content = "reply content",
-                replyToMessageId = "target1"
-            )
-
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { memberRepository.findById(memberId) } returns createMember(memberId, "user1")
-            every { chatMessageRepository.findById("target1") } returns targetMsg
-            every { chatMessageRepository.save(any()) } returns savedMsg
-            every { chatRoomRepository.updateLastMessageAndReadStatus(roomId, any(), any(), memberId) } just runs
-            every { memberRepository.findById(2L) } returns createMember(2L, "user2")
-
-            Then("replyToMessageId를 저장하고 replyPreview가 채워진 summary를 반환한다") {
-                val result = service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "reply content", null, replyToMessageId = "target1")
-                result shouldBe savedMsg
-
-                val summary = service.toMessageSummary(savedMsg)
-                summary.replyPreview shouldNotBe null
-                summary.replyPreview?.messageId shouldBe "target1"
-                summary.replyPreview?.senderUsername shouldBe "user2"
-                summary.replyPreview?.contentPreview shouldBe "target content"
-                summary.replyPreview?.deleted shouldBe false
+                ex.status.value() shouldBe 400
+                ex.message shouldBe "chat.message.empty"
             }
         }
 
-        When("존재하지 않는 답장 대상이면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { chatMessageRepository.findById("invalid") } returns null
+        When("차단된 상대에게 보내면") {
+            Then("403 으로 거부한다") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns true
 
-            Then("404 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> {
-                    service.sendMessage(memberId, roomId, ChatMessage.Type.TEXT, "reply content", null, replyToMessageId = "invalid")
+                    service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
                 }
-                ex.status shouldBe 404
-                ex.message shouldBe "chat.reply-target-not-found"
+                ex.status.value() shouldBe 403
+                ex.message shouldBe "chat.blocked"
             }
         }
 
-        When("삭제된 메시지에 답장하는 경우") {
-            val targetMsg = ChatMessage(
-                id = "target1",
-                roomId = roomId,
-                senderId = 2L,
-                type = ChatMessage.Type.TEXT,
-                content = "secret target",
-                deletedAt = Instant.now()
-            )
-            val savedMsg = ChatMessage(
-                id = "msg2",
-                roomId = roomId,
-                senderId = memberId,
-                type = ChatMessage.Type.TEXT,
-                content = "reply content",
-                replyToMessageId = "target1"
-            )
+        When("사진을 붙여 보내면") {
+            Then("첨부는 트랜잭션 밖에서 확정되고, 저장 뒤 방 미리보기 갱신·브로드캐스트가 일어난다") {
+                val room = ChatRoom(id = roomId)
 
-            every { chatMessageRepository.findById("target1") } returns targetMsg
-            every { memberRepository.findById(memberId) } returns createMember(memberId, "user1")
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { storage.attach("k1", any()) } returns "https://cdn/k1.jpg"
+                every { repo.findRoom(roomId) } returns room
+                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.increaseUnread(any(), any()) } returns Unit
+                every { messages.nextSeq(roomId) } returns 7L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
 
-            Then("replyPreview의 deleted=true이고 내용이 은닉된다") {
-                val summary = service.toMessageSummary(savedMsg)
-                summary.replyPreview shouldNotBe null
-                summary.replyPreview?.deleted shouldBe true
-                summary.replyPreview?.senderUsername shouldBe "알 수 없음"
-                summary.replyPreview?.contentPreview shouldBe null
-            }
-        }
-    }
+                val view = service.send(me, roomId, ChatMessage.Type.IMAGE, null, listOf("k1"))
 
-    Given("reportUser 호출 시") {
-        val reporterId = 1L
-        val reportedUserId = 2L
-        val roomId = "room1"
-
-        When("정상적인 신고 요청이면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            val lastMsg = ChatMessage(id = "lastMsg1", roomId = roomId, senderId = reportedUserId, type = ChatMessage.Type.TEXT, content = "bad msg")
-
-            every { chatRoomRepository.findById(roomId) } returns room
-            every { chatMessageRepository.findLastMessage(roomId) } returns lastMsg
-            every { chatOutBoxRepository.save(any(), any(), any(), any()) } returns mockk()
-
-            Then("outbox에 CHAT_REPORT 이벤트를 저장한다") {
-                service.reportUser(reporterId, roomId, reportedUserId, "inappropriate content")
+                view.fileUrls shouldBe listOf("https://cdn/k1.jpg")
+                view.seq shouldBe 7L
+                room.lastMessagePreview shouldBe "[IMAGE]"
                 verify {
-                    chatOutBoxRepository.save(
-                        aggregateType = "CHAT_REPORT",
-                        aggregateId = roomId,
-                        eventName = "chat-user-reported",
-                        payload = match {
-                            it is ChatUserReportedEvent &&
-                                    it.roomId == roomId &&
-                                    it.reporterId == reporterId &&
-                                    it.reportedUserId == reportedUserId &&
-                                    it.reason == "inappropriate content" &&
-                                    it.triggerMessageId == "lastMsg1"
+                    messages.save(
+                        match {
+                            it.senderId == me && it.roomId == roomId && it.seq == 7L &&
+                                it.files.map(ChatMessage.Attachment::url) == listOf("https://cdn/k1.jpg")
                         }
                     )
                 }
+                verify { broadcaster.broadcast("/topic/chat/room/$roomId", view) }
+            }
+
+            // 발행 판정은 Task 6 의 폴러가 한다. 전송 시점에 정하면 그 사이 상대의 화면 상태 변화를 못 잡는다.
+            Then("알림 이벤트를 여기서 발행하지 않고 미발행 상태로 남긴다") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.increaseUnread(any(), any()) } returns Unit
+                every { messages.nextSeq(roomId) } returns 1L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
+
+                service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
+
+                verify { messages.save(match { !it.published }) }
+                verify(exactly = 0) { publisher.publishEvent(any()) }
             }
         }
 
-        When("신고 대상이 방 참가자가 아니면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(1L, 2L))
-            every { chatRoomRepository.findById(roomId) } returns room
+        When("전송에 성공하면") {
+            Then("Mongo 저장이 Postgres 갱신보다 먼저 일어난다") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.increaseUnread(any(), any()) } returns Unit
+                every { messages.nextSeq(roomId) } returns 1L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
 
-            Then("400 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.reportUser(reporterId, roomId, 3L, "reason")
+                service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
+
+                // Postgres 가 먼저면 실패했을 때 "목록엔 보이는데 열면 없는 메시지"가 된다.
+                verifyOrder {
+                    messages.save(any())
+                    repo.findRoom(roomId)
+                    repo.increaseUnread(any(), any())
                 }
-                ex.status shouldBe 400
-                ex.message shouldBe "chat.reported-user-not-participant"
+            }
+
+            Then("상대의 안 읽은 수가 1 늘어난다") {
+                val participants = bothParticipants()
+
+                every { repo.findParticipants(roomId) } returns participants
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.increaseUnread(any(), any()) } returns Unit
+                every { messages.nextSeq(roomId) } returns 1L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
+
+                service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
+
+                // 카운터는 DB 에서 더한다(동시 전송 시 유실 방지)
+                verify { repo.increaseUnread(roomId, partner) }
             }
         }
 
-        When("신고자 본인이 방 참가자가 아니면") {
-            val room = ChatRoom(id = roomId, participantIds = listOf(2L, 3L))
-            every { chatRoomRepository.findById(roomId) } returns room
+        When("Postgres 갱신이 실패하면") {
+            Then("메시지는 Mongo 에 남는다 (대사 스케줄러가 복구한다)") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { messages.nextSeq(roomId) } returns 1L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
+                every { repo.findRoom(roomId) } throws IllegalStateException("db down")
 
-            Then("403 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> {
-                    service.reportUser(reporterId, roomId, 2L, "reason")
+                shouldThrow<IllegalStateException> {
+                    service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
                 }
-                ex.status shouldBe 403
-                ex.message shouldBe "chat.room-forbidden"
+
+                verify { messages.save(any()) }
+            }
+        }
+
+        When("상대가 나간 방에 보내면") {
+            Then("상대가 재입장되어 방이 되살아난다") {
+                val participants = bothParticipants(left = true)
+
+                every { repo.findParticipants(roomId) } returns participants
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.increaseUnread(any(), any()) } returns Unit
+                every { messages.nextSeq(roomId) } returns 1L
+                every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
+
+                service.send(me, roomId, ChatMessage.Type.TEXT, "돌아와", emptyList())
+
+                verify { repo.saveParticipant(match { it.memberId == partner && it.leftAt == null }) }
+            }
+        }
+    }
+
+    Given("첨부 업로드 URL 을 발급할 때") {
+
+        When("사진·영상·음성 contentType 이면") {
+            Then("대응하는 Storage.Type 으로 presign 한다") {
+                every { storage.presign(10L, "chat", Storage.Type.VIDEO, "a.mp4") } returns
+                    Storage.PresignedResult("chat/a.mp4", "https://s3/put")
+
+                service.presignUpload(10L, "a.mp4", "video/mp4")
+
+                verify { storage.presign(10L, "chat", Storage.Type.VIDEO, "a.mp4") }
+            }
+        }
+
+        When("그 외 contentType 이면") {
+            Then("400 으로 거부하고 presign 을 부르지 않는다") {
+                // 클라이언트가 준 contentType 을 그대로 믿으면 실행파일도 첨부로 올라간다
+                shouldThrow<LanglezException> {
+                    service.presignUpload(10L, "a.exe", "application/octet-stream")
+                }.status.value() shouldBe 400
+
+                verify(exactly = 0) { storage.presign(any(), any(), any(), any()) }
             }
         }
     }
