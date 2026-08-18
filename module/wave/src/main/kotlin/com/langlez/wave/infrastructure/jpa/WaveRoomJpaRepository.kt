@@ -1,11 +1,11 @@
 package com.langlez.wave.infrastructure.jpa
 
 import com.langlez.wave.domain.WaveRoom
-import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Query
 
 interface WaveRoomJpaRepository : JpaRepository<WaveRoom, Long> {
-    @Query("SELECT r FROM WaveRoom r WHERE r.endedAt IS NULL AND (:cursor IS NULL OR r.id < :cursor) ORDER BY r.id DESC")
-    fun findActive(cursor: Long?, pageable: PageRequest): List<WaveRoom>
+
+    /** 조건이 "진행 중 + 커서" 둘뿐이라 QueryDSL 을 끌어오는 것보다 파생 쿼리가 짧다. */
+    fun findAllByEndedAtIsNullAndIdLessThanOrderByIdDesc(cursor: Long, pageable: Pageable): List<WaveRoom>
 }

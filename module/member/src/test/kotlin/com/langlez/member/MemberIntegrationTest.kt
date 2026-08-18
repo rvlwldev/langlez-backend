@@ -27,7 +27,9 @@ import org.springframework.context.annotation.Primary
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.utility.DockerImageName
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -45,7 +47,7 @@ class MemberIntegrationTestConfig {
         "jwt.access-token-ttl-secs=3600",
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "app.cors.allowed-origins=http://localhost:3000"
     ]
 )
@@ -77,12 +79,20 @@ class MemberIntegrationTest : BehaviorSpec() {
             .withPassword("admin")
             .also { it.start() }
 
+        // 로컬에 레디스가 떠 있기를 기대하면 안 된다. DB 처럼 컨테이너로 띄운다.
+        @JvmField
+        val redis: GenericContainer<*> = GenericContainer(DockerImageName.parse("redis:7-alpine"))
+            .withExposedPorts(6379)
+            .also { it.start() }
+
         @DynamicPropertySource
         @JvmStatic
         fun configureProperties(registry: DynamicPropertyRegistry) {
             registry.add("spring.datasource.url") { postgres.jdbcUrl }
             registry.add("spring.datasource.username") { postgres.username }
             registry.add("spring.datasource.password") { postgres.password }
+            registry.add("spring.data.redis.host") { redis.host }
+            registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
         }
     }
 

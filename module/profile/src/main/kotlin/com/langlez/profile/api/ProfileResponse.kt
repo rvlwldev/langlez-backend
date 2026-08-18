@@ -23,18 +23,18 @@ class ProfileResponse {
             bio = profile.bio,
             goal = profile.goal,
             want = profile.want,
-            gender = profile.gender.name,
+            // 성별/국가/생년월일은 계정(Member) 소유다.
+            gender = profile.member.gender.name,
             mbti = profile.mbti?.name,
-            locale = profile.locale,
-            birthDay = profile.birthDay,
+            locale = profile.member.locale,
+            birthDay = profile.member.birthDay,
             languageLevel = profile.languageLevel?.name,
             interests = interests,
         )
     }
 
     data class Detail(
-        val username: String,
-        val nickname: String,
+        val handle: String,
         val bio: String?,
         val goal: String?,
         val want: String?,
@@ -47,15 +47,14 @@ class ProfileResponse {
         val interests: Set<String> = emptySet(),
     ) {
         constructor(profile: Profile, member: Member, visitCount: Long, interests: Set<String> = emptySet()) : this(
-            username = member.username,
-            nickname = member.nickname,
+            handle = member.handle,
             bio = profile.bio,
             goal = profile.goal,
             want = profile.want,
-            gender = profile.gender.name,
+            gender = member.gender.name,
             mbti = profile.mbti?.name,
-            locale = profile.locale,
-            birthDay = profile.birthDay,
+            locale = member.locale,
+            birthDay = member.birthDay,
             visitCount = visitCount,
             languageLevel = profile.languageLevel?.name,
             interests = interests,

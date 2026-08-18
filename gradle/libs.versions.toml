@@ -29,6 +29,9 @@ dependency-springboot-web = { module = "org.springframework.boot:spring-boot-sta
 dependency-springboot-validation = { module = "org.springframework.boot:spring-boot-starter-validation", version.ref = "spring-boot" }
 dependency-springboot-websocket = { module = "org.springframework.boot:spring-boot-starter-websocket", version.ref = "spring-boot" }
 dependency-springboot-aop = { module = "org.springframework.boot:spring-boot-starter-aop", version.ref = "spring-boot" }
+# 버전은 Spring Boot BOM 이 관리한다
+dependency-flyway-core = { module = "org.flywaydb:flyway-core" }
+dependency-flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
 dependency-springboot-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa", version.ref = "spring-boot" }
 dependency-springboot-jdbc = { module = "org.springframework.boot:spring-boot-starter-data-jdbc", version.ref = "spring-boot" }
 dependency-springboot-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator", version.ref = "spring-boot" }

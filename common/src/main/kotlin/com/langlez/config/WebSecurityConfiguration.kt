@@ -1,6 +1,9 @@
 package com.langlez.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.context.MessageSource
+import org.springframework.context.i18n.LocaleContextHolder
+import java.util.Locale
 import com.langlez.annotation.MemberIdResolver
 import com.langlez.annotation.MemberRoleResolver
 import com.langlez.exception.ExceptionResponse
@@ -27,6 +30,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 @EnableWebSecurity
 class WebSecurityConfiguration(
     private val mapper: ObjectMapper,
+    private val messages: MessageSource,
     private val idResolver: MemberIdResolver,
     private val roleResolver: MemberRoleResolver,
     private val oauth2Service: OAuth2UserService<OAuth2UserRequest, OAuth2User>?,
@@ -43,9 +47,13 @@ class WebSecurityConfiguration(
                 val swagger = arrayOf("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api-docs/**")
                 val oauth2 = arrayOf("/oauth2/**", "/login/oauth2/**")
                 val auth = arrayOf("/api/v1/auth/**")
+                // WebSocket 핸드셰이크는 HTTP 필터에서 막지 않는다.
+                // 브라우저/클라이언트가 핸드셰이크에 Authorization 헤더를 항상 실을 수 있는 게 아니고,
+                // 실제 인증은 STOMP CONNECT 프레임에서 ChatWebSocketConfiguration 이 한다.
+                val websocket = arrayOf("/ws/**")
 
                 customizer
-                    .requestMatchers(*oauth2, *swagger, *auth, *actuator).permitAll()
+                    .requestMatchers(*oauth2, *swagger, *auth, *actuator, *websocket).permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtFilter, AuthorizationFilter::class.java)
@@ -69,11 +77,17 @@ class WebSecurityConfiguration(
         resolvers.add(roleResolver)
     }
 
-    private fun toJSON(res: HttpServletResponse, status: Int, message: String) {
+    /** 여기는 MVC 밖(필터 체인)이라 @ControllerAdvice 가 안 탄다. 메시지 해석을 직접 해야 한다. */
+    private fun toJSON(res: HttpServletResponse, status: Int, key: String) {
         res.status = status
         res.contentType = MediaType.APPLICATION_JSON_VALUE
         res.characterEncoding = "UTF-8"
-        val response = ExceptionResponse(status, message)
-        res.writer.write(mapper.writeValueAsString(response))
+
+        val locale = LocaleContextHolder.getLocale()
+        val message = runCatching { messages.getMessage(key, null, locale) }
+            .recoverCatching { messages.getMessage(key, null, Locale.ENGLISH) }
+            .getOrDefault(key)
+
+        res.writer.write(mapper.writeValueAsString(ExceptionResponse(status, message)))
     }
 }

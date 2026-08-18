@@ -15,6 +15,7 @@ import org.springframework.retry.annotation.Backoff
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Duration
 
 @Service
@@ -25,6 +26,7 @@ class MemberService(
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
     private val suspendRepo: MemberSuspendHistoryRepository,
+    private val tx: TransactionTemplate,
 ) {
 
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
@@ -89,12 +91,23 @@ class MemberService(
     fun presignProfileUrl(id: Long, filename: String) =
         storage.presign(id, "member", Storage.Type.IMAGE, filename)
 
-    // storage.attach()가 S3 HeadObject/파일존재확인 등 블로킹 I/O라 트랜잭션 밖에서 먼저 끝낸다.
-    // repo.save() 자체가 자기 트랜잭션을 가지니 여기서 따로 @Transactional을 걸 필요 없다.
+    /**
+     * 프로필 이미지 확정.
+     *
+     * `storage.attach` 는 S3 확인 등 블로킹 I/O 라 트랜잭션 밖에서 먼저 끝낸다.
+     * 그 뒤 읽기+쓰기만 하나의 트랜잭션으로 묶는다. 예전처럼 조회와 저장이 서로 다른
+     * 트랜잭션이면 그 사이 다른 수정이 끼어들어 @Version 경합(lost update)이 난다.
+     * 반환은 반드시 save 결과여야 한다. merge 이전 detached 인스턴스를 돌려주면
+     * 응답에 실제 저장된 상태가 아닌 값이 실린다.
+     */
     fun updateProfileUrl(id: Long, key: String): Member {
-        val member = findOrThrow(id)
-        member.imageUrl = storage.attach(key, id)
-        return member.also(repo::save)
+        val imageUrl = storage.attach(key, id)
+
+        return tx.execute {
+            findOrThrow(id)
+                .apply { this.imageUrl = imageUrl }
+                .let(repo::save)
+        }!!
     }
 
     @Transactional
@@ -115,6 +128,20 @@ class MemberService(
 
         repo.save(member)
         suspendRepo.save(MemberSuspendHistory(member, reason, days?.let { Duration.ofDays(it) }))
+    }
+
+    /** 어드민 정지 해제. 정지 이력도 해제 처리한다. */
+    @Transactional
+    fun unsuspendMember(id: Long) {
+        val member = findOrThrow(id)
+
+        try {
+            member.unsuspend()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        repo.save(member)
     }
 
     @Transactional

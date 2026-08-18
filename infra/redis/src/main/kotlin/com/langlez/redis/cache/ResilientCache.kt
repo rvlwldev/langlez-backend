@@ -3,6 +3,8 @@ package com.langlez.redis.cache
 import com.langlez.core.cache.Cache
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 class ResilientCache(
     private val name: String,
@@ -27,16 +29,31 @@ class ResilientCache(
             }
 
     override fun put(key: Any, value: Any) =
-        runGuarded({ redis.put(key, value) }, { local.put(key, value) })
+        runGuarded({ redis.put(key, value) }, { afterCommit { local.put(key, value) } })
 
     override fun <T : Any> putMany(entries: Map<out Any, T>) =
-        runGuarded({ redis.putMany(entries) }, { local.putMany(entries) })
+        runGuarded({ redis.putMany(entries) }, { afterCommit { local.putMany(entries) } })
 
     override fun evict(key: Any) =
         runGuarded({ redis.evict(key) }, {}).also { local.evict(key) }
 
     override fun evictMany(keys: Collection<Any>) =
         runGuarded({ redis.evictMany(keys) }, {}).also { local.evictMany(keys) }
+
+    /**
+     * 로컬 폴백 쓰기도 커밋 이후로 미룬다.
+     *
+     * `RedisCache` 는 트랜잭션 중이면 afterCommit 에 쓰기를 미루는데, 폴백 경로가 즉시 쓰면
+     * 롤백된 트랜잭션이 만든 값이 로컬 캐시에 남는다. 레디스가 죽은 동안 그 노드가
+     * DB 에 없는 값을 계속 서빙하게 된다.
+     */
+    private fun afterCommit(write: () -> Unit) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) return write()
+
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() = write()
+        })
+    }
 
     private fun <T> runGuarded(op: () -> T, fallback: () -> T): T =
         if (!isAvailable()) fallback()

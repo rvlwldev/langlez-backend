@@ -13,7 +13,6 @@ dependencies {
 
     implementation(project(":module:member"))
     implementation(project(":module:relationship"))
-    implementation(project(":module:wavechat"))
 
     implementation(libs.dependency.springboot.websocket)
 

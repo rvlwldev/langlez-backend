@@ -1,19 +1,33 @@
 package com.langlez.chat
 
+import com.langlez.core.BlockQuery
+import com.langlez.core.Storage
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.context.annotation.Bean
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 
 @SpringBootApplication(scanBasePackages = ["com.langlez"])
-@EnableJpaRepositories(basePackages = ["com.langlez"])
 @EntityScan(basePackages = ["com.langlez"])
 class TestChatApplication {
 
     @Bean
-    fun clientRegistrationRepository(): ClientRegistrationRepository {
-        return Mockito.mock(ClientRegistrationRepository::class.java)
+    fun clientRegistrationRepository(): ClientRegistrationRepository =
+        Mockito.mock(ClientRegistrationRepository::class.java)
+
+    /** Storage 구현체는 attachment 모듈에 있다. chat 단독 컨텍스트에선 대역을 쓴다. */
+    @Bean
+    fun storage(): Storage = object : Storage {
+        override fun presign(id: Long, source: String, type: Storage.Type, filename: String) =
+            Storage.PresignedResult("$source/$filename", "https://presigned.test/$filename")
+
+        override fun attach(key: String, sourceId: Long?) = "https://cdn.test/$key"
+    }
+
+    /** BlockQuery 구현체는 relationship 모듈에 있다. chat 단독 컨텍스트에선 차단이 없는 것으로 둔다. */
+    @Bean
+    fun blockQuery(): BlockQuery = object : BlockQuery {
+        override fun isBlockedBetween(memberId: Long, otherId: Long) = false
     }
 }

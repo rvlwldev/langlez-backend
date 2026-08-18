@@ -1,14 +1,19 @@
 package com.langlez.kafka.config
 
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.SerializationException
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.annotation.EnableKafka
+import org.springframework.core.task.VirtualThreadTaskExecutor
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
+import org.springframework.kafka.core.ConsumerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
 import org.springframework.kafka.listener.DefaultErrorHandler
+import org.springframework.kafka.listener.RetryListener
 import org.springframework.util.backoff.ExponentialBackOff
 
 /**
@@ -23,6 +28,26 @@ import org.springframework.util.backoff.ExponentialBackOff
 class KafkaConfiguration {
 
     private val logger = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 리스너 컨테이너를 명시 선언한다.
+     *
+     * 오토컨피그 기본값은 컨슈머 스레드 1개라, 파티션을 늘려도 처리량이 안 늘어난다.
+     * 리스너 작업은 대부분 DB/외부 호출 대기라 가상 스레드로 돌린다.
+     * `concurrency` 는 파티션 수를 넘겨도 남는 컨슈머가 놀 뿐이라 3으로 잡는다.
+     */
+    @Bean
+    fun kafkaListenerContainerFactory(
+        consumerFactory: ConsumerFactory<String, String>,
+        errorHandler: DefaultErrorHandler,
+    ): ConcurrentKafkaListenerContainerFactory<String, String> =
+        ConcurrentKafkaListenerContainerFactory<String, String>().apply {
+            this.consumerFactory = consumerFactory
+            setConcurrency(3)
+            setCommonErrorHandler(errorHandler)
+            containerProperties.listenerTaskExecutor =
+                VirtualThreadTaskExecutor("kafka-listener-")
+        }
 
     /**
      * 컨슈머 예외 시 재시도 정책.
@@ -45,18 +70,33 @@ class KafkaConfiguration {
             maxElapsedTime = 300_000 // 5분까지 재시도 후 포기
         }
 
-        val recoverer = DeadLetterPublishingRecoverer(template) { record, _ ->
-            TopicPartition("${record.topic()}.DLT", record.partition())
-        }
+        val recoverer = DeadLetterPublishingRecoverer(template, ::dltDestination)
 
-        return DefaultErrorHandler({ record, e ->
-            logger.error(
-                "Kafka message handling finally failed, routing to DLT: topic={} partition={} offset={} key={}",
-                record.topic(), record.partition(), record.offset(), record.key(), e,
-            )
-            recoverer.accept(record, e)
-        }, backOff).apply {
+        // recoverer 를 람다로 감싸면 안 된다. DefaultErrorHandler 는 ConsumerAwareRecordRecoverer 일 때만
+        // consumer 를 넘겨 파티션 유효성(verifyPartition)을 확인한다. 감싸면 그 가드가 꺼진다.
+        // 로그는 RetryListener 로 남긴다.
+        return DefaultErrorHandler(recoverer, backOff).apply {
             addNotRetryableExceptions(SerializationException::class.java)
+            setRetryListeners(object : RetryListener {
+                override fun failedDelivery(record: ConsumerRecord<*, *>, ex: Exception, deliveryAttempt: Int) = Unit
+
+                override fun recovered(record: ConsumerRecord<*, *>, ex: Exception) {
+                    logger.error(
+                        "Kafka message handling finally failed, routing to DLT: topic={} partition={} offset={} key={}",
+                        record.topic(), record.partition(), record.offset(), record.key(), ex,
+                    )
+                }
+            })
         }
+    }
+
+    companion object {
+        /**
+         * DLT 목적지. 파티션을 -1 로 둬서 프로듀서가 분배하게 한다.
+         * 소스 파티션 번호를 그대로 쓰면 DLT 파티션 수가 더 적을 때(auto-create 시 흔하다)
+         * 발행이 실패하고, 실패한 레코드를 다시 seek 해서 무한 재시도에 빠진다.
+         */
+        fun dltDestination(record: ConsumerRecord<*, *>, @Suppress("UNUSED_PARAMETER") ex: Exception): TopicPartition =
+            TopicPartition("${record.topic()}.DLT", -1)
     }
 }

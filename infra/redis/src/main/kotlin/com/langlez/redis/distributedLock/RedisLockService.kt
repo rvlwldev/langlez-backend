@@ -21,7 +21,11 @@ class RedisLockService(private val redissonClient: RedissonClient) {
      * @param unit 시간 단위
      * @param action 실행할 작업
      * @return 작업 결과
-     * @throws IllegalStateException 락 획득 실패 시 발생
+     * @throws IllegalStateException 락 획득 실패 시 발생 (throwOnFailure = true 일 때)
+     *
+     * 주의: `throwOnFailure = false` 면 락 미획득 시 `null` 을 돌려준다.
+     * 이 값이 non-null 반환 타입의 메서드로 흘러가면 호출부에서 NPE 가 난다.
+     * 반환값을 쓰는 메서드에는 `throwOnFailure = true` 를 쓰거나 반환 타입을 nullable 로 둘 것.
      */
     fun <T> executeWithLock(
         key: String,

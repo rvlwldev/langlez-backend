@@ -4,6 +4,7 @@ import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.auth.oauth2.OAuth2LanglezUser
 import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
+import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.utility.JwtTokenProvider
@@ -23,6 +24,7 @@ class AuthService(
     private val service: MemberService,
     private val redisson: RedissonClient,
     private val tokenBlacklist: TokenBlacklist,
+    private val onlineTracker: MemberOnlineTracker,
     @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTtlSecs: Long,
     @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTtlSecs: Long,
 ) : OAuth2UserService<OAuth2UserRequest, OAuth2User> {
@@ -53,6 +55,13 @@ class AuthService(
             return@run service.createMember(type, id, email, name)
         }
 
+        // 정지/탈퇴 회원이 소셜 로그인으로 되살아나면 안 된다.
+        try {
+            member.requireActive()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.FORBIDDEN, e.message, e)
+        }
+
         return OAuth2LanglezUser(
             member.id,
             member.handle,
@@ -62,21 +71,35 @@ class AuthService(
         )
     }
 
-    fun issueTokens(id: Long, handle: String, role: String): Pair<String, String> {
+    /**
+     * 1인 1기기. 세션은 회원당 하나뿐이라 새 기기에서 로그인하면 이전 기기의
+     * 리프레시 토큰과 기기 바인딩이 함께 덮어써져 이전 세션이 끊긴다.
+     * (이전 기기의 access token 은 남은 TTL 동안만 유효하다.)
+     */
+    fun issueTokens(id: Long, handle: String, role: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
         val refreshToken = jwt.createRefreshToken(id, handle, role)
         val accessToken = jwt.createAccessToken(id, handle, role)
 
         redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, refreshTokenTtl)
+        ctx.deviceId?.let { redisson.getBucket<String>(deviceKey(id)).set(it, refreshTokenTtl) }
+
+        onlineTracker.recordAccess(id, ctx.ip, ctx.deviceId)
 
         return refreshToken to accessToken
     }
 
-    fun refresh(refreshToken: String): Pair<String, String> {
+    fun refresh(refreshToken: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
         val tokenType = jwt.extractTokenType(refreshToken)
         if (tokenType != "refresh") throw LanglezException(401, "auth.invalid-token")
 
         val id = jwt.extractId(refreshToken)
         val member = service.findById(id) ?: throw LanglezException(401, "auth.invalid-token")
+
+        try {
+            member.requireActive()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.FORBIDDEN, e.message, e)
+        }
 
         val bucket = redisson.getBucket<String>(refreshTokenKey(id))
         if (refreshToken != bucket.get()) {
@@ -84,15 +107,27 @@ class AuthService(
             throw LanglezException(401, "auth.token-expired")
         }
 
-        return issueTokens(id, member.handle, member.role.authority)
+        // 1인 1기기: 세션에 묶인 기기와 다르면 다른 기기에서 로그인해 밀려난 것이다.
+        //
+        // ctx.deviceId 가 null 인 경우를 통과시키면 안 된다. 헤더를 빼기만 하면 검증이
+        // 건너뛰어져(fail-open), 탈취한 리프레시 토큰을 아무 기기에서나 쓸 수 있다.
+        // 바인딩이 존재하면 반드시 일치해야 하고, 없으면 이번 기기로 바인딩한다(TOFU).
+        val boundDevice = redisson.getBucket<String>(deviceKey(id)).get()
+        if (boundDevice != null && boundDevice != ctx.deviceId) {
+            throw LanglezException(401, "auth.session-taken-over")
+        }
+
+        return issueTokens(id, member.handle, member.role.authority, ctx)
     }
 
     fun logout(memberId: Long, accessToken: String) {
         redisson.getBucket<String>(refreshTokenKey(memberId)).delete()
+        redisson.getBucket<String>(deviceKey(memberId)).delete()
         tokenBlacklist.blacklist(accessToken, jwt.extractRemainingValiditySeconds(accessToken))
     }
 
     companion object {
         private fun refreshTokenKey(id: Long) = "refresh_token:$id"
+        private fun deviceKey(id: Long) = "refresh_device:$id"
     }
 }

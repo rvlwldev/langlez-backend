@@ -22,6 +22,12 @@ class Follow(
     @CreatedDate @Column(name = "created_at")
     val createdAt: Instant = Instant.now()
 ) {
+    // 생성 시점에 막는다. 서비스마다 검사하면 새 호출 경로에서 빠뜨린다.
+    // (noarg 플러그인이 만드는 JPA 전용 생성자는 초기화 블록을 타지 않으므로 하이드레이션엔 영향이 없다)
+    init {
+        require(followerId != followedId) { "social.follow.self" }
+    }
+
     constructor(followerId: Long, followedId: Long) : this(
         id = 0,
         followerId = followerId,

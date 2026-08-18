@@ -1,8 +1,7 @@
 package com.langlez.profile
 
 import com.langlez.member.domain.Member
-import com.langlez.member.application.MemberRepository
-import com.langlez.member.domain.MemberProvider
+import com.langlez.member.domain.MemberRepository
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
@@ -10,7 +9,7 @@ import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
 import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
-import com.langlez.security.util.JwtParser
+import com.langlez.utility.JwtTokenProvider
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
@@ -27,6 +26,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -71,7 +71,7 @@ class ProfileE2ETest : BehaviorSpec() {
     @Autowired lateinit var memberJpa: MemberJpaRepository
     @Autowired lateinit var profileJpa: ProfileJpaRepository
     @Autowired lateinit var imageJpa: ProfileImageJpaRepository
-    @Autowired lateinit var jwtParser: JwtParser
+    @Autowired lateinit var jwt: JwtTokenProvider
     @Autowired lateinit var transactionTemplate: TransactionTemplate
 
     // 클래스 레벨 상태 — beforeSpec에서 초기화, 각 When은 이미지만 정리
@@ -108,14 +108,36 @@ class ProfileE2ETest : BehaviorSpec() {
         }
     }
 
+
+    /** presign → 실제 PUT 업로드 → 확정에 쓸 key 반환. 확정은 이제 key 로만 받는다. */
+    private fun uploadAndGetKey(token: String, filename: String): String {
+        val presign = restTemplate.exchange(
+            "/api/v1/profiles/images/upload-url?filename=$filename&contentType=image/jpeg",
+            HttpMethod.GET,
+            HttpEntity<Void>(authHeaders(token)),
+            Map::class.java,
+        ).body!!
+        val key = presign["key"].toString()
+
+        val headers = HttpHeaders()
+        headers.putAll(authHeaders(token))
+        headers.contentType = MediaType.IMAGE_JPEG
+        restTemplate.exchange(
+            "/attachments/$key",
+            HttpMethod.PUT,
+            HttpEntity(byteArrayOf(1, 2, 3), headers),
+            String::class.java,
+        )
+        return key
+    }
+
     init {
         beforeSpec {
             alice = memberRepo.save(
                 Member(
                     email = "alice@test.com",
-                    username = "alice",
-                    nickname = "Alice",
-                    provider = MemberProvider.GOOGLE,
+                    handle = "alice",
+                    provider = Member.Provider.GOOGLE,
                     providerId = "g-alice",
                     providerDisplayName = "Alice"
                 )
@@ -123,9 +145,8 @@ class ProfileE2ETest : BehaviorSpec() {
             val bob = memberRepo.save(
                 Member(
                     email = "bob@test.com",
-                    username = "bob",
-                    nickname = "Bob",
-                    provider = MemberProvider.GOOGLE,
+                    handle = "bob",
+                    provider = Member.Provider.GOOGLE,
                     providerId = "g-bob",
                     providerDisplayName = "Bob"
                 )
@@ -133,8 +154,8 @@ class ProfileE2ETest : BehaviorSpec() {
             transactionTemplate.execute {
                 profileJpa.save(Profile(id = alice.id, member = memberJpa.getReferenceById(alice.id)))
             }
-            aliceToken = jwtParser.createAccessToken(alice.id, "MEMBER")
-            bobToken = jwtParser.createAccessToken(bob.id, "MEMBER")
+            aliceToken = jwt.createAccessToken(alice.id, "alice", "ROLE_MEMBER")
+            bobToken = jwt.createAccessToken(bob.id, "bob", "ROLE_MEMBER")
         }
 
         // 각 테스트 후 이미지만 정리 (멤버/프로필은 공유)
@@ -161,8 +182,7 @@ class ProfileE2ETest : BehaviorSpec() {
 
                 Then("200 OK와 Alice의 프로필이 반환된다") {
                     response.statusCode shouldBe HttpStatus.OK
-                    response.body?.username shouldBe "alice"
-                    response.body?.nickname shouldBe "Alice"
+                    response.body?.handle shouldBe "alice"
                     response.body?.visitCount shouldNotBe null
                 }
             }
@@ -192,7 +212,8 @@ class ProfileE2ETest : BehaviorSpec() {
 
                 Then("200 OK와 업로드 URL이 반환된다") {
                     response.statusCode shouldBe HttpStatus.OK
-                    response.body?.get("uploadUrl").toString() shouldContain "upload"
+                    response.body?.get("presigned").toString() shouldContain "/attachments/"
+                    response.body?.get("key").toString() shouldContain "profiles/"
                 }
             }
 
@@ -215,7 +236,7 @@ class ProfileE2ETest : BehaviorSpec() {
                     "/api/v1/profiles/images/represent",
                     HttpMethod.POST,
                     HttpEntity(
-                        ProfileRequest.ImageConfirm("https://cdn/profiles/represent.jpg"),
+                        ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "represent.jpg")),
                         authHeaders(aliceToken),
                     ),
                     ProfileResponse.Image::class.java,
@@ -224,7 +245,7 @@ class ProfileE2ETest : BehaviorSpec() {
                 Then("201 Created와 represent=true인 사진이 반환된다") {
                     response.statusCode shouldBe HttpStatus.CREATED
                     response.body?.represent shouldBe true
-                    response.body?.url shouldBe "https://cdn/profiles/represent.jpg"
+                    response.body?.url shouldNotBe null
                 }
             }
 
@@ -233,7 +254,7 @@ class ProfileE2ETest : BehaviorSpec() {
                     "/api/v1/profiles/images/represent",
                     HttpMethod.POST,
                     HttpEntity(
-                        ProfileRequest.ImageConfirm("https://cdn/profiles/first.jpg"),
+                        ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "first.jpg")),
                         authHeaders(aliceToken),
                     ),
                     ProfileResponse.Image::class.java,
@@ -242,7 +263,7 @@ class ProfileE2ETest : BehaviorSpec() {
                     "/api/v1/profiles/images",
                     HttpMethod.POST,
                     HttpEntity(
-                        ProfileRequest.ImageConfirm("https://cdn/profiles/second.jpg"),
+                        ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "second.jpg")),
                         authHeaders(aliceToken),
                     ),
                     ProfileResponse.Image::class.java,
@@ -251,7 +272,7 @@ class ProfileE2ETest : BehaviorSpec() {
                 Then("201 Created와 represent=false인 추가 사진이 반환된다") {
                     response.statusCode shouldBe HttpStatus.CREATED
                     response.body?.represent shouldBe false
-                    response.body?.url shouldBe "https://cdn/profiles/second.jpg"
+                    response.body?.url shouldNotBe null
                 }
             }
 
@@ -259,26 +280,26 @@ class ProfileE2ETest : BehaviorSpec() {
                 restTemplate.exchange(
                     "/api/v1/profiles/images/represent",
                     HttpMethod.POST,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/old.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "old.jpg")), authHeaders(aliceToken)),
                     ProfileResponse.Image::class.java,
                 )
-                restTemplate.exchange(
+                val added = restTemplate.exchange(
                     "/api/v1/profiles/images",
                     HttpMethod.POST,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/new.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "new.jpg")), authHeaders(aliceToken)),
                     ProfileResponse.Image::class.java,
                 )
                 val response = restTemplate.exchange(
                     "/api/v1/profiles/images/represent",
                     HttpMethod.PATCH,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/new.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageSelect(added.body!!.url), authHeaders(aliceToken)),
                     ProfileResponse.Image::class.java,
                 )
 
                 Then("200 OK와 변경된 대표 사진이 반환된다") {
                     response.statusCode shouldBe HttpStatus.OK
                     response.body?.represent shouldBe true
-                    response.body?.url shouldBe "https://cdn/profiles/new.jpg"
+                    response.body?.url shouldNotBe null
                 }
             }
 
@@ -286,7 +307,7 @@ class ProfileE2ETest : BehaviorSpec() {
                 val response = restTemplate.exchange(
                     "/api/v1/profiles/images/represent",
                     HttpMethod.PATCH,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/ghost.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageSelect("https://cdn/profiles/ghost.jpg"), authHeaders(aliceToken)),
                     Any::class.java,
                 )
 
@@ -299,21 +320,21 @@ class ProfileE2ETest : BehaviorSpec() {
                 restTemplate.exchange(
                     "/api/v1/profiles/images/represent",
                     HttpMethod.POST,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/1.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "1.jpg")), authHeaders(aliceToken)),
                     ProfileResponse.Image::class.java,
                 )
                 for (i in 2..6) {
                     restTemplate.exchange(
                         "/api/v1/profiles/images",
                         HttpMethod.POST,
-                        HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/$i.jpg"), authHeaders(aliceToken)),
+                        HttpEntity(ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "$i.jpg")), authHeaders(aliceToken)),
                         ProfileResponse.Image::class.java,
                     )
                 }
                 val response = restTemplate.exchange(
                     "/api/v1/profiles/images",
                     HttpMethod.POST,
-                    HttpEntity(ProfileRequest.ImageConfirm("https://cdn/profiles/7.jpg"), authHeaders(aliceToken)),
+                    HttpEntity(ProfileRequest.ImageConfirm(uploadAndGetKey(aliceToken, "7.jpg")), authHeaders(aliceToken)),
                     Any::class.java,
                 )
 

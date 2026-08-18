@@ -39,7 +39,8 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: none
+      # none 이면 스키마가 어긋나도 런타임에야 터진다. validate 로 기동 시점에 잡는다.
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
     properties:

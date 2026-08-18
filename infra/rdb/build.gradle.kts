@@ -15,6 +15,10 @@ dependencies {
     api(libs.dependency.spring.kafka)
 
     api(libs.dependency.springboot.jpa)
+
+    // 스키마는 Flyway 가 만든다. Hibernate 는 validate 만 한다.
+    api(libs.dependency.flyway.core)
+    runtimeOnly(libs.dependency.flyway.postgresql)
     api(libs.dependency.querydsl.jpa)
 
     // OutBox 베이스가 @MappedSuperclass라, 상속받는 모듈의 Q클래스가 참조할 부모 Q클래스를 여기서 생성한다

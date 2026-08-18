@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.assertions.throwables.shouldThrow
@@ -41,7 +41,7 @@ class ProfileImageLockerTest : BehaviorSpec({
             Then("BAD_REQUEST 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     locker.confirmAdditionalImage(1L, "https://cdn/profiles/over.jpg")
-                }.status shouldBe HttpStatus.BAD_REQUEST.value()
+                }.status.value() shouldBe HttpStatus.BAD_REQUEST.value()
             }
         }
 

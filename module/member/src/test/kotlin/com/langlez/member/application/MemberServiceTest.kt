@@ -12,6 +12,8 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 class MemberServiceTest : BehaviorSpec({
 
@@ -22,7 +24,11 @@ class MemberServiceTest : BehaviorSpec({
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val suspendHistoryRepo = mockk<MemberSuspendHistoryRepository>()
 
-    val service = MemberService(repo, creator, tracker, storage, publisher, suspendHistoryRepo)
+    // updateProfileUrl 이 TransactionTemplate 으로 읽기+쓰기를 묶는다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = MemberService(repo, creator, tracker, storage, publisher, suspendHistoryRepo, tx)
 
     afterEach { clearMocks(repo, creator, tracker, storage, publisher, suspendHistoryRepo, answers = false) }
 

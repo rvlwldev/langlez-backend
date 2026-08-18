@@ -57,7 +57,9 @@ class AttachmentRepositoryImpl(
             .fetch()
     }
 
+    // 미첨부 정리 배치가 호출한다. Attachment 는 연관이 없어(cascade/orphanRemoval 없음)
+    // 영속성 컨텍스트를 우회해도 고아 행이 안 생기므로 건당 DELETE 대신 배치로 지운다.
     override fun deleteAll(attachments: List<Attachment>) {
-        jpa.deleteAll(attachments)
+        jpa.deleteAllInBatch(attachments)
     }
 }

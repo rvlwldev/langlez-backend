@@ -62,9 +62,15 @@ spring:
     listener:
       ack-mode: record
 
+  flyway:
+    # 마이그레이션 위치는 infra:rdb 의 RdbConfiguration 이 지정한다
+    enabled: true
+
   jpa:
     hibernate:
-      ddl-auto: update
+      # 스키마는 Flyway 가 만든다. Hibernate 는 엔티티와 맞는지 검사만 한다.
+      # update 로 두면 Flyway 와 Hibernate 가 각자 스키마를 건드려 더 나빠진다.
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
     properties:

@@ -1,10 +1,9 @@
 package com.langlez.profile.application
 
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
-import com.langlez.member.application.MemberRepository
-import com.langlez.member.domain.MemberProvider
-import com.langlez.member.domain.MemberRole
+import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.Member.Provider
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -27,7 +26,7 @@ import java.util.concurrent.TimeUnit
         "jwt.access-token-ttl-secs=3600",
         "jwt.refresh-token-ttl-secs=86400",
         "spring.main.allow-bean-definition-overriding=true",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "app.cors.allowed-origins=http://localhost:3000"
     ]
 )
@@ -73,12 +72,10 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
             val member = memberRepository.save(
                 Member(
                     email = "lockuser@example.com",
-                    username = "lockuser",
-                    nickname = "LockUser",
-                    provider = MemberProvider.GOOGLE,
+                    provider = Member.Provider.GOOGLE,
                     providerId = "p-lockuser",
                     providerDisplayName = "LockUser",
-                    role = MemberRole.MEMBER
+                    role = Member.Role.MEMBER
                 )
             )
 
@@ -93,7 +90,7 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
                     executor.submit(Runnable {
                         try {
                             startLatch.await()
-                            profileService.confirmAdditionalImage(member.id, "https://cdn/profiles/img_$index.jpg")
+                            profileService.confirmAdditionalImage(member.id, "profiles/img_$index.jpg")
                         } catch (e: Throwable) {
                             synchronized(exceptions) {
                                 exceptions.add(e)
@@ -115,7 +112,7 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
                     totalImages shouldBe 6L
 
                     val limitExceededExceptions = synchronized(exceptions) {
-                        exceptions.filter { it is LanglezException && it.status == 400 }
+                        exceptions.filter { it is LanglezException && it.status.value() == 400 }
                     }
                     limitExceededExceptions.size shouldBe (threadCount - 6)
                 }

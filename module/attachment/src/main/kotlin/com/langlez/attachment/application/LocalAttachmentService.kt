@@ -54,12 +54,14 @@ class LocalAttachmentService(
 
         val target = resolve(key)
         target.parentFile.mkdirs()
-        input.use { it.copyTo(target.outputStream()) }
+        // 출력 스트림도 use 로 감싼다. 안 닫으면 fd 가 새고 버퍼가 안 flush 돼 파일이 잘린다.
+        input.use { source -> target.outputStream().use(source::copyTo) }
     }
 
     private fun resolve(key: String): File {
         val file = File(root, key)
-        if (!file.canonicalPath.startsWith(root.canonicalPath))
+        // separator 를 붙여야 한다. 안 그러면 "<root>-evil" 같은 형제 경로가 통과한다.
+        if (!file.canonicalPath.startsWith(root.canonicalPath + File.separator))
             throw LanglezException(HttpStatus.BAD_REQUEST, "common.bad-request")
         return file
     }

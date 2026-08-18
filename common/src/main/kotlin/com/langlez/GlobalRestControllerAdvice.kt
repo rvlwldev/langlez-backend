@@ -22,27 +22,41 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
 
     /** 사용자 정의 예외 */
     @ExceptionHandler(LanglezException::class)
-    fun handleLanglezException(e: LanglezException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(e.status)
+    fun handleLanglezException(e: LanglezException, locale: Locale): ResponseEntity<ExceptionResponse> {
+        // 5xx 는 우리 잘못이라 스택까지 남긴다. 4xx 는 클라이언트 입력 문제라 한 줄이면 충분하다.
+        if (e.status.is5xxServerError) logger.error("Langlez 5xx: {}", e.message, e)
+        else logger.debug("Langlez {}: {}", e.status.value(), e.message)
+
+        return ResponseEntity.status(e.status)
             .body(ExceptionResponse(e.status, resolveMessage(e.message ?: "error.unexpected", locale)))
+    }
 
     /** 인증 실패 */
     @ExceptionHandler(AuthenticationException::class)
-    fun handleAuthenticationException(e: AuthenticationException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(ExceptionResponse(HttpStatus.UNAUTHORIZED, resolveMessage(e.message ?: "auth.unauthorized", locale)))
+    fun handleAuthenticationException(e: AuthenticationException, locale: Locale): ResponseEntity<ExceptionResponse> {
+        logger.warn("Authentication failed: {}", e.message)
+        // e.message 를 키로 쓰면 "Full authentication is required..." 같은 Spring 내부 문자열이
+        // 키로 조회 실패해 그대로 클라이언트에 노출된다. 고정 키만 쓴다.
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ExceptionResponse(HttpStatus.UNAUTHORIZED, resolveMessage("auth.unauthorized", locale)))
+    }
 
     /** 권한 없음 */
     @ExceptionHandler(AccessDeniedException::class)
-    fun handleAuthenticationException(e: AccessDeniedException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(ExceptionResponse(HttpStatus.FORBIDDEN, resolveMessage(e.message ?: "auth.forbidden", locale)))
+    fun handleAccessDeniedException(e: AccessDeniedException, locale: Locale): ResponseEntity<ExceptionResponse> {
+        logger.warn("Access denied: {}", e.message)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ExceptionResponse(HttpStatus.FORBIDDEN, resolveMessage("auth.forbidden", locale)))
+    }
 
     /** 잘못된 Body 요청, 잘못된 DTO 타입 등 */
     @ExceptionHandler(HttpMessageNotReadableException::class)
-    fun handleMessageNotReadableException(e: HttpMessageNotReadableException): ResponseEntity<ExceptionResponse> =
+    fun handleMessageNotReadableException(
+        e: HttpMessageNotReadableException,
+        locale: Locale,
+    ): ResponseEntity<ExceptionResponse> =
         ResponseEntity.badRequest()
-            .body(ExceptionResponse(HttpStatus.BAD_REQUEST, "common.bad-request"))
+            .body(ExceptionResponse(HttpStatus.BAD_REQUEST, resolveMessage("common.bad-request", locale)))
 
     /** Body 요청의 필수값 누락 등 */
     @ExceptionHandler(MethodArgumentNotValidException::class)
@@ -57,9 +71,9 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
 
     /** 올바르지 않은 엔드포인트 요청 */
     @ExceptionHandler(NoHandlerFoundException::class)
-    fun handleNotFoundException(e: NoHandlerFoundException): ResponseEntity<ExceptionResponse> =
+    fun handleNotFoundException(e: NoHandlerFoundException, locale: Locale): ResponseEntity<ExceptionResponse> =
         ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(ExceptionResponse(HttpStatus.NOT_FOUND, "common.not-found-endpoint"))
+            .body(ExceptionResponse(HttpStatus.NOT_FOUND, resolveMessage("common.not-found-endpoint", locale)))
 
     /** 처리되지 않은 예외 */
     @ExceptionHandler(Exception::class)

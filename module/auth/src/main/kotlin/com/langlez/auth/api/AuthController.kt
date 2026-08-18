@@ -1,56 +1,67 @@
 package com.langlez.auth.api
 
 import com.langlez.annotation.MemberId
-import com.langlez.auth.api.AuthCookies.expireTokenCookies
-import com.langlez.auth.api.AuthCookies.setTokenCookies
 import com.langlez.auth.api.AuthRequest.RefreshToken
 import com.langlez.auth.api.AuthResponse.NewTokens
+import com.langlez.auth.application.AccessContext
 import com.langlez.auth.application.AuthService
 import com.langlez.exception.LanglezException
-import org.springframework.http.HttpHeaders
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus.NO_CONTENT
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
 
+/**
+ * 모바일 앱 전용이라 쿠키를 쓰지 않는다. 토큰은 응답 바디로만 내려가고,
+ * 요청은 `Authorization` 헤더(access) / 바디(refresh)로만 받는다.
+ */
 @RestController
 @RequestMapping("/api/v1/auth")
 class AuthController(private val service: AuthService) {
 
     /**
-     * 리프레시 토큰은 쿠키(웹) 또는 바디(앱)로 받는다.
-     *
-     * OAuth2 로그인이 토큰을 HttpOnly 쿠키로 내려주기 때문에 웹 클라이언트의 JS 는
-     * 그 값을 읽어 바디에 실을 수 없다. 쿠키를 우선 보고, 없으면 바디를 쓴다.
+     * 기기 id 는 필수다. 선택으로 두면 헤더를 빼는 것만으로 1인 1기기 검증을 우회할 수 있고,
+     * 바인딩이 영영 생성되지 않아 정책 자체가 무력화된다.
      */
     @PostMapping("/refresh")
     fun refresh(
-        @CookieValue(AuthCookies.REFRESH_TOKEN, required = false) cookieToken: String?,
-        @RequestBody(required = false) request: RefreshToken?,
-    ): ResponseEntity<NewTokens> {
-        val token = cookieToken?.takeIf { it.isNotBlank() }
-            ?: request?.refreshToken?.takeIf { it.isNotBlank() }
-            ?: throw LanglezException(400, "auth.invalid-request")
+        @RequestBody @Valid request: RefreshToken,
+        servletRequest: HttpServletRequest,
+        @RequestHeader(DEVICE_ID_HEADER, required = false) deviceId: String?,
+    ): NewTokens {
+        if (deviceId.isNullOrBlank()) throw LanglezException(400, "auth.device-id-required")
 
-        val (refresh, access) = service.refresh(token)
-
-        val headers = HttpHeaders().apply {
-            setTokenCookies(access, service.accessTokenTtl, refresh, service.refreshTokenTtl)
-        }
-
-        return ResponseEntity.ok().headers(headers).body(NewTokens(refresh, access))
+        val (refresh, access) = service.refresh(request.refreshToken, accessContext(servletRequest, deviceId))
+        return NewTokens(refresh, access)
     }
 
     @PostMapping("/logout")
-    fun logout(
-        @MemberId memberId: Long,
-        @RequestHeader("Authorization") authHeader: String,
-    ): ResponseEntity<Void> {
+    @ResponseStatus(NO_CONTENT)
+    fun logout(@MemberId memberId: Long, @RequestHeader("Authorization") authHeader: String) {
         val accessToken = authHeader.takeIf { it.startsWith("Bearer ") }?.substring(7)
             ?: throw LanglezException(400, "auth.invalid-request")
+
         service.logout(memberId, accessToken)
+    }
 
-        val headers = HttpHeaders().apply { expireTokenCookies() }
+    companion object {
+        const val DEVICE_ID_HEADER = "X-Device-Id"
 
-        return ResponseEntity.status(NO_CONTENT).headers(headers).build()
+        /** 프록시 뒤에 있으면 remoteAddr 이 프록시 주소라 X-Forwarded-For 의 첫 값을 우선한다. */
+        fun accessContext(request: HttpServletRequest, deviceId: String?): AccessContext {
+            val ip = request.getHeader("X-Forwarded-For")
+                ?.split(",")
+                ?.firstOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: request.remoteAddr
+
+            return AccessContext(ip, deviceId?.takeIf { it.isNotBlank() })
+        }
     }
 }

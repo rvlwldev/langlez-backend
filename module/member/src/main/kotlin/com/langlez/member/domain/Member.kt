@@ -8,6 +8,7 @@ import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Locale
 
 @Entity
@@ -34,6 +35,11 @@ class Member(
     var imageUrl: String? = null,
     var agreedMarketingReceive: Boolean = false,
 
+    // 개인식별 정보는 프로필(자기소개)이 아니라 계정에 둔다. 프로필 없이도 존재해야 한다.
+    // gender 는 non-null 이므로 기존 행 백필 없이 배포하면 NULL 을 읽어 NPE 가 난다. 마이그레이션 필수.
+    @Enumerated(STRING) @Column(nullable = false) var gender: Gender = Gender.SECRET,
+    var birthDay: LocalDate? = null,
+
     @Enumerated(STRING) @Column(name = "provider_type") var provider: Provider,
     @Column(name = "provider_id") var providerId: String,
     @Column(name = "provider_display_name") var providerDisplayName: String? = null,
@@ -57,10 +63,12 @@ class Member(
             country = value?.country
         }
 
+    /** 가입 인증 완료. CREATED 로 머물던 계정을 여기서 ACTIVE 로 올린다. */
     fun verify() {
         require(audit.verifiedAt == null) { "member.already-verified" }
         audit.verifiedAt = Instant.now()
         audit.agreedTermsAt = Instant.now()
+        if (status == Status.CREATED) status = Status.ACTIVE
     }
 
     fun updateAccessedAt(accessedAt: Instant = Instant.now()) {
@@ -79,16 +87,40 @@ class Member(
         audit.lastHandleUpdatedAt = now
     }
 
-    fun suspend() {
-        require(status != Status.WITHDRAWN) { "member.already-withdrawn" }
-        status = Status.SUSPENDED
+    /** 정지/탈퇴 회원은 서비스를 계속 쓸 수 없다. 로그인·토큰 갱신 경로에서 호출한다. */
+    fun requireActive() {
+        require(status != Status.SUSPENDED) { "member.suspended" }
+        require(status != Status.WITHDRAWN) { "member.withdrawn" }
     }
 
-    fun withdraw() {
+    fun suspend(now: Instant = Instant.now()) {
+        require(status != Status.WITHDRAWN) { "member.already-withdrawn" }
+        status = Status.SUSPENDED
+        audit.suspendedAt = now
+    }
+
+    /** 어드민이 정지를 푼다. 정지는 되돌릴 수 있는 상태다. */
+    fun unsuspend() {
+        require(status != Status.WITHDRAWN) { "member.already-withdrawn" }
+        require(status == Status.SUSPENDED) { "member.not-suspended" }
+        status = Status.ACTIVE
+        audit.suspendedAt = null
+    }
+
+    /**
+     * 탈퇴. 되돌릴 수 없다.
+     *
+     * 개인정보를 지우거나 익명화하지 않는다. 탈퇴 후 재가입해 같은 문제를 반복하는 회원을
+     * 추적해야 해서 계정 기록을 영구 보존한다. 삭제/익명화 배치를 두지 않는 것이 의도된 정책이다.
+     */
+    fun withdraw(now: Instant = Instant.now()) {
         status = Status.WITHDRAWN
+        audit.withdrawnAt = now
     }
 
     enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
+
+    enum class Gender { MALE, FEMALE, SECRET }
 
     enum class Role {
         MEMBER, PREMIUM, ADMIN;

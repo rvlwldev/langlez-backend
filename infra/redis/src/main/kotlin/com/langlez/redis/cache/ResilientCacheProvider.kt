@@ -10,7 +10,6 @@ import org.springframework.scheduling.annotation.Scheduled
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.random.Random
 import com.github.benmanes.caffeine.cache.Cache as NativeCache
 
 class ResilientCacheProvider(
@@ -33,17 +32,16 @@ class ResilientCacheProvider(
             .build<Any, Any>()
         val aggregate = ResilientCache(name, redis, CaffeineCache(local), registry, isRedisAvailable::get) { markRedisDown() }
 
-        return CacheAggregate(aggregate, redis, local)
+        return CacheAggregate(aggregate, local)
     }
 
     @Scheduled(cron = "*/5 * * * * *")
-    fun checkRedisAndMigrate() {
+    fun checkRedisHealth() {
         try {
             redisson.keys.countExists(HEALTH_PROBE_KEY)
             if (isRedisAvailable.compareAndSet(false, true)) {
-                logger.debug("Redis is back online! Starting migration from local to Redis...")
-                Thread.sleep(Random.nextLong(0, 3000))
-                migrateLocalToRedis()
+                logger.info("Redis is back online. Discarding local fallback caches.")
+                discardLocalCaches()
             }
         } catch (_: Exception) {
             markRedisDown()
@@ -57,33 +55,21 @@ class ResilientCacheProvider(
     }
 
     /**
-     * Redis 가 죽어 있는 동안 로컬에만 쌓인 값을 Redis 로 올리고 로컬을 비운다.
+     * 복구 시 로컬 폴백 캐시를 버린다. Redis 로 올리지 않는다.
      *
-     * 분산 락을 걸지 않는다. 로컬 Caffeine 은 프로세스 안에만 있어서 각 인스턴스는
-     * 자기 로컬만 올릴 수 있다. 경합할 대상이 없다.
-     * 락으로 한 대만 통과시키면 나머지 인스턴스의 로컬이 영영 이관되지 않고 남아,
-     * 다음 장애 때 그 stale 값이 되살아난다.
+     * 로컬 Caffeine 은 프로세스마다 따로다. 장애 중에는
+     * (1) 다른 노드가 지운 키가 이 노드 로컬엔 그대로 남아 있고
+     * (2) `ResilientCache` 의 로컬 폴백 쓰기는 트랜잭션 동기화를 안 타서
+     *     롤백된 트랜잭션이 쓴 값도 남는다.
+     * 이걸 복구 때 올리면 프로세스 안에만 있던 낡은/유령 값이 전역으로 승격된다.
      *
-     * 적재는 `RedisCache.putMany`(RBatch)로 내려보낸다. 직접 mSet 을 부르면 TTL 이 안 걸려
-     * 이관된 키만 영구 잔존하고, 키 인코딩도 어댑터와 어긋나 이후 조회가 전부 미스가 된다.
-     *
-     * 로컬 비우기는 적재에 성공한 키만. 실패한 채로 비우면 Redis 에도 로컬에도 값이 없다.
+     * 캐시는 없어도 되는 데이터다. 버리면 다음 조회가 DB 를 한 번 더 칠 뿐이고
+     * 정합성은 확실하다. 복구 직후 미스가 몰리는 비용은 감수한다.
      */
-    private fun migrateLocalToRedis() = caches.forEach { (name, holder) ->
-        val entries = holder.local.asMap().toMap()
-        if (entries.isEmpty()) return@forEach
-
-        runCatching { holder.redis.putMany(entries) }
-            .onSuccess { entries.keys.forEach(holder.local::invalidate) }
-            .onFailure { e ->
-                logger.error("Local to Redis migration failed for cache: $name", e)
-                markRedisDown()
-            }
-    }
+    private fun discardLocalCaches() = caches.values.forEach { it.local.invalidateAll() }
 
     private class CacheAggregate(
         val aggregate: Cache,
-        val redis: RedisCache,
         val local: NativeCache<Any, Any>,
     )
 

@@ -21,10 +21,11 @@ class AuthServiceTest : BehaviorSpec({
     val memberService = mockk<MemberService>()
     val redisson = mockk<RedissonClient>()
     val bucket = mockk<RBucket<String>>()
+    val deviceBucket = mockk<RBucket<String>>(relaxed = true).also { every { it.get() } returns null }
     val tokenBlacklist = mockk<com.langlez.core.TokenBlacklist>()
 
     val service = AuthService(
-        jwt, memberService, redisson, tokenBlacklist,
+        jwt, memberService, redisson, tokenBlacklist, mockk(relaxed = true),
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )
@@ -46,6 +47,7 @@ class AuthServiceTest : BehaviorSpec({
         val newAccessToken = "new-access-token"
 
         every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
 
         When("유효한 리프레시 토큰으로 갱신하면") {
             every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
@@ -80,6 +82,7 @@ class AuthServiceTest : BehaviorSpec({
             every { jwt.extractId(validRefreshToken) } returns 999L
             every { memberService.findById(999L) } returns null
             every { redisson.getBucket<String>("refresh_token:999") } returns bucket
+        every { redisson.getBucket<String>("refresh_device:999") } returns deviceBucket
 
             Then("UNAUTHORIZED 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
@@ -123,6 +126,7 @@ class AuthServiceTest : BehaviorSpec({
         val role = "MEMBER"
 
         every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
         every { jwt.createRefreshToken(memberId, handle, role) } returns "issued-refresh-token"
         every { jwt.createAccessToken(memberId, handle, role) } returns "issued-access-token"
         every { bucket.set(any(), any<Duration>()) } just runs

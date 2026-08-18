@@ -2,6 +2,7 @@ package com.langlez.redis.cache
 
 import com.langlez.core.cache.Cache
 import org.redisson.api.RedissonClient
+import org.slf4j.LoggerFactory
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration
@@ -67,7 +68,14 @@ class RedisCache(
         delete(keys)
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-            override fun afterCommit() = commit()
+            // afterCommit 은 ResilientCache 의 runGuarded 밖에서 돈다. 여기서 예외를 흘리면
+            // 이미 커밋된 요청이 Redis 블립 하나로 500 이 된다. 캐시 갱신 실패는 미스일 뿐이라 삼킨다.
+            override fun afterCommit() {
+                runCatching(commit).onFailure {
+                    LoggerFactory.getLogger(RedisCache::class.java)
+                        .warn("Cache write after commit failed for cache: {}", name, it)
+                }
+            }
         })
     }
 

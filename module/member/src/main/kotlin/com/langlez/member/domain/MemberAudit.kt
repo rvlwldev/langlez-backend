@@ -15,6 +15,8 @@ class MemberAudit(
     val id: Long = 0,
 
     var lastAccessedIp: String? = null,
+    /** 1인 1기기 정책. 마지막으로 로그인한 기기 식별자 */
+    var lastDeviceId: String? = null,
     var verifiedAt: Instant? = null,
     var agreedTermsAt: Instant? = null,
     var lastHandleUpdatedAt: Instant? = null,

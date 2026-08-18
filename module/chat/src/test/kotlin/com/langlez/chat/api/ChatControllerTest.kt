@@ -1,192 +1,173 @@
 package com.langlez.chat.api
 
+import com.langlez.chat.api.request.ChatMessageSendRequest
+import com.langlez.chat.api.request.ChatReportRequest
+import com.langlez.chat.api.request.ChatRoomCreateRequest
+import com.langlez.chat.application.ChatMessageView
 import com.langlez.chat.application.ChatService
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatRoom
-import com.langlez.core.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberProvider
+import com.langlez.chat.domain.ChatRoomSummary
+import com.langlez.core.Storage
+import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import io.mockk.*
+import io.mockk.clearMocks
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import java.time.Instant
 
 class ChatControllerTest : BehaviorSpec({
+
     val service = mockk<ChatService>()
+    val storage = mockk<Storage>()
     val controller = ChatController(service)
 
-    afterEach {
-        clearMocks(service)
-    }
+    afterEach { clearMocks(service, storage, answers = false) }
 
-    fun createMember(id: Long, username: String = "user$id", nickname: String = "User $id") = Member(
+    fun view(id: String = "m100", deleted: Boolean = false) = ChatMessageView(
         id = id,
-        email = "$username@example.com",
-        username = username,
-        nickname = nickname,
-        provider = MemberProvider.GOOGLE,
-        providerId = "p$id",
-        providerDisplayName = nickname
+        seq = 42L,
+        roomId = 1L,
+        senderId = 10L,
+        type = ChatMessage.Type.TEXT,
+        content = "hi",
+        fileUrls = listOf("https://cdn.test/a.jpg"),
+        createdAt = Instant.parse("2026-08-13T00:00:00Z"),
+        deleted = deleted,
     )
 
-    Given("ChatController 가 주어졌을 때") {
+    Given("방 생성 요청 시") {
+        When("상대 id를 보내면") {
+            every { service.getOrCreateRoom(10L, 20L) } returns ChatRoom(id = 1L)
 
-        When("방을 생성하거나 조회할 때 (getOrCreateRoom)") {
-            val room = ChatRoom(id = "room1", participantIds = listOf(1L, 2L))
-            val summary = ChatResponse.RoomSummary(
-                id = "room1",
-                targetUsername = "user2",
-                targetNickname = "User 2",
-                lastMessageAt = null,
-                lastMessagePreview = null,
-                unreadCount = 0,
-                createdAt = Instant.now()
-            )
-            every { service.getOrCreateRoom(1L, "user2") } returns room
-            every { service.toRoomSummary(room, 1L) } returns summary
+            Then("방 응답을 돌려주고 인증된 회원 id로 서비스를 부른다") {
+                val response = controller.createRoom(10L, ChatRoomCreateRequest(partnerId = 20L))
 
-            Then("정상적으로 방 정보가 반환된다") {
-                val result = controller.getOrCreateRoom(1L, "user2")
-                result.id shouldBe "room1"
-                result.targetUsername shouldBe "user2"
+                response.id shouldBe 1L
+                verify { service.getOrCreateRoom(10L, 20L) }
+            }
+        }
+    }
+
+    Given("방 목록 조회 시") {
+        When("size를 과도하게 크게 요청하면") {
+            every { service.listRooms(10L, 50, null) } returns emptyList()
+
+            Then("상한으로 잘려 서비스에 전달된다") {
+                controller.listRooms(10L, size = 1000, cursor = null)
+
+                verify { service.listRooms(10L, 50, null) }
             }
         }
 
-        When("방 목록을 조회할 때 (getRooms)") {
-            val response = ChatResponse.RoomCursorList(
-                nextCursor = null,
-                rooms = listOf(
-                    ChatResponse.RoomSummary(
-                        id = "room1",
-                        targetUsername = "user2",
-                        targetNickname = "User 2",
-                        lastMessageAt = null,
-                        lastMessagePreview = null,
-                        unreadCount = 0,
-                        createdAt = Instant.now()
-                    )
+        When("방이 있으면") {
+            val room = ChatRoom(id = 1L).apply { onMessage("hi", Instant.parse("2026-08-13T00:00:00Z")) }
+            every { service.listRooms(10L, 20, null) } returns
+                listOf(ChatRoomSummary(room = room, partnerId = 20L, unreadCount = 3L))
+
+            Then("상대 id와 안 읽은 수가 담긴 요약을 돌려준다") {
+                val response = controller.listRooms(10L, size = 20, cursor = null)
+
+                response.single().partnerId shouldBe 20L
+                response.single().unreadCount shouldBe 3L
+                response.single().lastMessagePreview shouldBe "hi"
+            }
+        }
+    }
+
+    Given("메시지 목록 조회 시") {
+        When("커서를 넘기면") {
+            every { service.listMessages(10L, 1L, 20, 999L) } returns listOf(view())
+
+            Then("커서 그대로 서비스에 전달하고 메시지를 돌려준다") {
+                val response = controller.listMessages(10L, roomId = 1L, size = 20, cursor = 999L)
+
+                response.single().id shouldBe "m100"
+                verify { service.listMessages(10L, 1L, 20, 999L) }
+            }
+        }
+    }
+
+    Given("메시지 전송 시") {
+        When("본문과 첨부 key를 보내면") {
+            every { service.send(10L, 1L, ChatMessage.Type.TEXT, "hi", listOf("chat/a.jpg")) } returns view()
+
+            Then("요청 값을 그대로 서비스에 넘기고 저장된 메시지를 돌려준다") {
+                val request = ChatMessageSendRequest(
+                    type = ChatMessage.Type.TEXT,
+                    content = "hi",
+                    keys = listOf("chat/a.jpg"),
                 )
-            )
-            every { service.getRooms(1L, null, 20) } returns response
 
-            Then("방 목록을 올바르게 반환한다") {
-                val result = controller.getRooms(1L, null, 20)
-                result.rooms.size shouldBe 1
-                result.rooms[0].id shouldBe "room1"
+                val response = controller.sendMessage(10L, roomId = 1L, request = request)
+
+                response.id shouldBe "m100"
+                response.fileUrls shouldBe listOf("https://cdn.test/a.jpg")
+                verify { service.send(10L, 1L, ChatMessage.Type.TEXT, "hi", listOf("chat/a.jpg")) }
             }
         }
+    }
 
-        When("메시지 목록을 조회할 때 (getMessages)") {
-            val response = ChatResponse.MessageCursorList(
-                nextCursor = null,
-                messages = listOf(
-                    ChatResponse.MessageSummary(
-                        id = "msg1",
-                        senderUsername = "user2",
-                        type = ChatMessage.Type.TEXT,
-                        content = "hello",
-                        fileUrl = null,
-                        createdAt = Instant.now()
-                    )
-                )
-            )
-            every { service.getMessages(1L, "room1", null, 20) } returns response
+    Given("읽음 처리 시") {
+        When("방 id를 보내면") {
+            every { service.markRead(10L, 1L, any()) } returns Unit
 
-            Then("메시지 목록을 올바르게 반환한다") {
-                val result = controller.getMessages(1L, "room1", null, 20)
-                result.messages.size shouldBe 1
-                result.messages[0].id shouldBe "msg1"
+            Then("서비스의 읽음 처리가 호출된다") {
+                controller.readRoom(10L, roomId = 1L)
+
+                verify { service.markRead(10L, 1L, any()) }
             }
         }
+    }
 
-        When("미참여 유저가 메시지를 조회하려 할 때") {
-            every { service.getMessages(3L, "room1", null, 20) } throws LanglezException(403, "chat.room-forbidden")
+    Given("방 나가기 시") {
+        When("방 id를 보내면") {
+            every { service.leaveRoom(10L, 1L) } returns Unit
 
-            Then("403 Forbidden 예외를 전파한다") {
-                val ex = shouldThrow<LanglezException> {
-                    controller.getMessages(3L, "room1", null, 20)
-                }
-                ex.status shouldBe 403
-                ex.message shouldBe "chat.room-forbidden"
+            Then("서비스의 나가기가 호출된다") {
+                controller.leaveRoom(10L, roomId = 1L)
+
+                verify { service.leaveRoom(10L, 1L) }
             }
         }
+    }
 
-        When("메시지를 전송할 때 (sendMessage)") {
-            val sender = createMember(1L, "user1")
-            val message = ChatMessage(id = "msg1", roomId = "room1", senderId = 1L, type = ChatMessage.Type.TEXT, content = "hello")
-            val request = SendMessageRequest(type = ChatMessage.Type.TEXT, content = "hello")
-            val summary = ChatResponse.MessageSummary(
-                id = "msg1",
-                senderUsername = "user1",
-                type = ChatMessage.Type.TEXT,
-                content = "hello",
-                fileUrl = null,
-                createdAt = message.createdAt
-            )
+    Given("메시지 삭제 시") {
+        When("메시지 id를 보내면") {
+            every { service.deleteMessage(10L, "m100") } returns Unit
 
-            every { service.sendMessage(1L, "room1", ChatMessage.Type.TEXT, "hello", null, null) } returns message
-            every { service.toMessageSummary(message) } returns summary
+            Then("서비스의 삭제가 호출된다") {
+                controller.deleteMessage(10L, messageId = "m100")
 
-            Then("보낸 메시지 정보가 반환된다") {
-                val result = controller.sendMessage(1L, "room1", request)
-                result.id shouldBe "msg1"
-                result.senderUsername shouldBe "user1"
-                result.content shouldBe "hello"
+                verify { service.deleteMessage(10L, "m100") }
             }
         }
+    }
 
-        When("존재하지 않는 멤버가 메시지를 보낼 때") {
-            val request = SendMessageRequest(type = ChatMessage.Type.TEXT, content = "hello")
+    Given("신고 시") {
+        When("사유와 문제 메시지를 보내면") {
+            every { service.report(10L, 1L, "욕설", "m100") } returns Unit
 
-            every { service.sendMessage(99L, "room1", ChatMessage.Type.TEXT, "hello", null, null) } throws LanglezException(404, "member.not-found")
+            Then("서비스의 신고가 호출된다") {
+                controller.report(10L, roomId = 1L, request = ChatReportRequest("욕설", "m100"))
 
-            Then("404 Not Found 예외를 발생시킨다") {
-                val ex = shouldThrow<LanglezException> {
-                    controller.sendMessage(99L, "room1", request)
-                }
-                ex.status shouldBe 404
-                ex.message shouldBe "member.not-found"
+                verify { service.report(10L, 1L, "욕설", "m100") }
             }
         }
+    }
 
-        When("메시지를 읽음 처리할 때 (markAsRead)") {
-            every { service.markAsRead(1L, "room1") } just runs
+    Given("첨부 업로드 URL 발급 시") {
+        When("filename 과 contentType 을 보내면") {
+            val result = Storage.PresignedResult(key = "chat/2026-08-13/uuid_a.jpg", presigned = "https://s3/put?sig=1")
+            every { service.presignUpload(10L, "a.jpg", "image/jpeg") } returns result
 
-            Then("서비스의 markAsRead 가 정상 호출된다") {
-                controller.markAsRead(1L, "room1")
-                verify { service.markAsRead(1L, "room1") }
-            }
-        }
-
-        When("미참여 유저가 읽음 처리를 하려 할 때") {
-            every { service.markAsRead(3L, "room1") } throws LanglezException(403, "chat.room-forbidden")
-
-            Then("403 Forbidden 예외를 전파한다") {
-                val ex = shouldThrow<LanglezException> {
-                    controller.markAsRead(3L, "room1")
-                }
-                ex.status shouldBe 403
-                ex.message shouldBe "chat.room-forbidden"
-            }
-        }
-
-        When("정상적인 content type으로 업로드 URL을 요청할 때") {
-            every { service.generateUploadUrl(any(), "image/jpeg") } returns "https://s3/upload/temp.jpg"
-
-            Then("업로드 URL을 반환한다") {
-                val result = controller.getUploadUrl("temp.jpg", "image/jpeg")
-                result["uploadUrl"] shouldBe "https://s3/upload/temp.jpg"
-            }
-        }
-
-        When("허용되지 않은 content type으로 업로드 URL을 요청할 때") {
-            Then("400 Bad Request 예외를 발생시킨다") {
-                val ex = shouldThrow<LanglezException> {
-                    controller.getUploadUrl("temp.txt", "text/plain")
-                }
-                ex.status shouldBe 400
-                ex.message shouldBe "file.unsupported-content-type"
+            Then("서비스에 위임하고 key 와 presigned 를 함께 돌려준다") {
+                // contentType 검증은 비즈니스 규칙이라 서비스가 갖는다(ChatServiceTest 참고).
+                controller.getUploadUrl(10L, filename = "a.jpg", contentType = "image/jpeg") shouldBe result
+                verify { service.presignUpload(10L, "a.jpg", "image/jpeg") }
             }
         }
     }

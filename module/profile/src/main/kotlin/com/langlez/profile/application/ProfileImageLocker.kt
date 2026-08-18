@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.core.LanglezException
+import com.langlez.exception.LanglezException
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.redis.distributedLock.DistributedLock

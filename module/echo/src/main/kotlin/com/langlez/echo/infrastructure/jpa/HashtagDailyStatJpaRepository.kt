@@ -5,6 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.time.LocalDate
 
 interface HashtagDailyStatJpaRepository : JpaRepository<HashtagDailyStat, Long> {
-    fun findByHashtagAndStatDate(hashtag: String, statDate: LocalDate): HashtagDailyStat?
-    fun findAllByStatDateAndHashtagIn(statDate: LocalDate, hashtags: Collection<String>): List<HashtagDailyStat>
+    fun findAllByStatDate(statDate: LocalDate): List<HashtagDailyStat>
 }

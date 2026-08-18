@@ -12,18 +12,13 @@ dependencies {
     implementation(project(":infra:kafka"))
     implementation(project(":module:member"))
     implementation(project(":module:profile"))
-    implementation(project(":module:interest"))
     implementation(project(":module:auth"))
     implementation(project(":module:relationship"))
     implementation(project(":module:echo"))
     implementation(project(":module:chat"))
-    implementation(project(":module:admin"))
-    implementation(project(":module:matching"))
     implementation(project(":module:wave"))
     implementation(project(":module:notification"))
     implementation(project(":module:attachment"))
-    implementation(project(":module:report"))
-    implementation(project(":module:wavechat"))
 
     developmentOnly(libs.development.springboot.devtools)
 

@@ -16,7 +16,10 @@ abstract class OutBoxProcessor<T : OutBox>(private val repo: OutBoxRepository<T>
     open val threadTimeout = 10L
 
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
-    private val semaphore = Semaphore(threads)
+
+    // 반드시 lazy 여야 한다. 베이스 생성자에서 open val 을 읽으면 하위 클래스의 백킹 필드가
+    // 아직 대입되기 전이라 threads 가 0으로 잡히고, 모든 워커가 acquire 에서 영구 블록된다.
+    private val semaphore by lazy { Semaphore(threads) }
 
     @Autowired
     private lateinit var kafka: KafkaTemplate<String, String>
