@@ -222,16 +222,24 @@ Orca orchestration 스킬을 쓰거나 그 밖에 서브에이전트를 띄울 �
 
 **머지 전 코드 리뷰는 위 표와 별개로 `agy`(Antigravity CLI) 에 맡긴다.** 구현한 모델이 자기 코드를 리뷰하면 같은 맹점을 그대로 지나간다 — 다른 모델을 태우는 게 이 프로젝트에서 가장 값싼 안전망이다.
 
-`agy` 는 orca 의 known-agent 목록에 없어서 `worker-start --agent agy` 로는 안 붙는다. 터미널을 먼저 만들고 거기에 붙인다.
+`agy` 는 orca 의 known-agent 목록에 없다. **`worker-start` 는 `--agent agy` 도 `--terminal` 도 안 된다** — 후자는 프롬프트 주입 단계에서 `agent_prompt_stalled` 로 실패한다. orca 가 agy 의 TUI 입력 상태를 못 읽는다. `terminal send` 로 직접 넣어야 한다.
 
 ```bash
 # --worktree current 는 terminal create 에서 안 먹는다. 실제 worktree id 를 준다
-orca terminal create --worktree <worktree-id> --title "review-prN" --command "agy" --json
+orca terminal create --worktree <worktree-id> --title "review-prN (agy)" --command "agy" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
-orca orchestration worker-start --task <task_id> --terminal <handle> --json
+orca terminal send --terminal <handle> --text "<지시>" --enter --json
 ```
 
-`--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 형태로 넘긴다.
+**지시서는 파일로 두고 경로만 보낸다.** `terminal send` 로 긴 본문을 밀어 넣으면 TUI 가 깨진다. `.omo/review-prN-brief.md` 에 쓰고 "이 파일을 읽고 그대로 수행해라" 한 줄만 보낸다.
+
+**감독이 안 붙는다.** `worker_done` 이 없으니 산출물 파일이 생기는 것으로 완료를 판단한다.
+
+```bash
+until [ -f .omo/review-prN.md ]; do sleep 20; done
+```
+
+`--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 형태로 넘긴다. 기본은 Gemini 3.7 Flash (High) 다.
 
 리뷰 태스크는 **읽기 전용**으로 못 박고(`.omo/review-prN.md` 하나만 쓰게 한다), 판정을 `승인` / `조건부 승인(N건 수정 후)` / `반려` 중 하나로 강제한다. 지적마다 **"어떤 입력·상황에서 실제로 터지나"** 를 요구한다 — 그게 없으면 추측이고, **잘못된 지적은 잘못된 수정을 부른다.** 실제로 `SecurityContextHolder` 오진을 그대로 반영했다가 미인증 요청이 401 대신 403 을 받는 회귀가 난 적이 있다.
 
