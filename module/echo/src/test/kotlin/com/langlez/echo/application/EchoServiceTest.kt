@@ -156,6 +156,46 @@ class EchoServiceTest : BehaviorSpec({
                 verify(exactly = 0) { repo.findPosts(any(), any(), any()) }
             }
         }
+
+        When("차단된 작성자의 글 때문에 첫 페이지가 부족하면") {
+            Then("다음 페이지를 더 가져와 요청한 size 를 채운다") {
+                every { follows.followingIds(me) } returns listOf(other, 3L)
+                every { repo.findPosts(listOf(other, 3L), 2, null) } returns
+                    listOf(post(id = 22, authorId = other), post(id = 21, authorId = 3L))
+                every { repo.findPosts(listOf(other, 3L), 1, 21L) } returns
+                    listOf(post(id = 20, authorId = 3L))
+                every { blocks.isBlockedBetween(me, other) } returns true
+                every { blocks.isBlockedBetween(me, 3L) } returns false
+                every { repo.findMedia(listOf(21L, 20L)) } returns emptyList()
+                every { repo.findLikedPostIds(me, listOf(21L, 20L)) } returns emptySet()
+
+                val timeline = service.homeTimeline(me, 2, null)
+
+                timeline shouldHaveSize 2
+                timeline.map { it.id } shouldContainExactly listOf(21L, 20L)
+            }
+        }
+    }
+
+    Given("해시태그 타임라인을 볼 때") {
+
+        When("차단된 작성자의 글 때문에 첫 페이지가 부족하면") {
+            Then("다음 페이지를 더 가져와 요청한 size 를 채운다") {
+                every { repo.findPostsByHashtag("seoul", 2, null) } returns
+                    listOf(post(id = 32, authorId = other), post(id = 31, authorId = 3L))
+                every { repo.findPostsByHashtag("seoul", 1, 31L) } returns
+                    listOf(post(id = 30, authorId = 3L))
+                every { blocks.isBlockedBetween(me, other) } returns true
+                every { blocks.isBlockedBetween(me, 3L) } returns false
+                every { repo.findMedia(listOf(31L, 30L)) } returns emptyList()
+                every { repo.findLikedPostIds(me, listOf(31L, 30L)) } returns emptySet()
+
+                val timeline = service.hashtagTimeline(me, "#Seoul", 2, null)
+
+                timeline shouldHaveSize 2
+                timeline.map { it.id } shouldContainExactly listOf(31L, 30L)
+            }
+        }
     }
 
     Given("좋아요를 누를 때") {
@@ -209,6 +249,26 @@ class EchoServiceTest : BehaviorSpec({
                 service.comment(me, 10L, "hi")
 
                 verify { publisher.publishEvent(EchoCommentCreatedEvent(10L, other, 5L, me, "hi")) }
+            }
+        }
+
+        When("차단된 작성자의 댓글 때문에 첫 페이지가 부족하면") {
+            Then("다음 페이지를 더 가져와 요청한 size 를 채운다") {
+                every { repo.findPost(10L) } returns post(id = 10L, authorId = 99L)
+                every { blocks.isBlockedBetween(me, 99L) } returns false
+                every { repo.findComments(10L, 2, null) } returns listOf(
+                    Comment(id = 1, postId = 10, authorId = other, content = "a"),
+                    Comment(id = 2, postId = 10, authorId = 3L, content = "b"),
+                )
+                every { repo.findComments(10L, 1, 2L) } returns
+                    listOf(Comment(id = 3, postId = 10, authorId = 3L, content = "c"))
+                every { blocks.isBlockedBetween(me, other) } returns true
+                every { blocks.isBlockedBetween(me, 3L) } returns false
+
+                val comments = service.listComments(me, 10L, 2, null)
+
+                comments shouldHaveSize 2
+                comments.map { it.id } shouldContainExactly listOf(2L, 3L)
             }
         }
     }
