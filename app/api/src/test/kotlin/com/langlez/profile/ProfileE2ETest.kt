@@ -343,6 +343,75 @@ class ProfileE2ETest : BehaviorSpec() {
                 }
             }
         }
+
+        /**
+         * 정지·탈퇴 회원 차단은 JwtAuthenticationFilter 에서 일어난다. 필터에서 던진 예외는
+         * @RestControllerAdvice 를 못 타는 게 보통이라, 실제 응답 본문이 JSON 으로 나가는지
+         * 조립된 앱에서 확인한다. (필터가 handlerExceptionResolver 로 넘겨 이 경로가 살아 있다.)
+         */
+        Given("정지·탈퇴된 회원이 유효한 액세스 토큰을 들고 있을 때") {
+
+            // 메시지 문구는 로케일에 따라 달라진다. 실행 환경의 기본 로케일에 기대지 않고 영어로 못 박는다.
+            fun englishHeaders(token: String) = authHeaders(token).apply { set(HttpHeaders.ACCEPT_LANGUAGE, "en") }
+
+            fun tokenOf(handle: String, status: Member.Status): String {
+                val member = memberRepo.save(
+                    Member(
+                        email = "$handle@test.com",
+                        handle = handle,
+                        status = status,
+                        provider = Member.Provider.GOOGLE,
+                        providerId = "g-$handle",
+                        providerDisplayName = handle,
+                    )
+                )
+                return jwt.createAccessToken(member.id, handle, "ROLE_MEMBER")
+            }
+
+            When("정지된 회원이 일반 API 를 호출하면") {
+                val response = restTemplate.exchange(
+                    "/api/v1/profiles/alice",
+                    HttpMethod.GET,
+                    HttpEntity<Void>(englishHeaders(tokenOf("carol", Member.Status.SUSPENDED))),
+                    String::class.java,
+                )
+
+                Then("403 과 member.suspended 문구가 담긴 JSON 본문이 반환된다") {
+                    response.statusCode shouldBe HttpStatus.FORBIDDEN
+                    response.body shouldContain "\"status\":\"FORBIDDEN\""
+                    response.body shouldContain "This account is suspended."
+                }
+            }
+
+            When("탈퇴한 회원이 일반 API 를 호출하면") {
+                val response = restTemplate.exchange(
+                    "/api/v1/profiles/alice",
+                    HttpMethod.GET,
+                    HttpEntity<Void>(englishHeaders(tokenOf("dave", Member.Status.WITHDRAWN))),
+                    String::class.java,
+                )
+
+                Then("403 과 탈퇴 문구가 담긴 JSON 본문이 반환된다") {
+                    response.statusCode shouldBe HttpStatus.FORBIDDEN
+                    response.body shouldContain "\"status\":\"FORBIDDEN\""
+                    response.body shouldContain "This account has been deleted."
+                }
+            }
+
+            // 여기서 403 이 나오면 미인증 판정 경로가 깨진 것이다.
+            When("토큰 없이 호출하면") {
+                val response = restTemplate.exchange(
+                    "/api/v1/profiles/alice",
+                    HttpMethod.GET,
+                    HttpEntity<Void>(HttpHeaders()),
+                    String::class.java,
+                )
+
+                Then("여전히 401 이 반환된다") {
+                    response.statusCode shouldBe HttpStatus.UNAUTHORIZED
+                }
+            }
+        }
     }
 
     private fun authHeaders(token: String) = HttpHeaders().apply {
