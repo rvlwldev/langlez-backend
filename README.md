@@ -212,7 +212,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `chat` | 완료. 1:1 채팅 전체 (아래 상세) |
 | `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
 | `relationship` | 완료. 팔로우·차단·신고 + `FollowQuery`/`BlockQuery` 구현 |
-| `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. 단 **HTTP 컨트롤러가 없다** — `EchoService` 와 요청·응답 DTO 까지만 있고 `@RestController` 가 아직 없어 외부에 노출되지 않는다 |
+| `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. `EchoAPI` + `EchoController` 로 `/api/v1/echoes` 아래 12개 엔드포인트 노출. 아웃박스는 여전히 미사용 스캐폴딩이다(§5.4) |
 | `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
 
 `matching`, `interest`, `admin` 은 삭제됐다. `matching` 은 의존 계층이 소실돼 재설계가 필요하고, `interest` 는 재설계 예정, `admin` 은 폐기다.
@@ -292,30 +292,38 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 ### 5.2 중간
 
-8. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
+8. **`chat`·`echo` 아웃박스에 히스토리 아카이버가 없다**
+   `OutBoxHistoryProcessor` 를 상속한 클래스는 `MemberOutBoxHistoryScheduler`, `RelationshipOutBoxHistoryScheduler` 둘뿐이다. `ChatOutBoxHistory`, `EchoOutBoxHistory` 엔티티는 있으나 채우는 쪽이 없다.
+   `OutBoxProcessor.send` 는 `complete()` 후 `repo.save` 만 하고 삭제하지 않으므로 **`chat_event_outbox` 에 완료 행이 영원히 남는다.** 조회 인덱스가 커지며 `fetch` 가 점점 느려진다. (echo 는 아웃박스 자체를 안 쓰므로 §5.4 정리 대상과 함께 판단해야 한다)
+
+9. **`*_outbox_history` 를 비우는 배치가 아예 없다**
+   `OutBoxHistoryProcessor` 는 완료 건을 `*_outbox_history` 로 옮기기만 한다. 저장소 전체에 그 테이블을 삭제하거나 파티션을 드롭하는 코드가 없다. **무한 증가한다.** 지금 `member_outbox_history`, `relationship_event_outbox_history` 가 그 상태다.
+   → 보존 기간 기준 `@Scheduled` + `@DistributedLock` 삭제 배치. 한 번에 지우는 양에 상한을 둬야 한다 — 수백만 행을 한 트랜잭션에서 지우면 락과 WAL 이 터진다.
+
+10. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
    `MessageDeduplicator.kt:31-38` 이 한계를 직접 서술한다 — 되돌림은 같은 JVM 에서 `Exception` 이 잡혔을 때만 돈다. `Error`(OOM)나 SIGKILL·OOMKilled 로 죽으면 표시만 남고 오프셋은 미커밋이라, 재기동 후 재배달이 "중복"으로 걸러져 TTL(1시간)까지 유실된다. 그레이스풀 셧다운은 in-flight 를 기다리므로 정상 배포로는 안 터진다.
    → 표시를 **처리 성공 후**로 옮기면(전형적 idempotent-consumer) 유실 경로가 사라지고 `release` 자체가 불필요해진다. 대신 리밸런싱 중 겹치는 재배달을 못 막는다. 이 설계가 선언한 우선순위("중복 < 유실")와는 그쪽이 일치한다.
 
-9. **`attachment` 의 domain 계층이 웹 타입을 참조한다**
+11. **`attachment` 의 domain 계층이 웹 타입을 참조한다**
    `Attachment.kt:3-4` 가 `LanglezException`, `HttpStatus` 를 import 한다. 다른 8개 모듈 domain 은 전부 준수한다. → `require { "메시지키" }` 로 바꾸고 `AttachmentService` 에서 변환.
 
-10. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
+12. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
 
-11. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
-12. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
-13. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
+13. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+14. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
+15. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
 
 ### 5.3 낮음 / 정책 결정 필요
 
-14. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
-15. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-16. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
-17. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
-18. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-19. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
-20. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
-21. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
-22. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+16. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
+17. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+18. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
+19. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
+20. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+21. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
+22. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
+23. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
+24. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
 
 ### 5.4 정리 대상 (기능 영향 없음)
 
