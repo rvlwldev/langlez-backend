@@ -2,6 +2,7 @@ package com.langlez.notification
 
 import com.langlez.core.MemberStatusQuery
 import com.langlez.core.MessageBroadcaster
+import com.langlez.core.MessageDeduplicator
 import com.langlez.core.OnlineTracker
 import com.langlez.core.PushTokenQuery
 import com.langlez.core.TokenBlacklist
@@ -30,6 +31,13 @@ class TestNotificationApplication {
 
     @Bean
     fun tokenBlacklist(): TokenBlacklist = mockk(relaxed = true)
+
+    /**
+     * 구현체는 infra:redis 에 있다. relaxed 대역은 `isDuplicate` 로 false 를 돌려줘
+     * "중복 아님 = 통과" 로 흐른다 — 대역이 핸들러를 조용히 건너뛰지 않는 쪽이 기본값이어야 한다.
+     */
+    @Bean
+    fun messageDeduplicator(): MessageDeduplicator = mockk(relaxed = true)
 
     @Bean
     fun onlineTracker(): OnlineTracker = mockk(relaxed = true)
