@@ -222,24 +222,46 @@ Orca orchestration 스킬을 쓰거나 그 밖에 서브에이전트를 띄울 �
 
 **머지 전 코드 리뷰는 위 표와 별개로 `agy`(Antigravity CLI) 에 맡긴다.** 구현한 모델이 자기 코드를 리뷰하면 같은 맹점을 그대로 지나간다 — 다른 모델을 태우는 게 이 프로젝트에서 가장 값싼 안전망이다.
 
-`agy` 는 orca 의 known-agent 목록에 없다. **`worker-start` 는 `--agent agy` 도 `--terminal` 도 안 된다** — 후자는 프롬프트 주입 단계에서 `agent_prompt_stalled` 로 실패한다. orca 가 agy 의 TUI 입력 상태를 못 읽는다. `terminal send` 로 직접 넣어야 한다.
+`agy` 는 orca 의 known-agent 목록에 없다. **프롬프트 자동 주입이 안 된다** — `worker-start --agent agy`, `worker-start --terminal`, `dispatch --inject` 셋 다 `agent_prompt_stalled` 로 실패한다. agy 가 완전히 로그인해 유휴 상태여도 마찬가지다. orca 가 agy 의 TUI 입력 상태를 못 읽는다.
+
+**그래도 orca 서브에이전트로 돌린다.** `--inject` 없는 `dispatch` 로 Task·Dispatch 추적을 붙이고 프롬프트만 손으로 넣으면 `worker_done` 까지 정상으로 돈다.
 
 ```bash
-# --worktree current 는 terminal create 에서 안 먹는다. 실제 worktree id 를 준다
+# 1. 리뷰마다 새 터미널을 만든다 (이유는 아래)
 orca terminal create --worktree <worktree-id> --title "review-prN (agy)" --command "agy" --json
-orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
-orca terminal send --terminal <handle> --text "<지시>" --enter --json
+
+# 2. tui-idle 만으로는 부족하다. 로그인이 끝날 때까지 기다린다
+until orca terminal read --terminal <handle> --json | grep -q "Google AI Pro"; do sleep 3; done
+
+# 3. 태스크를 만들고 --inject 없이 dispatch (추적만 붙는다)
+orca orchestration task-create --spec "..." --json
+orca orchestration dispatch --task <task_id> --to <handle> --json
+
+# 4. 프롬프트와 함께 worker_done 명령을 그대로 준다. id 두 개를 반드시 박아 넣는다
+orca terminal send --terminal <handle> --enter --json --text "...지시...
+끝나면 아래를 그대로 실행해라.
+orca orchestration send --type worker_done --subject \"...\" --body \"...\" \
+  --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --json"
+
+# 5. 평소처럼 기다린다
+orca orchestration check --wait --types worker_done,question --timeout-ms 900000 --json
 ```
 
-**지시서는 파일로 두고 경로만 보낸다.** `terminal send` 로 긴 본문을 밀어 넣으면 TUI 가 깨진다. `.omo/review-prN-brief.md` 에 쓰고 "이 파일을 읽고 그대로 수행해라" 한 줄만 보낸다.
+**리뷰마다 새 터미널을 쓴다.** 재사용하면 agy 가 스크롤백에 남은 **옛 dispatch id** 를 집어 `worker_done` 을 보내고 `capability is revoked` 로 거부된다. 실제로 겪었다.
 
-**감독이 안 붙는다.** `worker_done` 이 없으니 산출물 파일이 생기는 것으로 완료를 판단한다.
-
-```bash
-until [ -f .omo/review-prN.md ]; do sleep 20; done
-```
+**지시서는 파일로 두고 경로만 보낸다.** `terminal send` 로 긴 본문을 밀면 TUI 가 깨진다. `.omo/review-prN-brief.md` 에 쓰고 "이 파일을 읽고 그대로 수행해라" 한 줄만 보낸다.
 
 `--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 형태로 넘긴다. 기본은 Gemini 3.7 Flash (High) 다.
+
+### 리뷰 지시서는 `superpowers:requesting-code-review` 를 따른다
+
+리뷰를 띄우기 전에 그 스킬을 읽고 `code-reviewer.md` 템플릿으로 지시서를 만든다. 핵심만 옮기면:
+
+- **세션 히스토리를 주지 않는다.** 무엇을 만들었는지·요구사항이 무엇이었는지·`BASE_SHA`..`HEAD_SHA` 범위만 정밀하게 준다. 코디네이터의 사고 과정이 아니라 결과물을 보게 한다
+- **read-only 를 명시한다.** 워킹트리·인덱스·HEAD·브랜치를 건드리지 못하게 한다. 다른 리비전이 필요하면 `git worktree add /tmp/review-<sha>` 로 따로 뜨게 한다
+- **리뷰어가 다시 서브에이전트를 띄우지 못하게 막는다.** 비용만 늘고 판정은 값이 없다. 디프가 크면 스스로 여러 번 나눠 보고 그렇게 했다고 적게 한다
+- **심각도를 나눈다.** Critical 은 즉시, Important 는 진행 전에, Minor 는 기록만
+- **리뷰어가 틀렸으면 근거를 들어 반박한다.** 그대로 반영하지 않는다
 
 리뷰 태스크는 **읽기 전용**으로 못 박고(`.omo/review-prN.md` 하나만 쓰게 한다), 판정을 `승인` / `조건부 승인(N건 수정 후)` / `반려` 중 하나로 강제한다. 지적마다 **"어떤 입력·상황에서 실제로 터지나"** 를 요구한다 — 그게 없으면 추측이고, **잘못된 지적은 잘못된 수정을 부른다.** 실제로 `SecurityContextHolder` 오진을 그대로 반영했다가 미인증 요청이 401 대신 403 을 받는 회귀가 난 적이 있다.
 
