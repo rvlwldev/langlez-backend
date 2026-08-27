@@ -140,9 +140,15 @@ class FollowIndexIntegrationTest : BehaviorSpec() {
                 plan shouldNotContain "member_follows_pkey"
             }
 
-            Then("팔로잉 카운트도 seq scan 이 아니다") {
+            /**
+             * `seq scan 아님` 만 단언하면 V6 없이도 통과한다 — follower_id 가
+             * UNQ_MEMBER_FOLLOW 의 선두 컬럼이라 그 유니크 인덱스로도 카운트는 나온다.
+             * V6 를 지웠을 때 빨간불이 뜨려면 새 인덱스를 타는 것까지 봐야 한다.
+             */
+            Then("팔로잉 카운트가 V6 전용 인덱스를 탄다") {
                 val plan = explain("select count(*) from member_follows where follower_id = $STAR")
 
+                plan shouldContain "idx_member_follow_follower"
                 plan shouldNotContain "seq scan on member_follows"
             }
         }
