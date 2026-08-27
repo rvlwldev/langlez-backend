@@ -22,6 +22,9 @@ private class FakeCache : Cache {
 
     override fun put(key: Any, value: Any) { map[key] = value }
     override fun <T : Any> putMany(entries: Map<out Any, T>) { map.putAll(entries) }
+    override fun putIfAbsent(key: Any, value: Any) { map.putIfAbsent(key, value) }
+    override fun <T : Any> putManyIfAbsent(entries: Map<out Any, T>) =
+        entries.forEach { (key, value) -> putIfAbsent(key, value) }
     override fun evict(key: Any) { map.remove(key) }
     override fun evictMany(keys: Collection<Any>) { keys.forEach(::evict) }
 }

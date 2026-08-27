@@ -27,6 +27,11 @@ class CaffeineCache(private val cache: NativeCache<Any, Any>) : Cache {
 
     override fun <T : Any> putMany(entries: Map<out Any, T>) = cache.putAll(entries)
 
+    override fun putIfAbsent(key: Any, value: Any) { cache.asMap().putIfAbsent(key, value) }
+
+    override fun <T : Any> putManyIfAbsent(entries: Map<out Any, T>) =
+        entries.forEach { (key, value) -> putIfAbsent(key, value) }
+
     override fun evict(key: Any) = cache.invalidate(key)
 
     override fun evictMany(keys: Collection<Any>) = cache.invalidateAll(keys)

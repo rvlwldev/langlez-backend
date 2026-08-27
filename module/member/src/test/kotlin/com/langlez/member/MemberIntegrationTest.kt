@@ -442,31 +442,47 @@ class MemberIntegrationTest : BehaviorSpec() {
         // =========================================================================
         Given("계정 상태 조회 포트로 상태를 볼 때") {
 
+            // 상태 변경 경로가 전부 repo.save 를 거쳐 캐시를 갱신하므로 낡은 상태가 남지 않는다.
+            // 여기가 깨지면 정지시킨 회원이 캐시 TTL 동안 그대로 API 를 쓴다.
+            // 회원을 블록마다 새로 만든다 — 하나를 돌려 쓰면 앞 블록이 남긴 상태가 뒤 블록의 전제가 된다.
+            fun newMember(seq: String) = memberService.createMember(
+                email = "u6-$seq@test.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "p6-$seq",
+                providerUsername = "U6",
+            )
+
             When("가입 직후라면") {
-                val m = memberService.createMember(
-                    email = "u6@test.com",
-                    providerType = Member.Provider.GOOGLE,
-                    providerId = "p6",
-                    providerUsername = "U6",
-                )
+                val m = newMember("created")
 
                 Then("CREATED 로 보인다") {
                     memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.CREATED
                 }
+            }
 
-                // 상태 변경 경로가 전부 repo.save 를 거쳐 캐시를 갱신하므로 낡은 상태가 남지 않는다.
-                // 여기가 깨지면 정지시킨 회원이 캐시 TTL 동안 그대로 API 를 쓴다.
-                Then("정지시키면 곧바로 SUSPENDED 로 보인다") {
+            When("정지시키면") {
+                val m = newMember("suspended")
+
+                Then("곧바로 SUSPENDED 로 보인다") {
                     memberService.suspendMember(m.id, reason = "test")
                     memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.SUSPENDED
                 }
+            }
 
-                Then("정지를 풀면 곧바로 ACTIVE 로 보인다") {
+            When("정지를 풀면") {
+                val m = newMember("unsuspended")
+                memberService.suspendMember(m.id, reason = "test")
+
+                Then("곧바로 ACTIVE 로 보인다") {
                     memberService.unsuspendMember(m.id)
                     memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.ACTIVE
                 }
+            }
 
-                Then("탈퇴시키면 곧바로 WITHDRAWN 으로 보인다") {
+            When("탈퇴시키면") {
+                val m = newMember("withdrawn")
+
+                Then("곧바로 WITHDRAWN 으로 보인다") {
                     memberService.withdrawMember(m.id)
                     memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.WITHDRAWN
                 }

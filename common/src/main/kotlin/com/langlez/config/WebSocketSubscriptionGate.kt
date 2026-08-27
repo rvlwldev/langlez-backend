@@ -4,6 +4,8 @@ import com.langlez.core.SubscriptionAuthorizer
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor
+import org.springframework.messaging.simp.SimpMessageType
 import org.springframework.messaging.simp.stomp.StompCommand
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.messaging.support.ChannelInterceptor
@@ -40,7 +42,15 @@ class WebSocketSubscriptionGate(
 
     override fun preSend(message: Message<*>, channel: MessageChannel): Message<*> {
         val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java)
-            ?: return message
+        // STOMP accessor 가 없으면 목적지를 읽을 수 없어 판정 자체가 불가능하다. 통과시키지 않는다.
+        // 현재 이 분기는 도달하지 않는다 — 인바운드 채널의 클라이언트 프레임은 StompSubProtocolHandler 가
+        // 항상 StompHeaderAccessor 를 붙여 보낸다. 그래도 "못 읽으면 통과"를 남겨 두지 않는다.
+        if (accessor == null) {
+            if (SimpMessageHeaderAccessor.getMessageType(message.headers) == SimpMessageType.SUBSCRIBE)
+                throw IllegalArgumentException(FORBIDDEN)
+
+            return message
+        }
 
         if (accessor.command != StompCommand.SUBSCRIBE) return message
 

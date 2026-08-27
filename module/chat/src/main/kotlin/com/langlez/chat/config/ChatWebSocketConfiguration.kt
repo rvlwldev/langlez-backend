@@ -7,6 +7,8 @@ import com.langlez.utility.JwtTokenProvider
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
 import org.springframework.messaging.simp.config.ChannelRegistration
@@ -31,6 +33,13 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
  * 발행은 레디스로 나가고, 모든 인스턴스가 구독해 각자 자기 세션에 밀어준다.
  * 그래서 서비스 코드는 `SimpMessagingTemplate` 이 아니라 `MessageBroadcaster` 포트를 써야 한다.
  */
+/*
+ * 게이트가 인바운드 채널의 첫 인터셉터여야 한다. 스프링은 WebSocketMessageBrokerConfigurer 빈을
+ * 전부 모아 configureClientInboundChannel 을 차례로 부르며 인터셉터를 append 하는데, 그 순회 순서는
+ * @Order 가 없으면 정해져 있지 않다. 새 모듈이 configurer 를 추가하면서 이 설정보다 먼저 불리면
+ * 그 모듈 인터셉터가 게이트 앞에 서고, 인가에 실패할 구독이 그 앞에서 부수 효과를 남긴다.
+ */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @Configuration
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
