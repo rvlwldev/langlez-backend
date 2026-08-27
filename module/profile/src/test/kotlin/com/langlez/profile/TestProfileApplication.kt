@@ -31,6 +31,14 @@ class TestProfileApplication {
         override fun attach(key: String, sourceId: Long?) = "https://cdn.test/$key"
     }
 
+    /** 구현체는 relationship 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
+    @Bean
+    fun followQuery(): com.langlez.core.FollowQuery = object : com.langlez.core.FollowQuery {
+        override fun followingIds(memberId: Long) = emptyList<Long>()
+
+        override fun counts(memberId: Long) = com.langlez.core.FollowQuery.Counts(0, 0)
+    }
+
     /**
      * RedisMessageBroadcaster 가 요구한다. 이 빈은 @EnableWebSocketMessageBroker 가 등록하는데,
      * 그 설정은 chat 모듈에 있어 이 모듈 단독 컨텍스트엔 없다. 대역만 올린다.

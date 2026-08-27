@@ -49,6 +49,27 @@ class RelationshipController(private val service: RelationshipService) : Relatio
     ): List<RelationshipMemberResponse> =
         service.listFollowings(memberId, size.coerceIn(1, MAX_SIZE), cursor).map(::RelationshipMemberResponse)
 
+    // `/me` 는 리터럴이라 `{memberId}` 패턴보다 먼저 매칭된다. 경로가 겹치지 않는다.
+    @GetMapping("/{memberId}/followers")
+    override fun listFollowersOf(
+        @MemberId viewerId: Long,
+        @PathVariable("memberId") targetId: Long,
+        @RequestParam(defaultValue = "$DEFAULT_SIZE") size: Int,
+        @RequestParam(required = false) cursor: Long?,
+    ): List<RelationshipMemberResponse> =
+        service.listFollowersOf(viewerId, targetId, size.coerceIn(1, MAX_SIZE), cursor)
+            .map(::RelationshipMemberResponse)
+
+    @GetMapping("/{memberId}/followings")
+    override fun listFollowingsOf(
+        @MemberId viewerId: Long,
+        @PathVariable("memberId") targetId: Long,
+        @RequestParam(defaultValue = "$DEFAULT_SIZE") size: Int,
+        @RequestParam(required = false) cursor: Long?,
+    ): List<RelationshipMemberResponse> =
+        service.listFollowingsOf(viewerId, targetId, size.coerceIn(1, MAX_SIZE), cursor)
+            .map(::RelationshipMemberResponse)
+
     @PostMapping("/blocks/{targetId}")
     @ResponseStatus(NO_CONTENT)
     override fun block(@MemberId memberId: Long, @PathVariable targetId: Long) {

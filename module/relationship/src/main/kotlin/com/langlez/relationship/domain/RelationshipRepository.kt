@@ -21,6 +21,20 @@ interface RelationshipRepository {
     /** 내가 팔로우한 사람들 */
     fun findFollowings(memberId: Long, size: Int, cursor: Long?): List<Edge>
 
+    /**
+     * 팔로워 수 / 팔로잉 수.
+     *
+     * 카운터 컬럼으로 비정규화하지 않고 매번 COUNT 한다. **되돌리지 마라.**
+     * `RelationshipService.block()` 이 팔로우를 양방향으로 끊는데 그 사실을 알리는 이벤트가 없다.
+     * 증감식 카운터를 두면 누가 차단할 때마다 조용히 어긋나고, 어긋난 뒤엔 백필 말고 고칠 방법이 없다.
+     * COUNT 는 항상 정확하고 백필이 필요 없다.
+     *
+     * 두 방향 모두 인덱스만 읽고 끝난다 (V6 의 IDX_MEMBER_FOLLOW_FOLLOWED / IDX_MEMBER_FOLLOW_FOLLOWER).
+     */
+    fun countFollowers(memberId: Long): Long
+
+    fun countFollowings(memberId: Long): Long
+
     fun save(block: Block): Block
     fun findBlock(blockerId: Long, blockedId: Long): Block?
     fun deleteBlock(blockerId: Long, blockedId: Long)

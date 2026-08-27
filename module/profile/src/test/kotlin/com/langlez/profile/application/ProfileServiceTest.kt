@@ -1,5 +1,6 @@
 package com.langlez.profile.application
 
+import com.langlez.core.FollowQuery
 import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
@@ -12,6 +13,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.*
+import java.util.Locale
 import org.springframework.http.HttpStatus
 
 class ProfileServiceTest : BehaviorSpec({
@@ -20,9 +22,11 @@ class ProfileServiceTest : BehaviorSpec({
     val storage = mockk<Storage>()
     val profileImageLocker = mockk<ProfileImageLocker>()
 
-    val service = ProfileService(repo, storage, profileImageLocker)
+    val follows = mockk<FollowQuery>()
 
-    afterEach { clearMocks(repo, storage, profileImageLocker, answers = false) }
+    val service = ProfileService(repo, storage, profileImageLocker, follows)
+
+    afterEach { clearMocks(repo, storage, profileImageLocker, follows, answers = false) }
 
     fun member(id: Long) = Member(
         id = id,
@@ -36,6 +40,24 @@ class ProfileServiceTest : BehaviorSpec({
 
     fun image(memberId: Long, url: String, represent: Boolean = false, sequence: Long = 1) =
         ProfileImage(memberId, url, sequence, 0L, represent)
+
+    Given("남의 프로필 상세를 열면") {
+
+        // 프로필 화면이 팔로워/팔로잉 숫자를 함께 그린다. 여기 안 실으면 클라이언트가 요청을 한 번 더 쏜다.
+        When("팔로워와 팔로잉이 있는 회원이면") {
+            Then("두 숫자가 응답에 실려 나간다") {
+                every { repo.findProfileByUsername("target") } returns profile(9L)
+                every { repo.increaseVisitCount(1L, "target") } returns Unit
+                every { repo.getVisitCountDelta("target") } returns 2L
+                every { follows.counts(9L) } returns FollowQuery.Counts(followers = 12L, followings = 3L)
+
+                val detail = service.getProfileDetail(1L, "target", Locale.KOREA)
+
+                detail.followerCount shouldBe 12L
+                detail.followingCount shouldBe 3L
+            }
+        }
+    }
 
     Given("프로필 이미지 업로드 URL 발급 시") {
 

@@ -18,7 +18,8 @@ class ProfileImageConfirmTest : BehaviorSpec({
     val repo = mockk<ProfileRepository>()
     val storage = mockk<Storage>()
     val locker = mockk<ProfileImageLocker>()
-    val service = ProfileService(repo, storage, locker)
+    val follows = mockk<com.langlez.core.FollowQuery>(relaxed = true)
+    val service = ProfileService(repo, storage, locker, follows)
 
     Given("업로드 URL 을 발급하면") {
         every {

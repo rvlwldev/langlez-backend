@@ -32,6 +32,28 @@ interface RelationshipAPI {
         @Parameter(description = "직전 페이지 마지막 항목의 cursor") cursor: Long?,
     ): List<RelationshipMemberResponse>
 
+    @Operation(
+        summary = "특정 회원의 팔로워 목록",
+        description = "남의 프로필용. 차단 관계면 403 이다. 커서 규칙은 내 팔로워 목록과 같다.",
+    )
+    fun listFollowersOf(
+        viewerId: Long,
+        @Parameter(description = "조회 대상 회원 id") targetId: Long,
+        @Parameter(description = "페이지 크기(최대 50)") size: Int,
+        @Parameter(description = "직전 페이지 마지막 항목의 cursor") cursor: Long?,
+    ): List<RelationshipMemberResponse>
+
+    @Operation(
+        summary = "특정 회원의 팔로잉 목록",
+        description = "남의 프로필용. 차단 관계면 403 이다. 커서 규칙은 내 팔로워 목록과 같다.",
+    )
+    fun listFollowingsOf(
+        viewerId: Long,
+        @Parameter(description = "조회 대상 회원 id") targetId: Long,
+        @Parameter(description = "페이지 크기(최대 50)") size: Int,
+        @Parameter(description = "직전 페이지 마지막 항목의 cursor") cursor: Long?,
+    ): List<RelationshipMemberResponse>
+
     @Operation(summary = "차단", description = "차단하면 서로의 팔로우 관계가 양방향으로 해제된다.")
     fun block(memberId: Long, @Parameter(description = "차단할 회원 id") targetId: Long)
 

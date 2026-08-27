@@ -1,5 +1,6 @@
 package com.langlez.profile.application
 
+import com.langlez.core.FollowQuery
 import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.profile.api.ProfileRequest
@@ -17,6 +18,7 @@ class ProfileService(
     private val repo: ProfileRepository,
     private val storage: Storage,
     private val profileImageLocker: ProfileImageLocker,
+    private val follows: FollowQuery,
 ) {
 
     @Transactional(readOnly = true)
@@ -31,7 +33,14 @@ class ProfileService(
             ?: throw LanglezException(404, "profile.not-found")
         increaseVisitCount(visitorId, username)
         val visitDelta = getVisitCount(username)
-        return ProfileResponse.Detail(profile, profile.member, profile.visitCount + visitDelta)
+        // 팔로워/팔로잉 수는 relationship 소유라 core 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
+        // 여기 실어 보낸다 — 클라이언트가 relationship 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
+        return ProfileResponse.Detail(
+            profile,
+            profile.member,
+            profile.visitCount + visitDelta,
+            follows.counts(profile.member.id),
+        )
     }
 
     fun increaseVisitCount(visitorId: Long, username: String) {

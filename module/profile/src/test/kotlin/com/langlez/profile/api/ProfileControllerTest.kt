@@ -42,6 +42,8 @@ class ProfileControllerTest : BehaviorSpec({
                 locale = null,
                 birthDay = null,
                 visitCount = 5L,
+                followerCount = 12L,
+                followingCount = 3L,
             )
             every { service.getProfileDetail(1L, "target", locale) } returns detail
 
@@ -49,6 +51,8 @@ class ProfileControllerTest : BehaviorSpec({
                 val result = controller.getProfile(1L, "target", locale)
                 result.handle shouldBe "target"
                 result.visitCount shouldBe 5L
+                result.followerCount shouldBe 12L
+                result.followingCount shouldBe 3L
             }
         }
 

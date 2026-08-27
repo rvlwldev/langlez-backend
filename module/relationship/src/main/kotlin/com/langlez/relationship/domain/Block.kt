@@ -10,7 +10,9 @@ import java.time.Instant
 @EntityListeners(AuditingEntityListener::class)
 @Table(
     name = "member_blocks",
-    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_BLOCK", columnNames = ["blocker_id", "blocked_id"])]
+    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_BLOCK", columnNames = ["blocker_id", "blocked_id"])],
+    // 차단 목록도 커서 페이징이다. 양방향 차단 판정은 두 컬럼 등치라 유니크 인덱스로 충분하다.
+    indexes = [Index(name = "IDX_MEMBER_BLOCK_BLOCKER", columnList = "blocker_id, id DESC")]
 )
 class Block(
     @Id @GeneratedValue(strategy = IDENTITY)

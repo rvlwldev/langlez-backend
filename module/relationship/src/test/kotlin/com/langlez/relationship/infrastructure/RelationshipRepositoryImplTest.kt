@@ -1,13 +1,19 @@
 package com.langlez.relationship.infrastructure
 
 import com.langlez.core.BlockQuery
+import com.langlez.core.FollowQuery
+import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRepository
+import com.langlez.relationship.application.RelationshipService
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.domain.Report
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -37,6 +43,15 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
     @Autowired
     lateinit var blocks: BlockQuery
 
+    @Autowired
+    lateinit var follows: FollowQuery
+
+    @Autowired
+    lateinit var service: RelationshipService
+
+    @Autowired
+    lateinit var memberRepo: MemberRepository
+
     companion object {
         @JvmField
         val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
@@ -59,6 +74,18 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
             registry.add("spring.data.redis.host") { redis.host }
             registry.add("spring.data.redis.port") { redis.getMappedPort(6379) }
         }
+    }
+
+    private var sequence = 0L
+
+    private fun newMember(prefix: String): Member {
+        sequence++
+        return Member(
+            email = "$prefix$sequence@count.test",
+            handle = "$prefix$sequence",
+            provider = Member.Provider.GOOGLE,
+            providerId = "$prefix$sequence",
+        )
     }
 
     init {
@@ -115,6 +142,66 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
 
                 repo.findBlocks(me, 10, null) shouldHaveSize 0
                 blocks.isBlockedBetween(other, me) shouldBe false
+            }
+        }
+
+        Given("팔로우가 하나도 없는 회원은") {
+            val loner = 5041L
+
+            Then("팔로워 수도 팔로잉 수도 0 이다") {
+                repo.countFollowers(loner) shouldBe 0L
+                repo.countFollowings(loner) shouldBe 0L
+            }
+        }
+
+        Given("팔로워와 팔로잉이 섞여 있으면") {
+            val me = 5051L
+            (5052L..5054L).forEach { repo.save(Follow(it, me)) }
+            (5055L..5056L).forEach { repo.save(Follow(me, it)) }
+
+            Then("두 방향이 각각 따로 세어진다") {
+                repo.countFollowers(me) shouldBe 3L
+                repo.countFollowings(me) shouldBe 2L
+            }
+
+            // 자기 팔로우 행은 엔티티가 막아 애초에 저장되지 않는다. 카운트가 자기 자신을 포함할 길이 없다.
+            Then("자기 자신은 어느 쪽에도 포함되지 않는다") {
+                shouldThrow<IllegalArgumentException> { Follow(me, me) }
+
+                repo.findFollowers(me, 50, null).map { it.memberId } shouldNotContain me
+                repo.findFollowings(me, 50, null).map { it.memberId } shouldNotContain me
+            }
+
+            Then("FollowQuery 포트도 같은 숫자를 한 번에 돌려준다") {
+                follows.counts(me) shouldBe FollowQuery.Counts(followers = 3L, followings = 2L)
+            }
+
+            Then("언팔로우하면 카운트가 바로 줄어든다") {
+                repo.deleteFollow(me, 5055L)
+
+                repo.countFollowings(me) shouldBe 1L
+            }
+        }
+
+        Given("서로 팔로우하던 두 회원 중 하나가 차단하면") {
+            val blocker = memberRepo.save(newMember("blocker"))
+            val blocked = memberRepo.save(newMember("blocked"))
+
+            repo.save(Follow(blocker.id, blocked.id))
+            repo.save(Follow(blocked.id, blocker.id))
+
+            // 차단은 팔로우를 양방향으로 끊는데 그걸 알리는 이벤트가 없다.
+            // 비정규화 카운터였다면 여기서 조용히 어긋난다. COUNT 라 그냥 맞는다.
+            Then("양쪽 카운트가 0 으로 떨어진다") {
+                repo.countFollowers(blocker.id) shouldBe 1L
+                repo.countFollowings(blocker.id) shouldBe 1L
+
+                service.block(blocker.id, blocked.id)
+
+                repo.countFollowers(blocker.id) shouldBe 0L
+                repo.countFollowings(blocker.id) shouldBe 0L
+                repo.countFollowers(blocked.id) shouldBe 0L
+                repo.countFollowings(blocked.id) shouldBe 0L
             }
         }
 
