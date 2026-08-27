@@ -10,4 +10,15 @@ package com.langlez.core
 interface FollowQuery {
     /** 내가 팔로우하는 회원 id 목록. 팔로우가 없으면 빈 목록. */
     fun followingIds(memberId: Long): List<Long>
+
+    /**
+     * 팔로워 수 / 팔로잉 수. 프로필 화면이 두 숫자를 함께 그려서 한 번에 돌려준다.
+     *
+     * 조회만 포트로 뽑는다는 이 인터페이스의 원칙 그대로다. 카운트를 이벤트로 흘려 다른 모듈이
+     * 자기 카운터를 들면 팔로우 그래프가 두 벌이 되고, 차단으로 팔로우가 끊길 때 조용히 어긋난다.
+     */
+    fun counts(memberId: Long): Counts
+
+    /** 팔로워 수와 팔로잉 수. */
+    data class Counts(val followers: Long, val followings: Long)
 }

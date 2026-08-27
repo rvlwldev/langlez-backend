@@ -57,6 +57,22 @@ class RelationshipService(
     fun listFollowings(memberId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> =
         toViews(repo.findFollowings(memberId, size, cursor))
 
+    /** 남의 프로필에서 보는 팔로워 목록. */
+    @Transactional(readOnly = true)
+    fun listFollowersOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> {
+        requireVisible(viewerId, targetId)
+
+        return toViews(repo.findFollowers(targetId, size, cursor))
+    }
+
+    /** 남의 프로필에서 보는 팔로잉 목록. */
+    @Transactional(readOnly = true)
+    fun listFollowingsOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> {
+        requireVisible(viewerId, targetId)
+
+        return toViews(repo.findFollowings(targetId, size, cursor))
+    }
+
     /**
      * 차단.
      *
@@ -115,6 +131,14 @@ class RelationshipService(
         return edges.mapNotNull { edge ->
             members[edge.memberId]?.let { RelationshipMemberView(edge.id, it.id, it.handle, it.imageUrl) }
         }
+    }
+
+    /**
+     * 차단 관계면 목록 자체를 막는다. 걸러 봐야 전부 빠진다 —
+     * `EchoService.memberTimeline` 이 같은 판단을 한다.
+     */
+    private fun requireVisible(viewerId: Long, targetId: Long) {
+        if (blocks.isBlockedBetween(viewerId, targetId)) throw LanglezException(FORBIDDEN, "social.blocked")
     }
 
     private fun requireMemberExists(id: Long) {

@@ -7,6 +7,7 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
+import com.langlez.relationship.domain.RelationshipRepository.Edge
 import com.langlez.relationship.domain.Report
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -37,6 +38,37 @@ class RelationshipServiceTest : BehaviorSpec({
         provider = Member.Provider.GOOGLE,
         providerId = "p$id",
     )
+
+    Given("남의 프로필에서 팔로워/팔로잉 목록을 열 때") {
+
+        When("차단 관계인 상대의 목록을 열면") {
+            Then("403 이 나고 조회조차 하지 않는다") {
+                every { blocks.isBlockedBetween(1L, 2L) } returns true
+
+                val followers = shouldThrow<LanglezException> { service.listFollowersOf(1L, 2L, 20, null) }
+                followers.status.value() shouldBe 403
+                followers.message shouldBe "social.blocked"
+
+                val followings = shouldThrow<LanglezException> { service.listFollowingsOf(1L, 2L, 20, null) }
+                followings.status.value() shouldBe 403
+
+                verify(exactly = 0) { repo.findFollowers(any(), any(), any()) }
+                verify(exactly = 0) { repo.findFollowings(any(), any(), any()) }
+            }
+        }
+
+        When("차단 관계가 아니면") {
+            Then("요청자가 아니라 조회 대상의 목록을 읽는다") {
+                every { blocks.isBlockedBetween(1L, 2L) } returns false
+                every { repo.findFollowers(2L, 20, null) } returns listOf(Edge(10L, 3L))
+                every { members.findAll(listOf(3L)) } returns listOf(member(3L))
+
+                service.listFollowersOf(1L, 2L, 20, null).map { it.memberId } shouldBe listOf(3L)
+
+                verify { repo.findFollowers(2L, 20, null) }
+            }
+        }
+    }
 
     Given("팔로우 요청 시") {
 

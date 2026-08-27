@@ -335,6 +335,7 @@ fun onChatMessageSent(event: ChatMessageSentEvent) { ... }
 - 파일 위치: `infra/rdb/src/main/resources/migration/V{n}__*.sql`
 - 운영·개발·테스트 **모두 `ddl-auto: validate`**. 통합테스트도 Flyway 를 타므로 마이그레이션 자체가 검증된다.
 - **이미 적용된 V 파일은 절대 수정하지 않는다.** 체크섬 불일치로 기동이 실패한다. 고칠 게 있으면 새 V 파일을 만든다.
+- **데이터가 이미 있는 테이블에 인덱스를 걸 때는 `create index concurrently` 를 검토한다.** 일반 `create index` 는 `SHARE` 락을 잡아 빌드가 끝날 때까지 그 테이블의 `INSERT`/`UPDATE`/`DELETE` 를 전부 세운다. 지금까지의 V 파일은 전부 같은 마이그레이션에서 방금 만든 빈 테이블에 걸어서 락이 0초였고, `V6` 도 운영 배포 전이라 그대로 뒀다. **행이 쌓인 뒤에 같은 패턴을 복사하면 배포 중 쓰기가 멈춘다.** `concurrently` 는 트랜잭션 안에서 못 돌므로 그 스크립트에 `-- flyway executeInTransaction=false` 를 붙여야 하고, 실패 시 `INVALID` 인덱스가 남아 수동 정리가 필요하다.
 - **`@Column(nullable = false)` 를 새로 붙이면 기존 행 백필 마이그레이션이 반드시 따라와야 한다.** 안 하면 NULL 을 읽어 Kotlin non-null 프로퍼티에서 NPE 가 난다.
 - 정렬·커서는 `created_at` 이 아니라 **id 시퀀스**나 도메인 시퀀스 기준. 인스턴스 간 시계 차이로 순서가 뒤집힌다.
 

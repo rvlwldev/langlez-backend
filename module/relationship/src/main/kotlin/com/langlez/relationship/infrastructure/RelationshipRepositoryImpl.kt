@@ -59,6 +59,19 @@ class RelationshipRepositoryImpl(
             .fetch()
             .map { Edge(it.get(QFollow.id)!!, it.get(QFollow.followedId)!!) }
 
+    /** IDX_MEMBER_FOLLOW_FOLLOWED 만 읽고 끝난다. 행을 안 읽으니 select 대상은 아무 컬럼이나 상관없다. */
+    override fun countFollowers(memberId: Long): Long =
+        dsl.select(QFollow.count())
+            .from(QFollow)
+            .where(QFollow.followedId.eq(memberId))
+            .fetchOne() ?: 0
+
+    override fun countFollowings(memberId: Long): Long =
+        dsl.select(QFollow.count())
+            .from(QFollow)
+            .where(QFollow.followerId.eq(memberId))
+            .fetchOne() ?: 0
+
     override fun save(block: Block): Block = blocks.save(block)
 
     override fun findBlock(blockerId: Long, blockedId: Long): Block? =

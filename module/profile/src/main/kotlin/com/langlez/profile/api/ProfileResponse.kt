@@ -1,5 +1,6 @@
 package com.langlez.profile.api
 
+import com.langlez.core.FollowQuery
 import com.langlez.member.domain.Member
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -43,10 +44,19 @@ class ProfileResponse {
         val locale: Locale?,
         val birthDay: LocalDate?,
         val visitCount: Long,
+        val followerCount: Long,
+        val followingCount: Long,
         val languageLevel: String? = null,
         val interests: Set<String> = emptySet(),
     ) {
-        constructor(profile: Profile, member: Member, visitCount: Long, interests: Set<String> = emptySet()) : this(
+        // 두 숫자를 Long 두 개로 받으면 순서를 바꿔 넘겨도 컴파일된다. 묶어서 받는다.
+        constructor(
+            profile: Profile,
+            member: Member,
+            visitCount: Long,
+            follows: FollowQuery.Counts,
+            interests: Set<String> = emptySet(),
+        ) : this(
             handle = member.handle,
             bio = profile.bio,
             goal = profile.goal,
@@ -56,6 +66,8 @@ class ProfileResponse {
             locale = member.locale,
             birthDay = member.birthDay,
             visitCount = visitCount,
+            followerCount = follows.followers,
+            followingCount = follows.followings,
             languageLevel = profile.languageLevel?.name,
             interests = interests,
         )

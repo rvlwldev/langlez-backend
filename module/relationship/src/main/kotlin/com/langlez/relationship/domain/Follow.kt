@@ -10,7 +10,13 @@ import java.time.Instant
 @EntityListeners(AuditingEntityListener::class)
 @Table(
     name = "member_follows",
-    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_FOLLOW", columnNames = ["follower_id", "followed_id"])]
+    uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_FOLLOW", columnNames = ["follower_id", "followed_id"])],
+    // 목록은 양방향 모두 커서 페이징(id 내림차순)이다. 유니크 인덱스엔 id 가 없어 정렬을 못 줘서
+    // 두 방향 다 전용 인덱스가 필요하다. 실제 DDL 은 V6 가 만든다 (validate 는 인덱스를 안 본다).
+    indexes = [
+        Index(name = "IDX_MEMBER_FOLLOW_FOLLOWED", columnList = "followed_id, id DESC"),
+        Index(name = "IDX_MEMBER_FOLLOW_FOLLOWER", columnList = "follower_id, id DESC"),
+    ]
 )
 class Follow(
     @Id @GeneratedValue(strategy = IDENTITY)
