@@ -1,6 +1,7 @@
 package com.langlez.relationship.application
 
 import com.langlez.core.BlockQuery
+import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -122,11 +123,33 @@ class RelationshipServiceTest : BehaviorSpec({
                 every { members.find(2L) } returns member(2L)
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollow(1L, 2L) } returns null
+                // relaxed 목이 돌려주는 Follow 는 id 가 0이라 이벤트 검증이 통과해버린다. 명시 스텁을 둔다.
+                every { repo.save(any<Follow>()) } returns Follow(id = 77L, followerId = 1L, followedId = 2L)
 
                 service.follow(1L, 2L)
 
                 verify(exactly = 1) { repo.save(any<Follow>()) }
-                verify(exactly = 1) { publisher.publishEvent(MemberFollowedEvent(1L, 2L)) }
+                // 저장된 팔로우 행 id 가 실려야 컨슈머가 재팔로우와 카프카 재배달을 구분한다.
+                verify(exactly = 1) { publisher.publishEvent(MemberFollowedEvent(77L, 1L, 2L)) }
+            }
+        }
+
+        When("언팔로우 후 같은 상대를 다시 팔로우하면") {
+            Then("행 id 가 달라 이벤트도 다른 값이 된다") {
+                every { members.find(2L) } returns member(2L)
+                every { blocks.isBlockedBetween(1L, 2L) } returns false
+                every { repo.findFollow(1L, 2L) } returns null
+                every { repo.save(any<Follow>()) } returnsMany listOf(
+                    Follow(id = 81L, followerId = 1L, followedId = 2L),
+                    Follow(id = 82L, followerId = 1L, followedId = 2L),
+                )
+
+                service.follow(1L, 2L)
+                service.unfollow(1L, 2L)
+                service.follow(1L, 2L)
+
+                verify(exactly = 1) { publisher.publishEvent(MemberFollowedEvent(81L, 1L, 2L)) }
+                verify(exactly = 1) { publisher.publishEvent(MemberFollowedEvent(82L, 1L, 2L)) }
             }
         }
     }

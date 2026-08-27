@@ -1,6 +1,7 @@
 package com.langlez.relationship.application
 
 import com.langlez.core.BlockQuery
+import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.domain.Block
@@ -41,8 +42,10 @@ class RelationshipService(
         if (blocks.isBlockedBetween(memberId, targetId)) throw LanglezException(FORBIDDEN, "social.follow.blocked")
         if (repo.findFollow(memberId, targetId) != null) return
 
-        repo.save(newFollow(memberId, targetId))
-        publisher.publishEvent(MemberFollowedEvent(memberId, targetId))
+        // 저장 결과의 행 id 를 이벤트에 싣는다. 컨슈머 중복 판정이 이 값으로 갈린다
+        // (언팔로우 후 재팔로우와 카프카 재배달을 구분하는 유일한 값이다).
+        val follow = repo.save(newFollow(memberId, targetId))
+        publisher.publishEvent(MemberFollowedEvent(follow.id, memberId, targetId))
     }
 
     /** 언팔로우는 없는 관계를 지워도 성공이다. 클라이언트가 상태를 몰라도 되게 한다. */
