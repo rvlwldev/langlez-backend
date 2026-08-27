@@ -30,11 +30,13 @@ class RelationshipConsumer(
     fun onChatUserReported(payload: String) {
         if (dedup.isDuplicate(CHAT_USER_REPORTED, payload)) return
 
-        val event = mapper.readValue(payload, ChatUserReportedEvent::class.java)
-
         // 실패하면 표시를 되돌리고 예외를 올린다. 되돌리지 않으면 재시도와 DLT 재투입이
         // 전부 "중복"으로 걸러져 신고가 통째로 사라진다.
+        // 역직렬화도 이 안에 있어야 한다 — 깨진 페이로드를 밖에서 풀면 표시가 남은 채 예외가 나가
+        // 바로 그 유실이 일어난다.
         try {
+            val event = mapper.readValue(payload, ChatUserReportedEvent::class.java)
+
             service.report(
                 reporterId = event.reporterId,
                 reportedUserId = event.reportedUserId,
