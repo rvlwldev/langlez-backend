@@ -50,6 +50,26 @@ class RedisCache(
         }
     }
 
+    /**
+     * read-through 적재는 [write] 의 트랜잭션 지연을 타지 않는다.
+     *
+     * [write] 는 트랜잭션 중이면 키를 먼저 지우고 쓰기를 커밋 이후로 미룬다. 아직 커밋되지 않은
+     * 값이 캐시에 새는 걸 막는 장치다. 하지만 read-through 가 캐시에 넣는 값은 이미 커밋된 값이라
+     * 샐 것이 없고, 반대로 그 선삭제가 다른 트랜잭션이 방금 갱신해 둔 값을 날려 버린다.
+     * 덮어쓰지 않는 쓰기라 즉시 실행해도 최신 값을 이기지 못한다.
+     */
+    override fun putIfAbsent(key: Any, value: Any) {
+        redisson.getBucket<Any>(encode(key)).setIfAbsent(value, expiration())
+    }
+
+    override fun <T : Any> putManyIfAbsent(entries: Map<out Any, T>) {
+        if (entries.isEmpty()) return
+
+        val batch = redisson.createBatch()
+        entries.forEach { (key, value) -> batch.getBucket<Any>(encode(key)).setIfAbsentAsync(value, expiration()) }
+        batch.execute()
+    }
+
     override fun evict(key: Any) = evictMany(listOf(key))
 
     override fun evictMany(keys: Collection<Any>) {

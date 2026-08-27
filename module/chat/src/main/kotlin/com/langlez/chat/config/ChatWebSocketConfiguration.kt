@@ -1,12 +1,14 @@
 package com.langlez.chat.config
 
-import com.langlez.chat.domain.ChatRepository
+import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.OnlineTracker
 import com.langlez.core.TokenBlacklist
 import com.langlez.utility.JwtTokenProvider
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
 import org.springframework.messaging.simp.config.ChannelRegistration
@@ -31,13 +33,20 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
  * 발행은 레디스로 나가고, 모든 인스턴스가 구독해 각자 자기 세션에 밀어준다.
  * 그래서 서비스 코드는 `SimpMessagingTemplate` 이 아니라 `MessageBroadcaster` 포트를 써야 한다.
  */
+/*
+ * 게이트가 인바운드 채널의 첫 인터셉터여야 한다. 스프링은 WebSocketMessageBrokerConfigurer 빈을
+ * 전부 모아 configureClientInboundChannel 을 차례로 부르며 인터셉터를 append 하는데, 그 순회 순서는
+ * @Order 가 없으면 정해져 있지 않다. 새 모듈이 configurer 를 추가하면서 이 설정보다 먼저 불리면
+ * 그 모듈 인터셉터가 게이트 앞에 서고, 인가에 실패할 구독이 그 앞에서 부수 효과를 남긴다.
+ */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @Configuration
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
     private val jwt: JwtTokenProvider,
     private val tokenBlacklist: TokenBlacklist,
-    private val chatRepository: ChatRepository,
     private val tracker: OnlineTracker,
+    private val gate: WebSocketSubscriptionGate,
 ) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
@@ -50,8 +59,15 @@ class ChatWebSocketConfiguration(
         registry.setApplicationDestinationPrefixes("/app")
     }
 
+    /**
+     * 구독 인가 게이트를 **먼저** 건다. 인가에 실패한 SUBSCRIBE 는 예외로 끊겨서
+     * 뒤따르는 인터셉터가 아예 돌지 않는다 — 남의 방을 구독하려던 요청이
+     * `recordViewing` 으로 "보는 중"에 기록되는 일이 없어야 한다.
+     *
+     * 게이트가 chat 모듈이 아니라 `common` 에 있는 이유는 그쪽 KDoc 에 있다.
+     */
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(authenticationInterceptor())
+        registration.interceptors(gate, authenticationInterceptor())
     }
 
     /**
@@ -66,7 +82,7 @@ class ChatWebSocketConfiguration(
                 ?: return message
 
             if (accessor.command == StompCommand.SUBSCRIBE) {
-                authorizeSubscription(accessor)?.let { memberId -> startViewing(accessor, memberId) }
+                startViewing(accessor)
                 return message
             }
 
@@ -98,40 +114,15 @@ class ChatWebSocketConfiguration(
     }
 
     /**
-     * 구독 인가. 연결만 인증하고 끝내면 로그인한 아무나 `/topic/chat/room/{남의방}` 을 구독해
-     * 남의 대화를 그대로 엿볼 수 있다(인증은 됐지만 인가가 없는 상태).
-     *
-     * 목적지를 엄격한 정규식으로만 통과시킨다. Spring 의 심플 브로커는 구독 목적지에
-     * 별표 와일드카드 패턴을 지원해서, 느슨하게 열어두면 방 번호 자리에 와일드카드를 넣어
-     * 전체 방을 한 번에 빨아갈 수 있다. 그래서 숫자만 허용한다.
-     *
-     * 방 토픽 구독이 통과하면 그 회원 id 를 돌려준다. 방 토픽이 아니면 null 이다.
-     */
-    private fun authorizeSubscription(accessor: StompHeaderAccessor): Long? {
-        val destination = accessor.destination ?: throw IllegalArgumentException("chat.room.forbidden")
-        if (!destination.startsWith(ROOM_TOPIC_PREFIX)) return null
-
-        val roomId = ROOM_TOPIC_PATTERN.matchEntire(destination)
-            ?.groupValues
-            ?.get(1)
-            ?.toLongOrNull()
-            ?: throw IllegalArgumentException("chat.room.forbidden")
-
-        val memberId = (accessor.user as? UsernamePasswordAuthenticationToken)?.principal as? Long
-            ?: throw IllegalArgumentException("auth.unauthorized")
-
-        chatRepository.findParticipant(roomId, memberId)
-            ?: throw IllegalArgumentException("chat.room.forbidden")
-
-        return memberId
-    }
-
-    /**
      * UNSUBSCRIBE 프레임은 구독 id 만 싣고 목적지를 안 준다. 그래서 SUBSCRIBE 때
      * 구독 id → 목적지를 세션 속성에 남겨둔다. 세션이 죽으면 같이 사라지니 따로 치울 게 없다.
      */
-    private fun startViewing(accessor: StompHeaderAccessor, memberId: Long) {
+    private fun startViewing(accessor: StompHeaderAccessor) {
         val destination = accessor.destination ?: return
+        // 게이트를 통과한 목적지엔 wave·notification 토픽도 섞여 있다. "보는 중"은 채팅방에만 있는 개념이다.
+        if (!destination.startsWith(ROOM_TOPIC_PREFIX)) return
+
+        val memberId = (accessor.user as? UsernamePasswordAuthenticationToken)?.principal as? Long ?: return
         accessor.subscriptionId?.let { accessor.sessionAttributes?.put("$VIEWING_ATTRIBUTE_PREFIX$it", destination) }
 
         tracker.recordViewing(memberId, destination)
@@ -164,6 +155,5 @@ class ChatWebSocketConfiguration(
     companion object {
         private const val ROOM_TOPIC_PREFIX = "/topic/chat/room/"
         private const val VIEWING_ATTRIBUTE_PREFIX = "viewing:"
-        private val ROOM_TOPIC_PATTERN = Regex("^/topic/chat/room/(\\d+)$")
     }
 }

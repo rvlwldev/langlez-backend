@@ -1,5 +1,6 @@
 package com.langlez.member.infrastructure
 
+import com.langlez.core.cache.Cache
 import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
 import com.langlez.core.cache.getMany
@@ -24,10 +25,15 @@ class MemberRepositoryImpl(
 
     override fun save(member: Member): Member = jpa.save(member).also(::updateCaches)
 
-    override fun find(id: Long): Member? {
-        val member = members.get<Member>(id) ?: jpa.findWithAuditById(id)
-        return member?.also(::updateCaches)
-    }
+    /**
+     * 캐시 히트면 캐시에 다시 쓰지 않는다.
+     *
+     * `JwtAuthenticationFilter` 가 매 요청 상태 검사로 이 경로를 타는데, 히트마다 되쓰면
+     * 요청당 Redis SET 이 4회 붙는 것에 더해 TTL 이 계속 갱신돼 한 번 박힌 낡은 값이
+     * **영영 만료되지 않는다.** 정지된 회원이 캐시의 ACTIVE 로 계속 통과했던 원인이다.
+     */
+    override fun find(id: Long): Member? =
+        members.get<Member>(id) ?: jpa.findWithAuditById(id)?.also(::cacheIfAbsent)
 
     /**
      * handle 은 바뀔 수 있는 키라 캐시에 구 handle 이 TTL 까지 남는다.
@@ -45,7 +51,7 @@ class MemberRepositoryImpl(
             ?: dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin()
                 .where(QMember.handle.eq(handle)).fetchOne()
 
-        return member?.also(::updateCaches)
+        return member?.also(::cacheIfAbsent)
     }
 
     override fun find(provider: Member.Provider, id: String): Member? {
@@ -56,7 +62,7 @@ class MemberRepositoryImpl(
             .where(QMember.provider.eq(provider), QMember.providerId.eq(id))
             .fetchOne()
 
-        return member?.also(::updateCaches)
+        return member?.also(::cacheIfAbsent)
     }
 
     override fun findByEmail(email: String): Member? {
@@ -66,7 +72,7 @@ class MemberRepositoryImpl(
         else dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin()
             .where(QMember.email.eq(email)).fetchOne()
 
-        return member?.also(::updateCaches)
+        return member?.also(::cacheIfAbsent)
     }
 
     override fun findAll(ids: Collection<Long>): List<Member> {
@@ -78,7 +84,7 @@ class MemberRepositoryImpl(
         if (missing.isEmpty()) return cached.values.toList()
 
         val loaded = dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin().where(QMember.id.`in`(missing)).fetch()
-        members.putMany(loaded.associateBy { it.id })
+        members.putManyIfAbsent(loaded.associateBy { it.id })
 
         return cached.values + loaded
     }
@@ -93,7 +99,7 @@ class MemberRepositoryImpl(
         if (missing.isEmpty()) return cached.toList()
 
         val loaded = dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin().where(QMember.handle.`in`(missing)).fetch()
-        return cached + loaded.onEach(::updateCaches)
+        return cached + loaded.onEach(::cacheIfAbsent)
     }
 
     override fun findAll(size: Int, cursor: Long?): List<Member> {
@@ -127,12 +133,25 @@ class MemberRepositoryImpl(
         members.forEach(::evictCaches)
     }
 
-    private fun updateCaches(member: Member) {
+    /** 쓰기 경로 전용. 저장한 값이 최신이므로 무조건 덮어쓴다. */
+    private fun updateCaches(member: Member) = writeCaches(member, Cache::put)
+
+    /**
+     * 읽기 경로(read-through) 전용. 비어 있을 때만 채운다.
+     *
+     * 커밋 전 DB 를 읽은 요청이 커밋 후 갱신보다 늦게 캐시에 도착해 최종 상태를 덮어쓰는 창을
+     * 닫는다. 순서가 어떻든 마지막 승자는 쓰기 경로다 — 읽기가 먼저 채웠으면 [updateCaches] 가
+     * 덮고, 쓰기가 먼저 채웠으면 읽기가 못 덮는다.
+     */
+    private fun cacheIfAbsent(member: Member) = writeCaches(member, Cache::putIfAbsent)
+
+    /** 갱신 방식만 다르고 대상 캐시는 같다. 키 집합을 한 곳에 둬야 [evictCaches] 와 어긋나지 않는다. */
+    private inline fun writeCaches(member: Member, write: Cache.(Any, Any) -> Unit) {
         val id = member.id.toString()
-        members.put(member.id, member)
-        emails.put(member.email, id)
-        handles.put(member.handle, id)
-        providers.put(with(member) { "$provider:$providerId" }, id)
+        members.write(member.id, member)
+        emails.write(member.email, id)
+        handles.write(member.handle, id)
+        providers.write(with(member) { "$provider:$providerId" }, id)
     }
 
     private fun evictCaches(member: Member) {

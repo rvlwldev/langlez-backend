@@ -34,6 +34,13 @@ class ResilientCache(
     override fun <T : Any> putMany(entries: Map<out Any, T>) =
         runGuarded({ redis.putMany(entries) }, { afterCommit { local.putMany(entries) } })
 
+    // read-through 적재는 커밋 전 값이 아니라 이미 커밋된 값이라 폴백도 미룰 이유가 없다.
+    override fun putIfAbsent(key: Any, value: Any) =
+        runGuarded({ redis.putIfAbsent(key, value) }, { local.putIfAbsent(key, value) })
+
+    override fun <T : Any> putManyIfAbsent(entries: Map<out Any, T>) =
+        runGuarded({ redis.putManyIfAbsent(entries) }, { local.putManyIfAbsent(entries) })
+
     override fun evict(key: Any) =
         runGuarded({ redis.evict(key) }, {}).also { local.evict(key) }
 

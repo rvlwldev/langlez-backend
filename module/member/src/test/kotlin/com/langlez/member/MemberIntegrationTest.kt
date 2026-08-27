@@ -1,6 +1,7 @@
 package com.langlez.member
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.core.MemberStatusQuery
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.core.event.member.MemberHandleChangedEvent
 import com.langlez.exception.LanglezException
@@ -14,6 +15,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.every
@@ -70,6 +72,9 @@ class MemberIntegrationTest : BehaviorSpec() {
 
     @Autowired
     lateinit var objectMapper: ObjectMapper
+
+    @Autowired
+    lateinit var memberStatusQuery: MemberStatusQuery
 
     companion object {
         @JvmField
@@ -428,6 +433,64 @@ class MemberIntegrationTest : BehaviorSpec() {
                     }
                     ex.status.value() shouldBe 404
                     ex.message shouldBe "member.not-found"
+                }
+            }
+        }
+
+        // =========================================================================
+        // 6. 계정 상태 조회 포트 (JwtAuthenticationFilter 가 매 요청 부른다)
+        // =========================================================================
+        Given("계정 상태 조회 포트로 상태를 볼 때") {
+
+            // 상태 변경 경로가 전부 repo.save 를 거쳐 캐시를 갱신하므로 낡은 상태가 남지 않는다.
+            // 여기가 깨지면 정지시킨 회원이 캐시 TTL 동안 그대로 API 를 쓴다.
+            // 회원을 블록마다 새로 만든다 — 하나를 돌려 쓰면 앞 블록이 남긴 상태가 뒤 블록의 전제가 된다.
+            fun newMember(seq: String) = memberService.createMember(
+                email = "u6-$seq@test.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "p6-$seq",
+                providerUsername = "U6",
+            )
+
+            When("가입 직후라면") {
+                val m = newMember("created")
+
+                Then("CREATED 로 보인다") {
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.CREATED
+                }
+            }
+
+            When("정지시키면") {
+                val m = newMember("suspended")
+
+                Then("곧바로 SUSPENDED 로 보인다") {
+                    memberService.suspendMember(m.id, reason = "test")
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.SUSPENDED
+                }
+            }
+
+            When("정지를 풀면") {
+                val m = newMember("unsuspended")
+                memberService.suspendMember(m.id, reason = "test")
+
+                Then("곧바로 ACTIVE 로 보인다") {
+                    memberService.unsuspendMember(m.id)
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.ACTIVE
+                }
+            }
+
+            When("탈퇴시키면") {
+                val m = newMember("withdrawn")
+
+                Then("곧바로 WITHDRAWN 으로 보인다") {
+                    memberService.withdrawMember(m.id)
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.WITHDRAWN
+                }
+            }
+
+            When("존재하지 않는 회원 id 라면") {
+                Then("null 을 반환한다") {
+                    memberStatusQuery.findStatus(-1L).shouldBeNull()
                 }
             }
         }
