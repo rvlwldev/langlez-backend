@@ -10,7 +10,8 @@
 
 관련 문서:
 
-- `CLAUDE.md` — **코드 규약**. `module/member` 를 기준 모듈로 삼아 실제 코드에서 역으로 추출했다. 새 코드를 쓰기 전에 반드시 읽는다. 반복해서 터졌던 함정 목록도 여기(13절) 있다
+- `CLAUDE.md` — **코드 규약**. `module/member` 를 기준 모듈로 삼아 실제 코드에서 역으로 추출했다. 새 코드를 쓰기 전에 반드시 읽는다. 반복해서 터졌던 함정 목록도 여기(§5) 있다
+- `module/CLAUDE.md` — **도메인 모듈 규약**. 4계층(`api`/`application`/`domain`/`infrastructure`) 구현 규약 — 엔티티·저장소·서비스·API·비동기·마이그레이션·i18n·테스트·새 모듈 체크리스트. `module/` 아래를 건드리기 전에 읽는다
 - `docs/superpowers/plans/` — 단위 작업별 상세 계획서(이력)
 
 ---
@@ -107,12 +108,14 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `BlockQuery` | 차단 관계 확인 | `relationship`(`BlockQueryImpl`) |
 | `FollowQuery` | 팔로잉 id 목록 | `relationship`(`FollowQueryImpl`) |
 | `PushTokenQuery` | FCM 토큰 조회 | `member`(`PushTokenQueryImpl`) |
+| `MemberStatusQuery` | 계정 상태 조회 (매 요청 상태 검사) | `member`(`MemberStatusQueryImpl`) |
 | `Storage` | presign / key 확정 | `attachment` |
 | `OnlineTracker` | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
 | `CacheProvider` / `Cache` | 캐시 획득·조회·무효화 | `infra/redis`(`ResilientCacheProvider`) |
 | `Notificator` | 알림 발송 | `notification` |
 | `MessageBroadcaster` | 토픽 팬아웃 | `infra/redis`(`RedisMessageBroadcaster`) |
 | `TokenBlacklist` | 액세스 토큰 무효화 | `infra/redis`(`TokenBlacklistImpl`) |
+| `SubscriptionAuthorizer` | STOMP 구독 목적지 인가 판정 | `chat`·`wave`·`notification` 각 모듈 |
 
 아웃박스가 필요한 이유: 저장과 이벤트 발행이 한 트랜잭션에 묶여야 "저장은 됐는데 이벤트는 유실"이 원천 차단된다. 단, **가장 빈번한 쓰기(채팅 메시지)는 별도 아웃박스 행 대신 문서의 `published` 플래그**로 처리해 쓰기 증폭을 없앴다.
 
@@ -159,7 +162,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `infra/rdb/src/main/kotlin/com/langlez/rdb/outbox/`(`OutBox`, `OutBoxRepository`, `OutBoxProcessor`, `OutBoxHistoryProcessor`) → `module/member/api/MemberEventListener.kt`(`@TransactionalEventListener(BEFORE_COMMIT)`) → `module/member/infrastructure/outbox/MemberOutBoxScheduler.kt`(`@Scheduled` + `@DistributedLock`).
 
 **7단계 — 실시간 채팅**
-`module/chat/src/main/kotlin/com/langlez/chat/`: `config/ChatWebSocketConfiguration.kt`(`/ws/chat`, CONNECT/SUBSCRIBE 인가) → `application/ChatService.kt` → `application/ChatMessagePublisher.kt` → `infrastructure/mongo/ChatMessageRepositoryImpl.kt` → `application/ChatReconciler.kt`(Mongo↔Postgres 이중 쓰기 창 복구).
+`module/chat/src/main/kotlin/com/langlez/chat/`: `config/ChatWebSocketConfiguration.kt`(`/ws/chat`, CONNECT 인증 + 게이트 등록) → `application/ChatService.kt` → `application/ChatMessagePublisher.kt` → `infrastructure/mongo/ChatMessageRepositoryImpl.kt` → `application/ChatReconciler.kt`(Mongo↔Postgres 이중 쓰기 창 복구).
 
 **8단계 — 이벤트 소비와 알림**
 `module/notification/api/NotificationConsumer.kt`(`chat-message-sent`) → `application/NotificationService.kt`(3상태 판정) → `infrastructure/FcmPushSender.kt`.
@@ -169,7 +172,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `infra/redis/src/main/kotlin/com/langlez/redis/`: `cache/ResilientCache.kt`·`cache/ResilientCacheProvider.kt`(Redis + Caffeine 폴백), `distributedLock/DistributedLock.kt`·`DistributedLockAspect.kt`, `broadcast/RedisMessageBroadcaster.kt`, `config/RedissonConfiguration.kt`.
 
 **10단계 — 나머지 도메인**
-`module/echo/application/EchoService.kt`(타임라인·좋아요·댓글·해시태그), `module/wave/application/WaveService.kt` + `config/WaveWebSocketConfiguration.kt`(`/ws/wave`, 참여자 검사).
+`module/echo/application/EchoService.kt`(타임라인·좋아요·댓글·해시태그), `module/wave/application/WaveService.kt` + `config/WaveWebSocketConfiguration.kt`(`/ws/wave` 등록만) + `infrastructure/WaveSubscriptionAuthorizer.kt`(참여자 판정).
 
 ### 복잡도 핫스팟
 
@@ -237,7 +240,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 **팔로우 그래프 연결:** `core.FollowQuery` 포트 신설로 결정. relationship 이 `FollowQueryImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
 
-**WebSocket 구독 인가:** wave 는 `WaveWebSocketConfiguration` 이 별도로 `sessions.isParticipant(roomId, memberId)` 를 검사한다. chat 설정 파일은 건드리지 않았다.
+**WebSocket 구독 인가:** 모듈마다 인터셉터를 달던 구조는 폐기했다. 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아 실제로 뚫렸다. 지금은 `common` 의 `WebSocketSubscriptionGate` 가 모든 SUBSCRIBE 를 받아 `core.SubscriptionAuthorizer` 중 `supports` 가 참인 것에게 묻고 **하나도 없으면 거부한다**(기본 거부). 각 모듈은 `{Domain}SubscriptionAuthorizer` 로 자기 토픽 판정만 선언한다. `WaveWebSocketConfiguration` 의 참여자 검사 인터셉터는 삭제됐고 지금은 엔드포인트 등록만 한다.
 
 ### 코드 리뷰 확정 결함 조치 완료
 
@@ -253,6 +256,8 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `MemberRepositoryImpl` 핸들 변경 시 구 핸들 캐시 오염 | 읽기 경로에서 재검증 — 캐시로 찾은 회원의 `handle` 이 요청 키와 다르면 버리고 DB 조회 후 evict |
 | `AttachmentRepositoryImpl.deleteAll` N+1 단건 삭제 | `deleteAllInBatch` (연관이 없어 고아 행 위험 없음) |
 | `Attachment.key` 유니크 인덱스가 MySQL 3072 byte 한계 초과 | **해당 없음.** PostgreSQL + Flyway 로 확정돼 지적 전제가 사라졌다 |
+| 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `core.MemberStatusQuery` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
+| 상태 검사가 보는 캐시를 커밋 전 값이 덮어씀 | read-through 적재를 `Cache.putIfAbsent` 로 바꿔 쓰기 경로만 덮어쓰게 했다. 캐시 히트 시 되쓰기(TTL 무한 갱신)도 제거. 회귀 방지는 `MemberStatusCacheRaceTest` |
 
 ---
 
@@ -262,26 +267,25 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 1. **`interest` 재설계** — 사용자가 직접 설계 예정. 2번의 선행 조건이다
 2. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
-3. **정지/탈퇴 회원 접근 차단 필터** — `Member.requireActive()` 는 있고 로그인·토큰 갱신 경로에서만 부른다. 일반 API 경로는 정지된 회원도 그대로 통과한다. `JwtAuthenticationFilter` 뒤에 상태 검사를 붙일 자리
-4. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화** — 지금 `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 탈퇴해도 발급된 액세스 토큰이 만료까지 살아 있고 리프레시 토큰도 안 지워진다. 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록
+3. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화** — 지금 `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 리프레시 토큰은 그대로 남는다. 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록
 
 ### 5.2 중간
 
-5. **컨슈머 멱등성 하네스** — Kafka 는 at-least-once 다. 지금 컨슈머(`notification`, `relationship`)에 중복 수신 방어가 없어 재전달되면 알림이 두 번 가고 신고가 두 건 쌓인다. Redis `SETNX` 기반 `messageId` 중복 검사를 AOP 로
-6. **Outbox history 아카이버** — `OutBoxHistoryProcessor` 가 완료 건을 `*_outbox_history` 로 옮기지만 그 히스토리 테이블을 비우는 쪽이 없다. 무한 증가한다. `@Scheduled` + `@DistributedLock` 배치 필요
-7. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
-8. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + 분산 추적용 TraceId 주입 필터
-9. **`listRooms` 참여자 조회 최적화** — 페이지 크기만큼 단건 조회가 붙는다 (`ponytail:` 주석)
-10. **대사 스케줄러 창 조정** — 활성 방 수만큼 Mongo 왕복 (`ponytail:` 주석)
+4. **컨슈머 멱등성 하네스** — Kafka 는 at-least-once 다. 지금 컨슈머(`notification`, `relationship`)에 중복 수신 방어가 없어 재전달되면 알림이 두 번 가고 신고가 두 건 쌓인다. Redis `SETNX` 기반 `messageId` 중복 검사를 AOP 로
+5. **Outbox history 아카이버** — `OutBoxHistoryProcessor` 가 완료 건을 `*_outbox_history` 로 옮기지만 그 히스토리 테이블을 비우는 쪽이 없다. 무한 증가한다. `@Scheduled` + `@DistributedLock` 배치 필요
+6. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+7. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + 분산 추적용 TraceId 주입 필터
+8. **`listRooms` 참여자 조회 최적화** — 페이지 크기만큼 단건 조회가 붙는다 (`ponytail:` 주석)
+9. **대사 스케줄러 창 조정** — 활성 방 수만큼 Mongo 왕복 (`ponytail:` 주석)
 
 ### 5.3 낮음 / 정책 결정 필요
 
-11. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 탈취를 부분적으로만 막는다. 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-12. **회원 검색 API** — handle 기반 페이징 검색. `MemberRepository.findAllByHandles` 는 있으나 부분 일치 검색 API 는 없다
-13. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-14. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 동의 시각이 없다. 법적으로 시각 기록이 필요한지 확인 후 `MemberAudit.agreedMarketingAt` 추가
-15. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 버퍼 보존 기간을 얼마로 할지
-16. **`chat_messages` 시간 파티셔닝** — Mongo로 옮겨 당장은 불필요하나, Postgres에 남은 대용량 테이블이 생기면 재검토
+10. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 탈취를 부분적으로만 막는다. 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+11. **회원 검색 API** — handle 기반 페이징 검색. `MemberRepository.findAllByHandles` 는 있으나 부분 일치 검색 API 는 없다
+12. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+13. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 동의 시각이 없다. 법적으로 시각 기록이 필요한지 확인 후 `MemberAudit.agreedMarketingAt` 추가
+14. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 버퍼 보존 기간을 얼마로 할지
+15. **`chat_messages` 시간 파티셔닝** — Mongo로 옮겨 당장은 불필요하나, Postgres에 남은 대용량 테이블이 생기면 재검토
 
 ### 5.4 정책 변경으로 폐기된 항목
 
@@ -318,4 +322,8 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 ## 7. 코드 규약
 
-네이밍, 엔티티 작성법, 포트·어댑터 구조, 트랜잭션·예외 처리, Swagger 분리, 테스트 작성법, 그리고 **반복해서 터진 함정 목록**은 전부 [`CLAUDE.md`](CLAUDE.md) 에 있다. 새 코드를 쓰기 전에 읽는다.
+모듈 구조, 계층 의존 방향, 네이밍, 주석, 코틀린 스타일, 그리고 **반복해서 터진 함정 목록**은 [`CLAUDE.md`](CLAUDE.md) 에 있다.
+
+엔티티 작성법, 포트·어댑터 구조, 트랜잭션·예외 처리, Swagger 분리, 실시간(WebSocket) 인증·인가, 비동기·마이그레이션·i18n, 테스트 작성법, 새 모듈 체크리스트는 [`module/CLAUDE.md`](module/CLAUDE.md) 에 있다.
+
+새 코드를 쓰기 전에 읽는다.

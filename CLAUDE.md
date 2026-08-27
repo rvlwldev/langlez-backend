@@ -93,7 +93,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 고빈도·저가치 신호를 브로커에 태우면 비용만 든다. 접속 핑(5초 간격)이 그랬다 — 브로커 왕복에 handle→id 조회까지 붙어 있었다. 지금은 `MemberPingController` 가 레디스 버킷에 바로 쓴다.
 
-현재 `core` 포트: `BlockQuery`, `FollowQuery`, `PushTokenQuery`, `Storage`, `OnlineTracker`, `CacheProvider`, `Notificator`, `MessageBroadcaster`, `TokenBlacklist`.
+현재 `core` 포트: `BlockQuery`, `FollowQuery`, `PushTokenQuery`, `MemberStatusQuery`, `Storage`, `OnlineTracker`, `CacheProvider`, `Notificator`, `MessageBroadcaster`, `TokenBlacklist`, `SubscriptionAuthorizer`.
 
 ### 저장소 분담
 
