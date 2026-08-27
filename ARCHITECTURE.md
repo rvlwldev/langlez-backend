@@ -11,28 +11,32 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
 
 ## 1. 한눈에
 
-```text
- 발행 모듈    발행 전에 이미 저장한 것        토픽                     수신 모듈      수신 모듈이 하는 일
- ─────────    ────────────────────────      ────────────────────    ────────────   ─────────────────────────────
-  chat        Mongo 메시지 문서         ──▶ chat-message-sent   ──▶ notification   ① Notification 행 저장
-              (본문·첨부)                                                           ② 온라인이면 인앱(Redis pub/sub)
-                                                                                    오프라인이면 FCM 푸시
+```mermaid
+flowchart LR
+    chat["chat"]
+    rel["relationship"]
+    mem["member"]
+    echo["echo"]
+    wave["wave"]
 
-  chat        없음                      ──▶ chat-user-reported  ──▶ relationship   ① Report 행 저장
-              (접수 사실만 알린다)                                                    sourceType=CHAT_USER
-                                                                                     sourceId=roomId
-                                                                                   ② existsReport 로 중복 한 번 더 거름
+    noti(["notification"])
+    relR(["relationship"])
+    none1(["소비자 없음"])
 
-  relation-   member_follows 행         ──▶ member-followed     ──▶ notification   ① Notification 행 저장
-   ship       (동기 저장. 이벤트는                                                  ② 온라인이면 인앱, 아니면 FCM
-              그 결과다)                                                            팔로우 관계 자체는 건드리지 않는다
+    chat -- "chat-message-sent<br/>(Mongo 메시지 문서는 이미 저장됨)" --> noti
+    chat -- "chat-user-reported<br/>(chat 은 아무것도 저장하지 않음)" --> relR
+    rel -- "member-followed<br/>(member_follows 행은 이미 저장됨)" --> noti
+    mem -- "member-created" --> none1
+    mem -- "member-handle-changed" --> none1
 
-  member      members 행                ──▶ member-created      ──▶ (없음)         —
-  member      handle 변경               ──▶ member-handle-      ──▶ (없음)         —
-                                            changed
+    noti --> notiDo["① Notification 행 저장<br/>② 온라인이면 인앱, 아니면 FCM"]
+    relR --> relDo["① Report 행 저장<br/>② existsReport 로 중복 한 번 더 거름"]
 
-  echo        —                             (발행 코드 없음. DTO·아웃박스만 있는 빈 스캐폴딩)
-  wave        —                             (카프카를 쓰지 않는다. Redis pub/sub 만)
+    echo -.- echoX["발행 코드 없음<br/>빈 스캐폴딩"]
+    wave -.- waveX["카프카 미사용<br/>Redis pub/sub 만"]
+
+    classDef gone fill:#eee,stroke:#999,color:#666
+    class none1,echoX,waveX gone
 ```
 
 **읽는 법 두 가지가 갈린다.**
@@ -61,23 +65,14 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
 
 **notification 이 받아서 하는 일**
 
-```text
-  chat-message-sent 수신
-        │
-        ├─ 그 방을 보고 있나?  ──── 예 ──▶ 아무것도 안 함
-        │     (발행 폴러가 한 번 걸렀지만, 발행과 소비 사이에
-        │      방에 들어온 사람은 안 걸러져 여기서 다시 본다)
-        │
-        └─ 아니오
-              │
-              ├─ Notification 저장  (type=CHAT_MESSAGE)
-              │     title = "notification.chat-message.title"  ← i18n 키
-              │     body  = event.preview
-              │     data  = { roomId, messageId, senderId }
-              │
-              └─ 앱이 켜져 있나?
-                    ├─ 예    ──▶ Redis pub/sub → /topic/notification/{수신자}
-                    └─ 아니오 ──▶ FCM 푸시 (토큰 없으면 조용히 끝)
+```mermaid
+flowchart TD
+    A["chat-message-sent 수신"] --> B{"수신자가 그 방을<br/>보고 있나?"}
+    B -- 예 --> C["아무것도 안 함<br/>(발행 폴러가 한 번 걸렀지만,<br/>발행과 소비 사이에 방에 들어온<br/>사람은 여기서 다시 걸린다)"]
+    B -- 아니오 --> D["Notification 저장 · type=CHAT_MESSAGE<br/>title = notification.chat-message.title (i18n 키)<br/>body = event.preview<br/>data = roomId, messageId, senderId"]
+    D --> E{"앱이 켜져 있나?"}
+    E -- 예 --> F["Redis pub/sub<br/>/topic/notification/{수신자}"]
+    E -- 아니오 --> G["FCM 푸시<br/>(토큰 없으면 조용히 끝)"]
 ```
 
 이력을 **먼저** 남기고 전달한다. 전달이 실패해도 알림함에는 남아야 한다.
@@ -99,21 +94,12 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 
 **relationship 이 받아서 하는 일**
 
-```text
-  chat-user-reported 수신
-        │
-        ├─ 중복 배달인가? ──── 예 ──▶ 버림
-        │
-        └─ Report 저장
-              reporterId       = event.reporterId
-              reportedUserId   = event.reportedUserId
-              sourceType       = CHAT_USER
-              sourceId         = event.roomId        ← "이 방에서 상대가 이랬다"가 단위
-              reason           = event.reason
-              triggerMessageId = event.triggerMessageId
-
-              existsReport 로 한 번 더 거른다
-              (같은 신고를 두 행으로 만들지 않는다)
+```mermaid
+flowchart TD
+    A["chat-user-reported 수신"] --> B{"중복 배달인가?"}
+    B -- 예 --> C["버림"]
+    B -- 아니오 --> D["Report 저장<br/>reporterId = event.reporterId<br/>reportedUserId = event.reportedUserId<br/>sourceType = CHAT_USER<br/>sourceId = event.roomId<br/>reason / triggerMessageId"]
+    D --> E["existsReport 로 한 번 더 거름<br/>동시 경합은 UNQ_REPORT_IDENTITY 가 막는다"]
 ```
 
 방 id 를 `sourceId` 로 남겨야 운영이 "어느 대화에서 벌어진 일인지" 추적한다.
@@ -133,17 +119,17 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 
 **팔로우 관계는 발행 전에 이미 저장돼 있다.** `RelationshipService.follow()` 가 한 트랜잭션 안에서 순서대로 한다.
 
-```text
-  POST /api/v1/relationships/follows/{targetId}
-        │
-        ├─ 대상 회원이 있나                    없으면 404
-        ├─ 차단 관계인가                       맞으면 403 social.follow.blocked
-        ├─ 이미 팔로우 중인가                  맞으면 조용히 끝 (멱등)
-        │
-        ├─ member_follows 행 저장  ◀── 여기서 데이터가 남는다
-        │
-        └─ publishEvent(MemberFollowedEvent(follow.id, ...))
-                 └─▶ relationship_event_outbox 행 (같은 트랜잭션)
+```mermaid
+flowchart TD
+    A["POST /api/v1/relationships/follows/{targetId}"] --> B{"대상 회원이 있나"}
+    B -- 없음 --> B1["404"]
+    B -- 있음 --> C{"차단 관계인가"}
+    C -- 맞음 --> C1["403 social.follow.blocked"]
+    C -- 아님 --> D{"이미 팔로우 중인가"}
+    D -- 맞음 --> D1["조용히 끝 (멱등)"]
+    D -- 아님 --> E["member_follows 행 저장<br/>여기서 데이터가 남는다"]
+    E --> F["publishEvent(MemberFollowedEvent(follow.id, ...))"]
+    F --> G["relationship_event_outbox 행<br/>같은 트랜잭션"]
 ```
 
 `followId` 를 실을 수 있는 것도 이 순서 덕이다 — 저장이 끝나야 행 id 가 나온다.
@@ -152,18 +138,12 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 
 **notification 이 받아서 하는 일**
 
-```text
-  member-followed 수신
-        │
-        └─ Notification 저장  (type=MEMBER_FOLLOWED)
-              대상  = event.followedId          ← 팔로우 당한 사람
-              title = "notification.member-followed"   ← i18n 키
-              body  = ""                        ← 채팅의 preview 에 해당하는 값이 없다
-              data  = { followerId }            ← 클라이언트가 프로필을 붙여 문구를 조립
-              │
-              └─ 앱이 켜져 있나?
-                    ├─ 예    ──▶ Redis pub/sub → /topic/notification/{followedId}
-                    └─ 아니오 ──▶ FCM 푸시
+```mermaid
+flowchart TD
+    A["member-followed 수신"] --> B["Notification 저장 · type=MEMBER_FOLLOWED<br/>대상 = event.followedId (팔로우 당한 사람)<br/>title = notification.member-followed (i18n 키)<br/>body = 빈 문자열<br/>data = followerId"]
+    B --> C{"앱이 켜져 있나?"}
+    C -- 예 --> D["Redis pub/sub<br/>/topic/notification/{followedId}"]
+    C -- 아니오 --> E["FCM 푸시"]
 ```
 
 **notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `core.FollowQuery` 포트로 조회한다.
@@ -202,34 +182,36 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 
 STOMP 브로커가 인메모리라 **자기 JVM 에 붙은 세션에만** 전달한다. 인스턴스가 여러 대면 다른 서버에 붙은 상대가 못 받는다. Redis pub/sub 이 그 간극을 메운다.
 
-```text
-   인스턴스 A                 Redis                  인스턴스 B
-      │                        │                         │
-  broadcast(topic, payload)    │                         │
-      ├───── PUBLISH ─────────▶│───── 구독 중 ──────────▶│
-      │                        │                         │
-   자기 세션에 push                                자기 세션에 push
-      ▼                                                  ▼
-   앱(A 에 붙음)                                    앱(B 에 붙음)
+```mermaid
+flowchart LR
+    subgraph A["인스턴스 A"]
+        SA["broadcast(topic, payload)"]
+        WA["자기 세션에 push"]
+    end
+    R[("Redis<br/>pub/sub")]
+    subgraph B["인스턴스 B"]
+        WB["자기 세션에 push"]
+    end
+    SA -- PUBLISH --> R
+    R -- 구독 --> WA
+    R -- 구독 --> WB
+    WA --> APPA["앱 (A 에 붙음)"]
+    WB --> APPB["앱 (B 에 붙음)"]
 ```
 
 **서비스 코드는 `SimpMessagingTemplate` 이 아니라 `core.MessageBroadcaster` 포트를 쓴다.** 직접 쓰면 다중 인스턴스에서 조용히 깨진다.
 
 ### 토픽 목록
 
-```text
-   발행 모듈       토픽                              구독 자격        페이로드
-  ┌─────────┐
-  │  chat   │──▶ /topic/chat/room/{roomId}         그 방 참여자     ChatMessageView
-  │         │                                                      ChatReadEvent
-  └─────────┘
-  ┌─────────┐
-  │  wave   │──▶ /topic/wave/{roomId}/chat         그 방 참여자     WaveChat
-  └─────────┘
-  ┌─────────┐
-  │notifica-│──▶ /topic/notification/{memberId}    본인만          NotificationView
-  │  tion   │
-  └─────────┘
+```mermaid
+flowchart LR
+    chat["chat"] -- "ChatMessageView<br/>ChatReadEvent" --> T1["/topic/chat/room/{roomId}"]
+    wave["wave"] -- "WaveChat" --> T2["/topic/wave/{roomId}/chat"]
+    noti["notification"] -- "NotificationView" --> T3["/topic/notification/{memberId}"]
+
+    T1 --> G1["구독 자격: 그 방 참여자"]
+    T2 --> G2["구독 자격: 그 방 참여자"]
+    T3 --> G3["구독 자격: 본인만"]
 ```
 
 ### `/topic/chat/room/{roomId}`
@@ -246,12 +228,12 @@ STOMP 브로커가 인메모리라 **자기 JVM 에 붙은 세션에만** 전달
 
 메시지 전송은 **두 갈래로 동시에 나간다.**
 
-```text
-  ChatService.send()
-     ├─▶ Redis pub/sub ─▶ WebSocket        지금 그 방을 보고 있는 사람용 (즉시)
-     └─▶ Mongo(published=false)
-            └─▶ ChatMessagePublisher ─▶ chat-message-sent (Kafka)
-                                             안 보고 있는 사람용 (알림)
+```mermaid
+flowchart TD
+    S["ChatService.send()"] --> R["Redis pub/sub → WebSocket<br/>지금 그 방을 보고 있는 사람용 (즉시)"]
+    S --> M["Mongo 저장 (published=false)"]
+    M --> P["ChatMessagePublisher (1초)"]
+    P --> K["chat-message-sent (Kafka)<br/>안 보고 있는 사람용 (알림)"]
 ```
 
 ### `/topic/wave/{roomId}/chat`
@@ -270,18 +252,17 @@ Kafka 이벤트를 처리한 결과가 여기로 나간다. **수신자가 온�
 
 ### 구독 인가는 기본 거부다
 
-```text
-  SUBSCRIBE 프레임
-        │
-        ▼
-  WebSocketSubscriptionGate  (common — 모든 구독이 여기를 지난다)
-        │
-        │ 등록된 SubscriptionAuthorizer 중 supports(destination) 가 참인 것을 찾는다
-        │
-        ├─ 하나도 없음 ──────▶ 거부        ← 핵심
-        └─ 찾음 ─▶ authorize(destination, memberId)
-                        ├─ false ─▶ 거부
-                        └─ true  ─▶ 통과
+```mermaid
+flowchart TD
+    A["SUBSCRIBE 프레임"] --> B["WebSocketSubscriptionGate<br/>(common — 모든 구독이 여기를 지난다)"]
+    B --> C{"supports(destination) 가<br/>참인 authorizer 가 있나"}
+    C -- "하나도 없음" --> D["거부 ← 핵심"]
+    C -- 찾음 --> E{"authorize(destination, memberId)"}
+    E -- false --> F["거부"]
+    E -- true --> G["통과"]
+
+    classDef deny fill:#fdd,stroke:#c66
+    class D,F deny
 ```
 
 | 목적지 | 판정하는 곳 | 조건 |
@@ -314,27 +295,24 @@ Kafka 이벤트를 처리한 결과가 여기로 나간다. **수신자가 온�
 
 ### 아웃박스 (기본)
 
-```text
-  Service ──publishEvent──▶ {Domain}EventListener
-                                   │  @TransactionalEventListener(BEFORE_COMMIT)
-                                   ▼
-                           {domain}_event_outbox 행 저장   ← 도메인 행과 같은 트랜잭션
-                                   │
-                                   │  {Domain}OutBoxScheduler (2초)
-                                   ▼                        @DistributedLock
-                                 Kafka
+```mermaid
+flowchart TD
+    A["Service"] -- publishEvent --> B["{Domain}EventListener<br/>@TransactionalEventListener(BEFORE_COMMIT)"]
+    B --> C["{domain}_event_outbox 행 저장<br/>도메인 행과 같은 트랜잭션"]
+    C --> D["{Domain}OutBoxScheduler (2초)<br/>@DistributedLock"]
+    D --> E["Kafka"]
 ```
 
 도메인 행과 아웃박스 행이 함께 커밋되거나 함께 롤백된다. "저장은 됐는데 이벤트는 유실"이 원천 차단된다.
 
 ### `published` 플래그 (채팅 메시지 전용)
 
-```text
-  Mongo 문서 (published=false)
-        │  ChatMessagePublisher (1초)  @DistributedLock
-        ▼
-      Kafka  ──성공──▶ markPublished()
-             ──실패──▶ 그대로 둠 → 다음 주기에 다시 잡힘
+```mermaid
+flowchart TD
+    A["Mongo 문서 (published=false)"] --> B["ChatMessagePublisher (1초)<br/>@DistributedLock"]
+    B --> C["Kafka 발행"]
+    C -- 성공 --> D["markPublished()"]
+    C -- 실패 --> E["그대로 둠<br/>다음 주기에 다시 잡힘"]
 ```
 
 가장 빈번한 쓰기라 별도 아웃박스 행을 만들면 쓰기가 그대로 두 배가 된다.
@@ -343,22 +321,11 @@ Kafka 이벤트를 처리한 결과가 여기로 나간다. **수신자가 온�
 
 ## 6. 새 이벤트를 추가할 때
 
-```text
-  1. 이벤트 DTO 를 core/event/{domain}/ 에 둔다      ← 모듈 간 공유 계약
-     └─ 그 발생 건을 유일하게 가리키는 id 를 넣는다   ← 멱등 키가 된다
-
-  2. 발행 측
-     ├─ Service 에서 publishEvent
-     ├─ {Domain}EventListener 가 BEFORE_COMMIT 으로 받아 아웃박스 행 저장
-     └─ {Domain}OutBoxScheduler + {Domain}OutBoxHistoryScheduler
-
-  3. 수신 측
-     ├─ api/{Domain}Consumer.kt 에 @KafkaListener
-     └─ 중복 검사 → try { 역직렬화; 처리 } catch { 표시 되돌림; throw }
-
-  4. 사용자에게 보이면
-     ├─ i18n 키를 messages_*.properties 12개 전부에 등록
-     └─ title 에는 키를, data 에는 id 를 넣는다
+```mermaid
+flowchart TD
+    A["1. 이벤트 DTO 를 core/event/{domain}/ 에<br/>그 발생 건을 유일하게 가리키는 id 를 넣는다 (멱등 키)"] --> B["2. 발행 측<br/>Service 에서 publishEvent<br/>EventListener 가 BEFORE_COMMIT 으로 아웃박스 행 저장<br/>OutBoxScheduler + OutBoxHistoryScheduler"]
+    B --> C["3. 수신 측<br/>api/{Domain}Consumer.kt 에 @KafkaListener<br/>중복 검사 → try 역직렬화·처리 → catch 표시 되돌림·throw"]
+    C --> D["4. 사용자에게 보이면<br/>i18n 키를 messages_*.properties 12개 전부에<br/>title 에는 키를, data 에는 id 를"]
 ```
 
 **빠뜨리기 쉬운 것**

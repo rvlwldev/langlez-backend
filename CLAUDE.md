@@ -218,52 +218,103 @@ Orca orchestration 스킬을 쓰거나 그 밖에 서브에이전트를 띄울 �
 - **여러 제약이 한 편집에 겹치면 opus.** 이 문서의 조항 수십 개를 동시에 지켜야 하는 편집에서 하위 모델은 하나씩 흘린다 — `@field:` 타깃 누락, 엔티티를 `data class` 로 선언, 조건을 메서드명으로 이은 파생 쿼리.
 - **haiku 에 설계 판단을 맡기지 않는다.** 지시가 "무엇을 어디에 쓸지"까지 이미 다 정해져 있을 때만 쓴다.
 
-### 코드 리뷰는 `agy` 로 한다
+### 기능 작업 워크플로 (orchestration)
 
-**머지 전 코드 리뷰는 위 표와 별개로 `agy`(Antigravity CLI) 에 맡긴다.** 구현한 모델이 자기 코드를 리뷰하면 같은 맹점을 그대로 지나간다 — 다른 모델을 태우는 게 이 프로젝트에서 가장 값싼 안전망이다.
+orchestration 으로 기능을 만들 때는 **구현자와 리뷰어를 분리한다.** 구현한 모델이 자기 코드를 리뷰하면 같은 맹점을 그대로 지나간다.
 
-`agy` 는 orca 의 known-agent 목록에 없다. **프롬프트 자동 주입이 안 된다** — `worker-start --agent agy`, `worker-start --terminal`, `dispatch --inject` 셋 다 `agent_prompt_stalled` 로 실패한다. agy 가 완전히 로그인해 유휴 상태여도 마찬가지다. orca 가 agy 의 TUI 입력 상태를 못 읽는다.
+```mermaid
+flowchart TD
+    A["코디네이터: 태스크 작성"] --> B["구현 서브에이전트 (claude / sonnet)<br/>새 워크트리에서 구현 → 푸시 → PR 생성"]
+    B --> C["리뷰 서브에이전트 (agy)<br/>superpowers:requesting-code-review 로 리뷰<br/>코드 수정 금지 · 리뷰를 PR 에 코멘트로 남긴다"]
+    C --> D{"머지 가능한가"}
+    D -- "수정 필요" --> E["같은 sonnet 에이전트가 리뷰를 읽고<br/>수정 → 푸시"]
+    E --> C
+    D -- "승인" --> F["코디네이터가 직접 머지하고 PR 을 닫는다"]
+    F --> G["sonnet · agy 서브에이전트 정리"]
+```
 
-**그래도 orca 서브에이전트로 돌린다.** `--inject` 없는 `dispatch` 로 Task·Dispatch 추적을 붙이고 프롬프트만 손으로 넣으면 `worker_done` 까지 정상으로 돈다.
+#### 1) 구현 — `sonnet`, 워크트리 기반
 
 ```bash
-# 1. 리뷰마다 새 터미널을 만든다 (이유는 아래)
+orca orchestration task-create --spec "<지시서>" --json
+orca orchestration worker-start --task <task_id> \
+  --worktree new-top-level --name <작업명> \
+  --agent claude --model sonnet --setup run --json
+```
+
+**반드시 새 워크트리에 띄운다.** 같은 워크트리에서 여러 에이전트가 돌면 브랜치가 섞인다 — 코디네이터가 문서 작업하려고 브랜치를 바꿨다가 구현 에이전트의 커밋이 그 브랜치에 얹히고 origin 까지 올라간 적이 실제로 있다.
+
+지시서에 **푸시와 PR 생성까지** 시킨다. 코디네이터가 대신 하지 않는다.
+
+#### 2) 리뷰 — `agy`, 읽기 전용
+
+`agy` 는 orca 의 known-agent 가 아니라 **프롬프트 자동 주입이 안 된다.** `worker-start --agent`, `worker-start --terminal`, `dispatch --inject` 셋 다 `agent_prompt_stalled` 로 실패한다. 로그인이 끝나 유휴 상태여도 마찬가지다.
+
+`--inject` 없는 `dispatch` 로 추적을 붙이고 프롬프트만 손으로 넣으면 `worker_done` 까지 정상으로 돈다.
+
+```bash
+# 리뷰마다 새 터미널을 만든다 (이유는 아래)
 orca terminal create --worktree <worktree-id> --title "review-prN (agy)" --command "agy" --json
 
-# 2. tui-idle 만으로는 부족하다. 로그인이 끝날 때까지 기다린다
+# tui-idle 만으로는 부족하다. 로그인이 끝날 때까지 기다린다
 until orca terminal read --terminal <handle> --json | grep -q "Google AI Pro"; do sleep 3; done
 
-# 3. 태스크를 만들고 --inject 없이 dispatch (추적만 붙는다)
 orca orchestration task-create --spec "..." --json
-orca orchestration dispatch --task <task_id> --to <handle> --json
+orca orchestration dispatch --task <task_id> --to <handle> --json   # --inject 없이
 
-# 4. 프롬프트와 함께 worker_done 명령을 그대로 준다. id 두 개를 반드시 박아 넣는다
-orca terminal send --terminal <handle> --enter --json --text "...지시...
+orca terminal send --terminal <handle> --enter --json --text "<지시서 경로>를 읽고 그대로 수행해라.
 끝나면 아래를 그대로 실행해라.
 orca orchestration send --type worker_done --subject \"...\" --body \"...\" \
   --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --json"
 
-# 5. 평소처럼 기다린다
 orca orchestration check --wait --types worker_done,question --timeout-ms 900000 --json
 ```
 
-**리뷰마다 새 터미널을 쓴다.** 재사용하면 agy 가 스크롤백에 남은 **옛 dispatch id** 를 집어 `worker_done` 을 보내고 `capability is revoked` 로 거부된다. 실제로 겪었다.
+**agy 는 코드를 고치지 않는다.** 리뷰만 한다.
+**리뷰 결과는 그 PR 에 코멘트로 남긴다** (`gh pr comment <N> --body-file .omo/review-prN.md`).
 
-**지시서는 파일로 두고 경로만 보낸다.** `terminal send` 로 긴 본문을 밀면 TUI 가 깨진다. `.omo/review-prN-brief.md` 에 쓰고 "이 파일을 읽고 그대로 수행해라" 한 줄만 보낸다.
+지시서는 **`superpowers:requesting-code-review`** 의 `code-reviewer.md` 템플릿을 따른다. 스킬을 먼저 읽어라. 핵심만 옮기면:
 
-`--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 형태로 넘긴다. 기본은 Gemini 3.7 Flash (High) 다.
+- **세션 히스토리를 주지 않는다.** 무엇을 만들었는지·요구사항·`BASE_SHA`..`HEAD_SHA` 범위만 정밀하게 준다
+- **read-only 를 명시한다.** 워킹트리·인덱스·HEAD·브랜치 금지. 다른 리비전이 필요하면 `git worktree add /tmp/review-<sha>`
+- **리뷰어가 다시 서브에이전트를 띄우지 못하게 막는다.** 디프가 크면 스스로 나눠 보고 그렇게 적게 한다
+- **심각도를 나눈다.** Critical 즉시 / Important 머지 전 / Minor 기록만
+- 판정을 `승인` / `조건부 승인(N건 수정 후)` / `반려` 중 하나로 강제한다
+- 지적마다 **"어떤 입력·상황에서 실제로 터지나"** 를 요구한다. 그게 없으면 추측이다
 
-### 리뷰 지시서는 `superpowers:requesting-code-review` 를 따른다
+#### 3) 수정 루프
 
-리뷰를 띄우기 전에 그 스킬을 읽고 `code-reviewer.md` 템플릿으로 지시서를 만든다. 핵심만 옮기면:
+리뷰에 Critical·Important 가 있으면 **구현했던 그 sonnet 에이전트에게** 리뷰를 보여주고 고치게 한다. 새 에이전트를 띄우지 않는다 — 그 에이전트가 코드 맥락을 이미 갖고 있다.
 
-- **세션 히스토리를 주지 않는다.** 무엇을 만들었는지·요구사항이 무엇이었는지·`BASE_SHA`..`HEAD_SHA` 범위만 정밀하게 준다. 코디네이터의 사고 과정이 아니라 결과물을 보게 한다
-- **read-only 를 명시한다.** 워킹트리·인덱스·HEAD·브랜치를 건드리지 못하게 한다. 다른 리비전이 필요하면 `git worktree add /tmp/review-<sha>` 로 따로 뜨게 한다
-- **리뷰어가 다시 서브에이전트를 띄우지 못하게 막는다.** 비용만 늘고 판정은 값이 없다. 디프가 크면 스스로 여러 번 나눠 보고 그렇게 했다고 적게 한다
-- **심각도를 나눈다.** Critical 은 즉시, Important 는 진행 전에, Minor 는 기록만
-- **리뷰어가 틀렸으면 근거를 들어 반박한다.** 그대로 반영하지 않는다
+```bash
+orca orchestration send --to dispatch:<sonnet_dispatch_id> \
+  --subject "리뷰 반영" --body "<리뷰 경로와 반영 지시>" --json
+```
 
-리뷰 태스크는 **읽기 전용**으로 못 박고(`.omo/review-prN.md` 하나만 쓰게 한다), 판정을 `승인` / `조건부 승인(N건 수정 후)` / `반려` 중 하나로 강제한다. 지적마다 **"어떤 입력·상황에서 실제로 터지나"** 를 요구한다 — 그게 없으면 추측이고, **잘못된 지적은 잘못된 수정을 부른다.** 실제로 `SecurityContextHolder` 오진을 그대로 반영했다가 미인증 요청이 401 대신 403 을 받는 회귀가 난 적이 있다.
+수정·푸시가 끝나면 **agy 로 다시 리뷰한다.** 승인이 날 때까지 돈다.
+
+#### 4) 머지와 정리
+
+승인이 나면 **코디네이터가 직접** 머지하고 PR 을 닫는다.
+
+```bash
+gh pr merge <N> --squash --delete-branch
+```
+
+그다음 **sonnet 과 agy 서브에이전트를 정리한다.**
+
+```bash
+orca orchestration worker-release --dispatch <sonnet_dispatch_id> --json
+orca terminal close --terminal <agy_handle> --json
+```
+
+**받은 `worker_done` 은 그 자리에서 ack 한다.** 안 하면 그 delivery 가 계속 재생돼 다음 대기를 가로챈다. 실제로 두 번 겪었다.
+
+**리뷰마다 새 agy 터미널을 쓴다.** 재사용하면 스크롤백에 남은 **옛 dispatch id** 를 집어 `worker_done` 이 `capability is revoked` 로 거부된다.
+
+**지시서는 파일로 두고 경로만 보낸다.** `terminal send` 로 긴 본문을 밀면 TUI 가 깨진다.
+
+`--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 로 넘긴다. 기본은 Gemini 3.7 Flash (High) 다.
 
 ---
 
