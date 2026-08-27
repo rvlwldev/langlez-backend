@@ -3,10 +3,12 @@ package com.langlez.relationship.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.core.BlockQuery
+import com.langlez.core.MessageDeduplicator
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.domain.Report
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.clearMocks
 import io.mockk.every
@@ -21,10 +23,23 @@ class RelationshipConsumerTest : BehaviorSpec({
     val blocks = mockk<BlockQuery>(relaxed = true)
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
-    val service = RelationshipService(repo, members, blocks, publisher)
-    val consumer = RelationshipConsumer(service, ObjectMapper().registerKotlinModule())
+    // SETNX 를 흉내 내는 로컬 대역. relaxed 목을 쓰면 isDuplicate 가 늘 false 라
+    // 중복 억제가 실제로 도는지 검증이 안 된다. 진짜 레디스 동작은 RedisMessageDeduplicatorTest 가 본다.
+    val seen = mutableSetOf<String>()
+    val dedup = object : MessageDeduplicator {
+        override fun isDuplicate(topic: String, payload: String) = !seen.add(topic + payload)
+        override fun release(topic: String, payload: String) {
+            seen.remove(topic + payload)
+        }
+    }
 
-    afterEach { clearMocks(repo, members, blocks, publisher, answers = false) }
+    val service = RelationshipService(repo, members, blocks, publisher)
+    val consumer = RelationshipConsumer(service, dedup, ObjectMapper().registerKotlinModule())
+
+    afterEach {
+        clearMocks(repo, members, blocks, publisher, answers = false)
+        seen.clear()
+    }
 
     val payload = """
         {"roomId":10,"reporterId":1,"reportedUserId":2,"reason":"욕설","triggerMessageId":"m7"}
@@ -43,14 +58,33 @@ class RelationshipConsumerTest : BehaviorSpec({
         }
 
         When("같은 이벤트가 다시 배달되면") {
-            Then("두 번째부터는 저장하지 않는다 (at-least-once 대비)") {
-                // 첫 배달 이후에는 같은 신고가 이미 있다.
-                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "10", "m7") } returnsMany listOf(false, true)
+            Then("두 번째는 서비스까지 가지도 않는다") {
+                // 존재 검사가 계속 false 여도 중복 검사에서 막혀야 한다.
+                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "10", "m7") } returns false
 
                 consumer.onChatUserReported(payload)
                 consumer.onChatUserReported(payload)
 
                 verify(exactly = 1) { repo.save(any<Report>()) }
+            }
+        }
+
+        When("중복 검사를 통과했는데 저장이 실패하면") {
+            Then("중복 표시를 되돌려 재시도가 다시 처리할 수 있게 한다") {
+                every { repo.existsReport(any(), any(), any(), any()) } returns false
+
+                var attempts = 0
+                every { repo.save(any<Report>()) } answers {
+                    attempts++
+                    if (attempts == 1) throw IllegalStateException("DB 장애")
+                    firstArg()
+                }
+
+                shouldThrow<IllegalStateException> { consumer.onChatUserReported(payload) }
+
+                consumer.onChatUserReported(payload)
+
+                verify(exactly = 2) { repo.save(any<Report>()) }
             }
         }
     }
