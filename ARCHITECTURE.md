@@ -64,7 +64,7 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
         └─ 아니오
               │
               ├─ Notification 저장  (type=CHAT_MESSAGE)
-              │     title = "notification.chat-message"  ← i18n 키
+              │     title = "notification.chat-message.title"  ← i18n 키
               │     body  = event.preview
               │     data  = { roomId, messageId, senderId }
               │
@@ -356,3 +356,4 @@ Kafka 이벤트를 처리한 결과가 여기로 나간다. **수신자가 온�
 | `existsReport` | 유니크 제약이 없는 check-then-insert. 동시 요청에 뚫린다 |
 | FCM 제목 | i18n 키 원문(`notification.member-followed`)이 OS 배너에 그대로 뜬다 |
 | 컨슈머 중복 표시 | 강제 종료(SIGKILL·OOM) 시 표시만 남아 TTL(1시간)까지 재배달이 걸러진다 |
+| 알림 `title` 키 명명 | chat 은 `notification.chat-message.title`, 팔로우는 `notification.member-followed` — 접미사 규칙이 어긋난다 |
