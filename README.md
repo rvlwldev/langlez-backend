@@ -1,0 +1,321 @@
+# Langlez Backend
+
+언어교환 모바일 앱(iOS/Android)의 서버. Kotlin / Spring Boot 멀티모듈 모듈러 모놀리스.
+
+- **언어·런타임**: Kotlin 2.2.21 / Java 21 (Virtual Threads 사용, 코루틴 미사용)
+- **프레임워크**: Spring Boot 3.5.8 (Web, Security, Data JPA + QueryDSL 7.1, Data MongoDB, WebSocket/STOMP), springdoc-openapi 2.8.9
+- **저장소**: PostgreSQL · MongoDB · Redis(Redisson)
+- **메시징**: Kafka (트랜잭셔널 아웃박스 경유)
+- **스키마**: Flyway (`ddl-auto: validate`)
+
+관련 문서:
+
+- `CLAUDE.md` — **코드 규약**. `module/member` 를 기준 모듈로 삼아 실제 코드에서 역으로 추출했다. 새 코드를 쓰기 전에 반드시 읽는다. 반복해서 터졌던 함정 목록도 여기(13절) 있다
+- `docs/superpowers/plans/` — 단위 작업별 상세 계획서(이력)
+
+---
+
+## 1. 빠른 시작
+
+```bash
+./local-infra-start.sh          # PostgreSQL / Redis / Kafka / 모니터링 컨테이너 기동
+./gradlew build                 # 전체 빌드 + 테스트 (Testcontainers 사용, Docker 필요)
+./gradlew :app:api:bootRun      # 서버 실행 (http://localhost:8080)
+./gradlew :module:member:test   # 모듈 단위 테스트
+```
+
+`local-infra-start.sh` 는 `docker/postgresql.yml`, `docker/redis.yml`, `docker/kafka.yml`, `docker/monitoring.yml` 을 `-p langlez` 단일 compose 프로젝트로 합쳐 올린다.
+**MongoDB 는 기본 기동에서 빠져 있다.** 채팅 메시지를 다루려면 스크립트에 `-f docker/mongodb.yml` 을 추가하거나 별도로 띄운다.
+
+로컬 접속 정보(`app/api/src/main/resources/application.yml` 기준):
+
+| 대상 | 주소 |
+|---|---|
+| PostgreSQL | `jdbc:postgresql://localhost:5432/langlez_db` (admin/admin) |
+| MongoDB | `mongodb://localhost:27017/langlez_db` |
+| Redis | `localhost:6379` |
+| Kafka | `localhost:9092,9094,9096` (3노드) |
+| WebSocket | `/ws/chat`, `/ws/wave` (STOMP, 브로커 prefix `/topic`, 앱 prefix `/app`) |
+
+운영 설정은 `application-production.yml` 이 환경 변수로 덮어쓴다.
+
+### 시작 전에 알아야 할 것
+
+- **모바일 전용이다.** 쿠키를 쓰지 않는다. 토큰은 헤더로만 오간다.
+- **1인 1기기 정책.** `X-Device-Id` 헤더가 필수고, 다른 기기로 로그인하면 기존 세션이 끊긴다.
+- **`ddl-auto: validate`.** 스키마 변경은 Flyway 로만 한다. 엔티티와 마이그레이션이 어긋나면 기동 시점에 죽는다.
+- **`open-in-view: false`.** 트랜잭션 밖에서 LAZY 연관을 만지면 터진다.
+- **탈퇴 회원 데이터는 지우지 않는다.** 익명화도 안 한다. 재가입 후 같은 문제를 반복하는 회원 추적이 목적인 의도된 정책이다.
+
+---
+
+## 2. 아키텍처
+
+### 모듈 구조
+
+```
+core            프레임워크 없는 순수 계약(포트 인터페이스 + 이벤트 DTO). 의존성 0
+common          웹·보안·예외·필터·i18n 공용
+infra/rdb       JPA + QueryDSL + Outbox 베이스 + Flyway
+infra/redis     Redisson, 캐시 어댑터, 분산 락, pub/sub 브로드캐스터
+infra/kafka     프로듀서·컨슈머 설정, DLT
+module/*        도메인 모듈 (api / application / domain / infrastructure 4계층)
+app/api         조립 + 실행
+```
+
+`settings.gradle.kts` 가 `infra/`, `module/` 하위를 자동 스캔한다. `build.gradle.kts` 만 만들면 서브프로젝트로 등록된다.
+다만 **등록만으로는 앱이 그 모듈을 로드하지 않는다** — `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다.
+
+현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `chat`, `notification`, `relationship`, `echo`, `wave`.
+
+### 4계층
+
+모든 도메인 모듈은 아래 4계층을 갖는다. 계층 이름과 depth 를 임의로 바꾸지 않는다.
+
+```
+module/member/src/main/kotlin/com/langlez/member/
+├── api/                # 외부 진입점 (HTTP, Kafka, 애플리케이션 이벤트) + 요청·응답 DTO
+├── application/        # 유스케이스 조합, 트랜잭션 경계
+├── domain/             # 엔티티 + 저장소 포트(인터페이스)
+└── infrastructure/     # 포트의 구현(어댑터), jpa/, outbox/
+```
+
+의존 방향은 한쪽으로만 흐른다.
+
+```
+api ──▶ application ──▶ domain ◀── infrastructure
+```
+
+- `domain` 은 다른 계층을 import 하지 않는다. 프레임워크 의존은 영속성/감사 애노테이션까지만.
+- `application` 은 `domain` 의 포트 인터페이스만 안다. `infrastructure` 구현 클래스를 직접 참조하지 않는다.
+- `infrastructure` 가 `domain` 인터페이스를 구현하며 방향을 뒤집는다.
+- 모듈 간에는 서로를 직접 참조하지 않는다. `core` 의 포트와 Kafka 이벤트를 거친다.
+
+### 통신 규칙
+
+| 목적 | 수단 |
+|---|---|
+| 모듈 간 상태 변경 전파, 유실되면 안 되는 것 | **Kafka** (아웃박스 경유) |
+| 응답을 기다려야 하는 조회 | **`core` 포트** |
+| 접속 중인 사용자에게 실시간 전달 | **`core.MessageBroadcaster`** → Redis pub/sub → WebSocket |
+| 고빈도 하트비트 | **Redis 직결** (Kafka 금지) |
+
+현재 `core` 포트 (`core/src/main/kotlin/com/langlez/core/`):
+
+| 포트 | 역할 | 구현 |
+|---|---|---|
+| `BlockQuery` | 차단 관계 확인 | `relationship`(`BlockQueryImpl`) |
+| `FollowQuery` | 팔로잉 id 목록 | `relationship`(`FollowQueryImpl`) |
+| `PushTokenQuery` | FCM 토큰 조회 | `member`(`PushTokenQueryImpl`) |
+| `Storage` | presign / key 확정 | `attachment` |
+| `OnlineTracker` | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
+| `CacheProvider` / `Cache` | 캐시 획득·조회·무효화 | `infra/redis`(`ResilientCacheProvider`) |
+| `Notificator` | 알림 발송 | `notification` |
+| `MessageBroadcaster` | 토픽 팬아웃 | `infra/redis`(`RedisMessageBroadcaster`) |
+| `TokenBlacklist` | 액세스 토큰 무효화 | `infra/redis`(`TokenBlacklistImpl`) |
+
+아웃박스가 필요한 이유: 저장과 이벤트 발행이 한 트랜잭션에 묶여야 "저장은 됐는데 이벤트는 유실"이 원천 차단된다. 단, **가장 빈번한 쓰기(채팅 메시지)는 별도 아웃박스 행 대신 문서의 `published` 플래그**로 처리해 쓰기 증폭을 없앴다.
+
+### 저장소 분담
+
+| 데이터 | 저장소 | 이유 |
+|---|---|---|
+| 회원·프로필·방·참여자·아웃박스 | PostgreSQL | 조인·트랜잭션 필요, 유한 증가 |
+| 채팅 메시지 본문 + 첨부 | MongoDB | 무한 증가, 첨부 임베드로 조회 1회 |
+| 접속·화면 상태·분산 락·캐시·wave 채팅 | Redis | 휘발성·고빈도 |
+
+### 스키마 관리
+
+Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V5__drop_wave_messages.sql`.
+운영·개발·테스트 모두 `ddl-auto: validate`. **이미 적용된 V 파일은 절대 수정하지 않는다** (체크섬 불일치로 기동 실패). 고칠 게 있으면 새 V 파일을 만든다.
+
+---
+
+## 3. 신규 개발자 학습 투어
+
+아래 순서로 읽으면 전체 구조가 한 번에 잡힌다. 각 단계는 실제 파일 경로다.
+
+**1단계 — 조립과 실행**
+`settings.gradle.kts`, `build.gradle.kts`, `app/api/src/main/kotlin/com/langlez/MainApplication.kt`, `app/api/src/main/resources/application.yml`.
+모듈 자동 스캔, Virtual Thread 활성화, JPA/Mongo 리포지토리 자동 설정을 왜 제외했는지를 확인한다.
+
+**2단계 — `core` 의 계약**
+`core/src/main/kotlin/com/langlez/core/`.
+모듈 간 결합이 전부 이 인터페이스들을 통과한다. 이벤트 DTO 는 `core/event/{chat,echo,member}/`.
+
+**3단계 — 공용 웹·보안**
+`common/src/main/kotlin/com/langlez/`: `filter/JwtAuthenticationFilter.kt`, `config/WebSecurityConfiguration.kt`, `utility/JwtTokenProvider.kt`, `annotation/MemberId.kt`(+`MemberIdResolver`), `GlobalRestControllerAdvice.kt`, `exception/LanglezException.kt`.
+인증된 사용자 id 가 컨트롤러까지 어떻게 전달되는지, 예외가 어떻게 i18n 메시지로 바뀌는지 본다.
+
+**4단계 — 기준 모듈 `member`**
+`module/member/src/main/kotlin/com/langlez/member/`: `domain/Member.kt`(+`MemberAudit.kt`) → `domain/MemberRepository.kt` → `infrastructure/MemberRepositoryImpl.kt`(2단계 캐시) → `api/MemberAPI.kt` + `api/MemberController.kt`(Swagger 분리) → `api/MemberPingController.kt`(고빈도 핑을 Redis 직결로).
+**여기 코드가 규약의 정답이다.** 다른 모듈이 이것과 다르면 다른 쪽이 틀린 것이다.
+
+**5단계 — 인증 흐름**
+`module/auth/src/main/kotlin/com/langlez/auth/`: `oauth2/OAuth2SuccessHandler.kt` → `application/AuthService.kt` → `application/AccessContext.kt` → `api/AuthController.kt`.
+OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기 세션 탈취 처리를 따라간다.
+
+**6단계 — 아웃박스**
+`infra/rdb/src/main/kotlin/com/langlez/rdb/outbox/`(`OutBox`, `OutBoxRepository`, `OutBoxProcessor`, `OutBoxHistoryProcessor`) → `module/member/api/MemberEventListener.kt`(`@TransactionalEventListener(BEFORE_COMMIT)`) → `module/member/infrastructure/outbox/MemberOutBoxScheduler.kt`(`@Scheduled` + `@DistributedLock`).
+
+**7단계 — 실시간 채팅**
+`module/chat/src/main/kotlin/com/langlez/chat/`: `config/ChatWebSocketConfiguration.kt`(`/ws/chat`, CONNECT/SUBSCRIBE 인가) → `application/ChatService.kt` → `application/ChatMessagePublisher.kt` → `infrastructure/mongo/ChatMessageRepositoryImpl.kt` → `application/ChatReconciler.kt`(Mongo↔Postgres 이중 쓰기 창 복구).
+
+**8단계 — 이벤트 소비와 알림**
+`module/notification/api/NotificationConsumer.kt`(`chat-message-sent`) → `application/NotificationService.kt`(3상태 판정) → `infrastructure/FcmPushSender.kt`.
+`module/relationship/api/RelationshipConsumer.kt`(`chat-user-reported`)도 같이 본다.
+
+**9단계 — Redis 인프라**
+`infra/redis/src/main/kotlin/com/langlez/redis/`: `cache/ResilientCache.kt`·`cache/ResilientCacheProvider.kt`(Redis + Caffeine 폴백), `distributedLock/DistributedLock.kt`·`DistributedLockAspect.kt`, `broadcast/RedisMessageBroadcaster.kt`, `config/RedissonConfiguration.kt`.
+
+**10단계 — 나머지 도메인**
+`module/echo/application/EchoService.kt`(타임라인·좋아요·댓글·해시태그), `module/wave/application/WaveService.kt` + `config/WaveWebSocketConfiguration.kt`(`/ws/wave`, 참여자 검사).
+
+### 복잡도 핫스팟
+
+바꿀 때 특히 조심할 곳. 전부 실제로 사고가 났거나, 동시성·정합성이 걸려 있다.
+
+| 파일 | 왜 위험한가 |
+|---|---|
+| `module/chat/application/ChatService.kt` | 방 생성·읽음·나가기·첨부가 한곳에. Mongo 쓰기와 Postgres 비정규화 카운터가 함께 움직인다 |
+| `module/chat/application/ChatReconciler.kt` | 이중 쓰기 실패 복구. 활성 방 수만큼 Mongo 왕복이 붙는다 |
+| `module/member/infrastructure/MemberRepositoryImpl.kt` | 2단계 캐시. 보조 캐시는 PK 만 담고, 변경 가능한 키(handle)는 읽을 때 재검증한다 |
+| `infra/redis/cache/ResilientCache.kt`, `ResilientCacheProvider.kt` | Redis 장애 시 Caffeine 폴백. 직렬화 타입이 어긋나면 조용히 전부 miss 난다 |
+| `common/filter/JwtAuthenticationFilter.kt` | 예외 catch 범위를 넓히면 Spring Security 예외 경로를 가로챈다. 회귀 테스트가 붙어 있다 |
+| `infra/rdb/outbox/OutBoxProcessor.kt` | `open val` 튜닝 상수를 베이스 생성자에서 읽으면 전체가 멈춘다 |
+| `module/echo/application/EchoService.kt` | 원자적 카운터 갱신, 차단·팔로우 필터가 타임라인 전 경로에 얽힌다 |
+| `module/wave/application/WaveService.kt` | 정원 검사 + Redis 링버퍼. 분산 락 없이는 정원이 새어 나간다 |
+
+---
+
+## 4. 현재 구현 상태
+
+### 인프라
+
+- **Flyway 도입** — 엔티티에서 뽑은 DDL을 `V1__init.sql` 베이스라인으로. `ddl-auto`를 `update`/`none` → `validate` 로 통일. 통합테스트도 Flyway를 타므로 마이그레이션 자체가 검증된다
+- **캐시 포트 이행** — Spring `@Cacheable`/`CacheManager` 전면 제거, `core.CacheProvider` 로 교체
+- **Redis pub/sub 팬아웃** — `MessageBroadcaster` 포트 + `RedisMessageBroadcaster`. 인메모리 STOMP 브로커는 자기 JVM 세션에만 닿아 다중 인스턴스에서 조용히 깨진다
+- **Lettuce 스택 제거** — Redisson만 사용. 쿼리 로거가 관측 대상 0건이었다
+
+### 모듈
+
+| 모듈 | 상태 |
+|---|---|
+| `member` | 완료. 기준 모듈. 2단계 캐시, 상태 머신, 접속 기록 배치 동기화 |
+| `auth` | 완료. OAuth2, JWT, **1인 1기기** 정책, 쿠키 제거(모바일 전용) |
+| `attachment` | 완료. presign → key 확정 흐름 |
+| `profile` | 완료. 개인정보(성별·생일·국가)는 `member` 로 이관 |
+| `chat` | 완료. 1:1 채팅 전체 (아래 상세) |
+| `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
+| `relationship` | 완료. 팔로우·차단·신고 + `FollowQuery`/`BlockQuery` 구현 |
+| `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. 단 **HTTP 컨트롤러가 없다** — `EchoService` 와 요청·응답 DTO 까지만 있고 `@RestController` 가 아직 없어 외부에 노출되지 않는다 |
+| `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
+
+`matching`, `interest`, `admin` 은 삭제됐다. `matching` 은 의존 계층이 소실돼 재설계가 필요하고, `interest` 는 재설계 예정, `admin` 은 폐기다.
+
+### chat 모듈 상세
+
+방 생성·목록·메시지 조회·읽음·첨부(앨범)·나가기·삭제·신고 + WebSocket 실시간.
+
+핵심 설계:
+
+- 메시지는 **Mongo**, 첨부는 문서에 **임베드** → 목록 조회 1회
+- 안 읽은 수는 `chat_room_members.unread_count` **비정규화** → 방 목록도 조회 1회
+- 정렬·커서는 `created_at` 이 아니라 **방별 `seq`** (인스턴스 간 시계 차이로 순서가 뒤집힘)
+- 나가기 = **재입장 정책** (나가도 이전 대화 전부 보임)
+- 알림은 **발행 직전**에 "그 방 보는 중인지" 판정 → 보고 있으면 생략
+- 이중 쓰기(Mongo→Postgres) 창은 **대사 스케줄러**가 5분마다 복구
+
+### 4개 모듈 재구축 완료 (2026-08-14)
+
+`docs/superpowers/plans/2026-08-14-remaining-modules.md` 기준. 전부 병렬 구현 후 점검 완료.
+
+- **A. notification** — `chat-message-sent` 수신 → 세 상태 판정(그 방 보는 중 / 앱만 켜짐 / 미접속) → 인앱 또는 FCM. `FcmPushSender` 는 Firebase Admin SDK 실사용, `fcm.credentials` 미설정 시 경고 로그만 남기고 무시
+- **B. relationship** — 팔로우·차단·신고 API + `chat-user-reported` 수신 → `Report` 저장
+- **C. echo** — 트위터형 피드 (글·타임라인·좋아요·댓글·해시태그·이미지)
+- **D. wave** — 음성방 + **사라지는 채팅** (Redis 링버퍼만, 저장 안 함)
+
+**팔로우 그래프 연결:** `core.FollowQuery` 포트 신설로 결정. relationship 이 `FollowQueryImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
+
+**WebSocket 구독 인가:** wave 는 `WaveWebSocketConfiguration` 이 별도로 `sessions.isParticipant(roomId, memberId)` 를 검사한다. chat 설정 파일은 건드리지 않았다.
+
+### 코드 리뷰 확정 결함 조치 완료
+
+| 결함 | 조치 |
+|---|---|
+| `JwtAuthenticationFilter` 가 `chain.doFilter` 까지 `catch (Exception)` 으로 감싸 Spring Security 예외 경로를 가로챔 | 인증 수립 구간만 감싸도록 축소. `accessDeniedHandler`/`authenticationEntryPoint` 가 정상 동작 |
+| ~~같은 필터의 SecurityContext 스레드 유출~~ | **오진이었다. 조치 금지.** `SecurityContextHolderFilter` 가 이미 `finally` 로 정리한다. 여기서 `clearContext()` 를 넣으면 미인증 요청이 401 대신 403 을 받는 회귀가 난다. 회귀 방지 테스트가 `JwtAuthenticationFilterTest` 에 있다 |
+| `GlobalRestControllerAdvice` 핸들러 메서드명 중복 | `handleAccessDeniedException` 으로 리네임 |
+| Redisson 타입 검증기에 `java.time.` 누락 | `allowIfSubType("java.time.")` 추가 |
+| `ResilientCacheConfiguration` 이 전달받은 TTL 을 무시하고 10분 고정 | 해당 `jitteredWriter` 경로를 제거하고 설정을 단일 빈으로 단순화 |
+| Kafka DLT 파티션에 소스 파티션 번호를 그대로 지정 | `-1` 로 바꿔 프로듀서가 동적 분배 |
+| Virtual Thread `ConcurrentKafkaListenerContainerFactory` 빈 미선언 | 명시 선언 |
+| `MemberRepositoryImpl` 핸들 변경 시 구 핸들 캐시 오염 | 읽기 경로에서 재검증 — 캐시로 찾은 회원의 `handle` 이 요청 키와 다르면 버리고 DB 조회 후 evict |
+| `AttachmentRepositoryImpl.deleteAll` N+1 단건 삭제 | `deleteAllInBatch` (연관이 없어 고아 행 위험 없음) |
+| `Attachment.key` 유니크 인덱스가 MySQL 3072 byte 한계 초과 | **해당 없음.** PostgreSQL + Flyway 로 확정돼 지적 전제가 사라졌다 |
+
+---
+
+## 5. 남은 작업
+
+### 5.1 우선순위 높음
+
+1. **`interest` 재설계** — 사용자가 직접 설계 예정. 2번의 선행 조건이다
+2. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
+3. **정지/탈퇴 회원 접근 차단 필터** — `Member.requireActive()` 는 있고 로그인·토큰 갱신 경로에서만 부른다. 일반 API 경로는 정지된 회원도 그대로 통과한다. `JwtAuthenticationFilter` 뒤에 상태 검사를 붙일 자리
+4. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화** — 지금 `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 탈퇴해도 발급된 액세스 토큰이 만료까지 살아 있고 리프레시 토큰도 안 지워진다. 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록
+
+### 5.2 중간
+
+5. **컨슈머 멱등성 하네스** — Kafka 는 at-least-once 다. 지금 컨슈머(`notification`, `relationship`)에 중복 수신 방어가 없어 재전달되면 알림이 두 번 가고 신고가 두 건 쌓인다. Redis `SETNX` 기반 `messageId` 중복 검사를 AOP 로
+6. **Outbox history 아카이버** — `OutBoxHistoryProcessor` 가 완료 건을 `*_outbox_history` 로 옮기지만 그 히스토리 테이블을 비우는 쪽이 없다. 무한 증가한다. `@Scheduled` + `@DistributedLock` 배치 필요
+7. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+8. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + 분산 추적용 TraceId 주입 필터
+9. **`listRooms` 참여자 조회 최적화** — 페이지 크기만큼 단건 조회가 붙는다 (`ponytail:` 주석)
+10. **대사 스케줄러 창 조정** — 활성 방 수만큼 Mongo 왕복 (`ponytail:` 주석)
+
+### 5.3 낮음 / 정책 결정 필요
+
+11. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 탈취를 부분적으로만 막는다. 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+12. **회원 검색 API** — handle 기반 페이징 검색. `MemberRepository.findAllByHandles` 는 있으나 부분 일치 검색 API 는 없다
+13. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+14. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 동의 시각이 없다. 법적으로 시각 기록이 필요한지 확인 후 `MemberAudit.agreedMarketingAt` 추가
+15. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 버퍼 보존 기간을 얼마로 할지
+16. **`chat_messages` 시간 파티셔닝** — Mongo로 옮겨 당장은 불필요하나, Postgres에 남은 대용량 테이블이 생기면 재검토
+
+### 5.4 정책 변경으로 폐기된 항목
+
+되살리려면 정책부터 다시 논의해야 한다. 모르고 다시 착수하는 걸 막으려고 남긴다.
+
+| 폐기 항목 | 사유 |
+|---|---|
+| 탈퇴 회원 개인정보 익명화 / 30일 유예 후 삭제 배치 | **의도적으로 하지 않는다.** 탈퇴 후 재가입해 같은 문제를 반복하는 회원을 추적해야 해서 계정 기록을 영구 보존한다 (`Member.withdraw` KDoc 참조) |
+| 멀티 디바이스 세션 관리 / 기기 목록 / 원격 로그아웃 | **1인 1기기 정책**으로 확정. 기기 목록이라는 개념 자체가 없다. `MemberAudit.lastDeviceId` 하나로 끝난다 |
+| Redis Stream DLQ (`autoClaim` 재시도 추적) | Redis Stream 을 안 쓴다. 메시징은 Kafka 로 통일했고 DLT 가 그 역할을 한다 |
+| `Member.status` 라이프사이클 도입 | 완료 (`CREATED`/`ACTIVE`/`SUSPENDED`/`WITHDRAWN` + `suspend`/`unsuspend`/`withdraw`/`requireActive`) |
+| `Member.profileImageUrl`, 약관 동의 이력, `getMe` 통합 조회 | 완료 (`Member.imageUrl`, `MemberAudit.agreedTermsAt`, `MemberMeResponse`) |
+| Kafka 컨슈머 짝 맞추기 | 완료. `chat-message-sent` → notification, `chat-user-reported` → relationship |
+
+---
+
+## 6. 검증 기준
+
+```bash
+./gradlew build          # 전체 빌드 + 테스트
+```
+
+- 통합테스트는 Testcontainers(Postgres · Redis · Mongo)를 띄운다. Docker 필요
+- `ddl-auto: validate` 라 마이그레이션과 엔티티가 어긋나면 **기동 시점에** 잡힌다
+- 신규 i18n 키는 `common/src/main/resources/messages_*.properties` **12개 전부**(ko, ja, en, de, es, fr, pt, id, ru, vi, zh_CN, zh_TW)에 있어야 한다. 누락은 조용히 넘어가고 키 문자열이 그대로 사용자 응답에 노출된다
+
+  ```bash
+  for f in common/src/main/resources/messages_*.properties; do echo "$(basename $f) $(grep -c '^[a-z].*=' $f)"; done
+  ```
+
+  전부 같은 수여야 한다
+
+---
+
+## 7. 코드 규약
+
+네이밍, 엔티티 작성법, 포트·어댑터 구조, 트랜잭션·예외 처리, Swagger 분리, 테스트 작성법, 그리고 **반복해서 터진 함정 목록**은 전부 [`CLAUDE.md`](CLAUDE.md) 에 있다. 새 코드를 쓰기 전에 읽는다.

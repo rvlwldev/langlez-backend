@@ -62,3 +62,4 @@ attachments/
 
 # Local secrets — 절대 커밋하지 마세요
 **/application-local.yml
+.omo/

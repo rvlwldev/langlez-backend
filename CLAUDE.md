@@ -4,7 +4,9 @@ Kotlin / Spring Boot 3.5.8 멀티모듈 백엔드. 언어교환 모바일 앱(iO
 
 `module/member` 가 이 프로젝트의 **기준 모듈(reference module)** 이다. 새 모듈을 만들거나 기존 모듈을 고칠 때 member 모듈의 구조와 관례를 그대로 따른다. 이 문서는 member 모듈의 실제 코드에서 역으로 추출했고, **문서와 코드가 어긋나면 member 모듈 코드가 정답**이다.
 
-현황과 남은 작업은 `PLAN.md`, 확정된 결함 목록은 `REVIEW.md` 를 본다.
+이 문서는 **어느 파일을 고치든 항상 적용되는 것**만 담는다. 도메인 모듈(`module/*`)의 4계층 구현 규약 — 엔티티·저장소·서비스·API·비동기·마이그레이션·i18n·테스트·새 모듈 체크리스트 — 은 **`module/CLAUDE.md`** 에 있다. `module/` 하위 파일을 건드릴 때 자동으로 딸려오지만, **새 모듈을 만들 때처럼 아직 그 아래 파일을 연 적이 없다면 먼저 읽는다.**
+
+현황과 남은 작업은 `README.md` 를 본다.
 
 ---
 
@@ -19,8 +21,14 @@ Kotlin / Spring Boot 3.5.8 멀티모듈 백엔드. 언어교환 모바일 앱(iO
 ### 검증
 
 ```bash
-./gradlew build   # 전체 빌드 + 테스트. 통합테스트가 Testcontainers(Postgres·Redis·Mongo)를 띄우므로 Docker 필요
+./local-infra-start.sh                               # 로컬 인프라 (Postgres·Redis·Kafka·모니터링). mongodb 는 제외돼 있다
+./gradlew build                                      # 전체 빌드 + 테스트. Testcontainers 를 쓰므로 Docker 필요
+./gradlew :app:api:bootRun                           # 앱 실행. 인프라 기동이 선행돼야 한다
+./gradlew :module:<name>:test --tests "*MemberTest"  # 모듈별 / 단일 클래스 테스트
+./gradlew compileKotlin compileTestKotlin            # 컴파일만 빠르게 확인
 ```
+
+**린트 단계가 없다.** ktlint/detekt 를 붙이지 않았으니 린트 태스크가 있다고 가정하지 않는다.
 
 ---
 
@@ -36,7 +44,9 @@ module/*        도메인 모듈 (api / application / domain / infrastructure 4�
 app/api         조립 + 실행
 ```
 
-`settings.gradle.kts` 가 `module/` 하위를 자동 스캔한다. `build.gradle.kts` 만 만들면 등록된다.
+`settings.gradle.kts` 가 `infra/`·`module/` 하위를 자동 스캔한다. `build.gradle.kts` 만 만들면 서브프로젝트로 등록된다.
+
+**등록만으로는 앱이 그 모듈을 로드하지 않는다.** `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다. 빠뜨려도 컴파일과 모듈 단위 테스트는 통과하므로 조용히 넘어간다.
 
 ### 4계층
 
@@ -93,6 +103,14 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 채팅 메시지 본문 + 첨부 | MongoDB | 무한 증가, 첨부 임베드로 조회 1회 |
 | 접속·화면 상태·분산 락·캐시·wave 채팅 | Redis | 휘발성·고빈도 |
 
+### 설정과 로깅
+
+**설정은 `app/api/src/main/resources/` 두 파일에만 둔다.** `application.yml`(기본값이자 로컬용, `docker/` 인프라 설정과 짝을 맞춘다. 여기 든 로컬 dummy 시크릿은 운영에서 안 쓰이므로 커밋해도 된다)과 `application-production.yml`(운영용, 민감값은 전부 `${ENV_VAR}` 주입). `module/*`, `infra/*`, `common/*` 에 `application.yml` 을 만들지 않는다 — 기본값이 필요하면 `@Value`/`@ConfigurationProperties` 로 코드에 둔다.
+
+**보안에 직결되는 설정값에 `@Value("${key:fallback}")` 같은 조용한 기본값을 넣지 않는다.** 운영에서 프로퍼티가 빠져도 기본값으로 부팅해 문제를 숨긴다. 프로덕션 코드는 필수값으로 두고, 부분 컨텍스트만 띄우는 통합테스트가 `@SpringBootTest(properties = [...])` 로 명시적으로 넣는다.
+
+쿼리 로깅은 `common/.../logger/PerformanceLogger` 한 곳을 통해 나간다 (현재는 P6Spy(RDB)만). 임계값은 `logger.rdb/mongo/redis.{log-threshold-ms, warn-threshold-ms}`, **`warn-threshold` 이상만 `WARN` 이고 나머지는 `DEBUG`** — 일반 쿼리 로그를 INFO 로 올리면 콘솔이 스케줄러 로그로 덮인다. 로그 파일은 `APP_LOG_PATH` 기본값이 `build/test-logs` 라 테스트가 소스 옆을 더럽히지 않고, `bootRun` 만 `app/log/langlez-server/logs` 를 주입해 Promtail 이 수집한다.
+
 ---
 
 ## 2. 네이밍
@@ -124,318 +142,7 @@ class MemberRepositoryImpl(
 
 ---
 
-## 3. 도메인 엔티티
-
-`Member.kt` 가 표준형이다.
-
-```kotlin
-@Entity
-@EntityListeners(AuditingEntityListener::class)
-@Table(
-    name = "members",
-    uniqueConstraints = [UniqueConstraint("UNQ_MEMBER_HANDLE", ["handle"])]
-)
-class Member(
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
-    val email: String,
-
-    @Column(length = 20) var handle: String = randomHandle(),
-    @Enumerated(STRING) var status: Status = Status.CREATED,
-    @Enumerated(STRING) @Column(name = "provider_type") var provider: Provider,
-
-    @Version var version: Long = 0
-) {
-    fun changeHandle(newHandle: String, now: Instant = Instant.now()) {
-        require(canChangeHandle(now)) { "member.handle.cooldown" }
-        require(isValidHandle(newHandle)) { "member.handle.invalid" }
-
-        handle = newHandle
-        audit.lastHandleUpdatedAt = now
-    }
-
-    enum class Status { CREATED, ACTIVE, SUSPENDED, WITHDRAWN }
-
-    companion object {
-        const val HANDLE_REGEX = "^[a-zA-Z0-9_.]{3,20}$"
-        fun isValidHandle(handle: String): Boolean = HANDLE_PATTERN.matches(handle)
-    }
-}
-```
-
-1. **`data class` 를 쓰지 않는다.** 일반 `class` + 주생성자 + 기본값. JPA 엔티티에 `equals`/`hashCode`/`copy` 자동 생성은 해롭다. DTO 만 `data class` 다.
-2. **PK 는 기본적으로 `@Id @GeneratedValue(IDENTITY) val id: Long = 0`.** 항상 `val`, 기본값 `0`. 식별관계는 예외 — 부모 PK 를 공유하면 `@MapsId`(`Profile`), 복합키면 `@IdClass`(`ProfileImage`).
-3. **enum 은 반드시 `@Enumerated(STRING)`.** ordinal 저장 금지.
-4. **enum 과 상수는 엔티티 안에 중첩한다.** `Member.Status`, `Member.HANDLE_REGEX`. 최상위로 빼지 않는다.
-5. **비즈니스 규칙은 엔티티 메서드로.** 서비스에서 `member.status = SUSPENDED` 처럼 필드를 직접 조작하지 않고 `member.suspend()` 를 호출한다. 불변식은 메서드 안에서 `require` 로 지킨다.
-6. **`require` 의 메시지는 i18n 메시지 키다.** `require(...) { "member.handle.cooldown" }` — 사람이 읽는 문장을 넣지 않는다. 키 형식은 `{도메인}.{대상}.{사유}` (점 구분, 각 마디는 kebab-case).
-7. **제약조건에 이름을 붙인다.** 유니크는 `UNQ_{TABLE}_{COLUMN}`, 인덱스는 `IDX_{TABLE}_{COLUMN}`. 이름 없는 제약은 DB 에서 추적이 안 된다.
-8. **컬럼명이 프로퍼티명과 다르면 `@Column(name = ...)` 을 명시한다.** (`provider` → `provider_type`)
-9. **시각은 `Instant`.** `LocalDateTime`/`Date` 안 쓴다. 시각이 아니라 **날짜**면 `LocalDate`(`Member.birthDay`). 시각 인자는 `now: Instant = Instant.now()` 로 받아 테스트에서 주입 가능하게 한다.
-10. **낙관적 락이 필요한 엔티티는 `@Version`.**
-11. **감사 필드가 여러 개면 별도 엔티티로 분리한다.** (`MemberAudit`, `@OneToOne(fetch = LAZY, cascade = [ALL], orphanRemoval = true)`)
-
-### 검증 규칙은 한 곳에서만 정의한다
-
-`HANDLE_REGEX` 는 엔티티 companion 에 있고 요청 DTO 가 그걸 참조한다. 정규식을 두 군데 적지 않는다.
-
-```kotlin
-// domain/Member.kt
-const val HANDLE_REGEX = "^[a-zA-Z0-9_.]{3,20}$"
-
-// api/request/MemberUpdateHandleRequest.kt
-@field:Pattern(regexp = Member.HANDLE_REGEX, message = "member.handle.invalid")
-val handle: String,
-```
-
----
-
-## 4. 저장소: 포트와 어댑터
-
-### 포트 (domain)
-
-순수 인터페이스. 프레임워크 타입(`Page`, `Pageable`, `Optional`)을 노출하지 않는다. 페이징은 커서 기반으로 `size`, `cursor` 를 직접 받는다.
-
-```kotlin
-interface MemberRepository {
-    fun save(member: Member): Member
-
-    fun find(id: Long): Member?
-    fun find(handle: String): Member?
-    fun find(provider: Member.Provider, id: String): Member?
-    fun findByEmail(email: String): Member?
-
-    fun findAll(ids: Collection<Long>): List<Member>
-    fun findAll(size: Int, cursor: Long?): List<Member>
-
-    fun delete(id: Long)
-    fun delete(member: Member)
-}
-```
-
-- **단건 조회는 `find` 로 오버로딩한다.** `findById`, `findByHandle` 처럼 이름을 늘리지 않는다. 파라미터 타입이 이미 의도를 말한다. 타입이 겹쳐 구분이 안 될 때만 `findByEmail` 처럼 이름을 붙인다.
-- **없으면 `null` 을 반환한다.** 예외를 던지지 않는다. 예외 변환은 application 계층 몫이다.
-- 복수 조회는 `findAll`, 반환은 `List<T>`.
-
-### 어댑터 (infrastructure)
-
-1. **캐시는 `core.CacheProvider` 포트를 쓴다.** Spring 의 `@Cacheable`/`CacheManager` 는 쓰지 않는다. 어노테이션 기반 캐시는 self-invocation 에 취약하고 갱신 시점이 코드에 안 보인다. (Spring `Cache` 에 multi-get/multi-set 이 없어 컬렉션 조회가 건당 왕복으로 쪼개지는 것도 이유였다.)
-2. **2단계 캐시 구조.** 보조 캐시(`member-handle`, `member-email`, `member-provider`)는 **PK 만 문자열로** 저장하고, 실제 엔티티는 `member` 캐시 한 곳에만 둔다. 엔티티를 여러 캐시에 복제하면 갱신 시 반드시 어긋난다.
-3. **`updateCaches` / `evictCaches` 는 항상 대칭 쌍.** 한쪽에 캐시를 추가했으면 반대쪽에도 넣는다.
-4. **바뀔 수 있는 값을 캐시 키로 쓰면 읽을 때 반드시 재검증한다.** 구 키가 TTL 까지 남는다. 구 키를 지우는 것만으로는 부족하다 — 캐시는 노드마다 따로 있고 로컬 폴백 캐시는 같은 객체 참조를 돌려주기도 해서 "이전 값"을 신뢰할 수 없다.
-   ```kotlin
-   val id = handles.get<String>(handle)?.toLongOrNull()
-   // handle 은 바뀔 수 있는 키다. 캐시로 찾은 회원의 handle 이 다르면 낡은 항목이다.
-   val cached = id?.let(jpa::findByIdOrNull)?.takeIf { it.handle == handle }
-   if (cached == null && id != null) handles.evict(handle)
-   ```
-5. **LAZY 연관을 가진 엔티티는 캐시하지 않는다.** 캐시에서 꺼낸 엔티티는 detached 라 연관 변경이 `merge` 로 전파되지 않고, 초기화 안 된 프록시가 직렬화되며, 오래된 `@Version` 을 되써서 `OptimisticLockException` 을 부른다. 캐시가 필요하면 필요한 필드만 담은 값 객체를 넣는다.
-6. **동적·복합 조건 조회는 QueryDSL.** 조건을 메서드명으로 잇는 파생 쿼리(`findByHandleAndStatusAndDeletedAtIsNullOrderBy...`)는 만들지 않는다. 다만 아래는 파생 쿼리가 낫다 — QueryDSL 로 쓰면 오히려 장황해진다:
-   - `@EntityGraph` 를 붙여야 하는 조회 (`findWithAuditById`)
-   - 단일 조건 존재 확인 (`existsByBlockerIdAndBlockedId`)
-   - soft delete 필터가 붙은 단순 조회 (`findByIdAndDeletedAtIsNull`)
-7. **QueryDSL Q타입은 별칭 import 한다.** `import com.langlez.member.domain.QMember.Companion.member as QMember`
-8. **컬렉션 인자는 빈 값을 먼저 걷어낸다.** `if (ids.isEmpty()) return emptyList()` — 빈 `IN ()` 쿼리를 막는다. 중복은 `toSet()` 으로 제거.
-9. **일괄 삭제는 조건부로 `deleteAllInBatch`.** `deleteAll` 은 건수만큼 단건 DELETE 라 느리다. 다만 `deleteAllInBatch` 는 **영속성 컨텍스트를 우회하므로 `cascade`/`orphanRemoval` 이 걸린 연관이 있으면 쓰면 안 된다** — 자식 행이 고아로 남는다. (`Member` 는 `audit` 에 `cascade = [ALL], orphanRemoval = true` 가 있어 `deleteAll` 을 쓴다.)
-
----
-
-## 5. 애플리케이션 계층
-
-```kotlin
-@Service
-class MemberService(
-    private val repo: MemberRepository,
-    private val tracker: OnlineTracker,
-    private val publisher: ApplicationEventPublisher,
-) {
-
-    @Transactional(readOnly = true)
-    fun findById(id: Long): Member? = repo.find(id)
-
-    @Transactional
-    fun updateHandle(id: Long, newHandle: String): Member {
-        if (repo.find(newHandle) != null)
-            throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated")
-
-        val member = findOrThrow(id)
-
-        try {
-            member.changeHandle(newHandle)
-        } catch (e: IllegalArgumentException) {
-            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
-        }
-
-        return runCatching { repo.save(member) }
-            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
-            .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
-    }
-
-    private fun findOrThrow(id: Long) = repo.find(id)
-        ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
-}
-```
-
-### 트랜잭션
-
-- **읽기 전용은 `@Transactional(readOnly = true)`, 쓰기는 `@Transactional`.** 클래스 레벨에 걸지 않고 메서드마다 명시한다.
-- **일부러 트랜잭션을 걸지 않았다면 이유를 주석으로 남긴다.** 다음 사람이 "누락"으로 보고 되돌리는 걸 막는 게 목적이다.
-  ```kotlin
-  // storage.attach() 가 S3 HeadObject 등 블로킹 I/O 라 트랜잭션 밖에서 먼저 끝낸다.
-  // repo.save() 가 자기 트랜잭션을 가지니 여기서 따로 @Transactional 을 걸 필요 없다.
-  fun updateProfileUrl(id: Long, key: String): Member { ... }
-  ```
-- **네트워크 I/O(S3, 외부 API)는 DB 트랜잭션 안에 넣지 않는다.** 커넥션을 잡은 채 외부를 기다리면 풀이 마른다.
-
-### 예외
-
-- **application 계층은 `LanglezException(HttpStatus, 메시지키)` 만 던진다.** 메시지 자리에는 i18n 키.
-- **도메인의 `IllegalArgumentException` 을 그대로 흘리지 않는다.** `try/catch` 로 잡아 상태코드를 붙여 변환하고, 원인 예외를 세 번째 인자로 넘겨 스택을 보존한다.
-- **`findOrThrow` 는 private 헬퍼.** 키 타입별로 오버로딩해 중복 `?: throw` 를 없앤다.
-- **유니크 제약 경합은 `@Retryable(retryFor = [DataIntegrityViolationException::class])`** 로 흡수한다 (랜덤 handle 충돌 등).
-
-### Kotlin 관용구
-
-- 상태 변경 후 저장은 `apply { }` + `also(repo::save)` 체인. — `findOrThrow(id).apply { fcm = token }.also(repo::save)`
-- 단일 표현식 함수는 `=` 본문.
-- **실패해도 주 흐름을 막으면 안 되는 부수 효과는 `runCatching`.** `.apply { runCatching { tracker.toOnline(id) } }` — 온라인 표시 실패로 가입을 실패시키지 않는다. 단, 삼켜도 되는 실패에만. 데이터 정합성이 걸린 곳엔 쓰지 않는다.
-
-### 이벤트
-
-- 도메인 이벤트 DTO 는 `core/event/{domain}/` 에 `data class` 로 둔다. 모듈 간 공유 계약이다.
-- 발행은 `ApplicationEventPublisher.publishEvent`.
-- 수신 후 Outbox 기록은 **`@TransactionalEventListener(phase = BEFORE_COMMIT)`**. 원 트랜잭션이 아직 열려 있어 Outbox insert 가 같은 트랜잭션에 묶이고 롤백 시 함께 사라진다. `AFTER_COMMIT` 을 쓰면 이벤트만 남고 원본이 롤백되는 불일치가 생긴다.
-
----
-
-## 6. API 계층
-
-### Swagger 문서와 컨트롤러 분리
-
-**이 프로젝트의 핵심 관례다.** 컨트롤러에 `@Operation`, `@Schema` 를 직접 붙이지 않는다. 문서는 `{Domain}API` 인터페이스에 몰고 컨트롤러는 그걸 구현하며 Spring MVC 매핑만 갖는다.
-
-```kotlin
-// api/MemberAPI.kt — 문서 전용
-@Tag(name = "Member", description = "회원 계정 관리 API")
-interface MemberAPI {
-    @Operation(summary = "핸들 변경", description = "15일 쿨다운 및 중복 검사가 있다.")
-    fun patchHandle(memberId: Long, request: MemberUpdateHandleRequest): MemberMeResponse
-}
-
-// api/MemberController.kt — 매핑 전용
-@RestController
-@RequestMapping("/api/v1/members")
-class MemberController(private val service: MemberService, private val repo: MemberRepository) : MemberAPI {
-
-    @PatchMapping("/me/handle")
-    override fun patchHandle(
-        @MemberId memberId: Long,
-        @RequestBody @Valid request: MemberUpdateHandleRequest
-    ): MemberMeResponse = MemberMeResponse(service.updateHandle(memberId, request.handle))
-}
-```
-
-- 경로는 `/api/v1/{복수형 도메인}`. 본인 리소스는 `/me` 하위.
-- **인증된 사용자 ID 는 `@MemberId memberId: Long` 으로만 받는다.** 본문에서 받으면 남을 사칭할 수 있다. `Principal`/`SecurityContextHolder` 를 컨트롤러에서 직접 뒤지지 않는다.
-- 요청 바디는 `@RequestBody @Valid` 를 항상 함께.
-- 본문 없는 응답은 `@ResponseStatus(HttpStatus.NO_CONTENT)`.
-- **컨트롤러는 로직을 갖지 않는다.** 단순 조회는 서비스를 거치지 않고 `repo` 를 직접 주입받아 써도 된다.
-- **엔티티를 그대로 반환하지 않는다.** 항상 응답 DTO 로 변환한다.
-- **모든 방 단위·소유자 단위 접근은 권한 검사를 거친다(IDOR 방지).** 인증만 통과했다고 남의 리소스에 닿으면 안 된다. WebSocket SUBSCRIBE 도 마찬가지다.
-
-### DTO
-
-```kotlin
-data class MemberMeResponse(
-    @field:Schema(description = "이메일") val email: String,
-    @field:Schema(description = "프로필 이미지 URL", nullable = true) val imageUrl: String?,
-) {
-    constructor(member: Member) : this(email = member.email, imageUrl = member.imageUrl)
-}
-```
-
-- DTO 는 `data class`, 모든 프로퍼티 `val`.
-- **어노테이션에 `@field:` 타깃을 명시한다.** (`@field:Schema`, `@field:NotBlank`, `@field:Pattern`) 타깃을 생략하면 파라미터에 붙어 런타임에 무시될 수 있다.
-- **엔티티 → 응답 변환은 보조 생성자로.** 별도 Mapper 클래스나 `toResponse()` 확장함수를 만들지 않는다.
-- 응답은 노출 범위별로 나눈다. 본인용 `MemberMeResponse`(이메일 포함), 타인용 `MemberPublicResponse`(handle/role 만). 하나의 DTO 에 nullable 필드를 섞어 재사용하지 않는다.
-
-### 파일 업로드
-
-`core.Storage.presign` 으로 presigned URL 을 내주고, 확정은 **key 로만** 받는다. **클라이언트가 준 URL 을 그대로 저장하면 외부 주소를 심을 수 있다.** (`module/chat`, `module/profile`, `module/echo` 가 같은 패턴)
-
----
-
-## 7. 비동기 / 스케줄링
-
-### Outbox
-
-DB 트랜잭션과 메시지 발행의 원자성이 필요하면 Outbox 를 쓴다. `infra:rdb` 의 `OutBox`, `OutBoxRepository`, `OutBoxProcessor` 를 상속한다.
-
-```kotlin
-@Entity
-@Table(name = "member_event_outbox")
-class MemberOutBox(domain: String, topic: String, payload: String, key: String? = null)
-    : OutBox(domain, topic, payload, key)
-
-@Repository
-interface MemberOutBoxRepository : OutBoxRepository<MemberOutBox>
-
-@Component
-internal class MemberOutBoxScheduler(repo: MemberOutBoxRepository) : OutBoxProcessor<MemberOutBox>(repo) {
-    override val chunk = 1000
-
-    @Scheduled(cron = "*/2 * * * * *")
-    @DistributedLock(prefix = "lock:member-outbox")
-    override fun send() = super.send()
-}
-```
-
-예외: **가장 빈번한 쓰기(채팅 메시지)는 별도 아웃박스 행 대신 문서의 `published` 플래그**로 처리해 쓰기 증폭을 없앴다.
-
-### 스케줄러
-
-- **`@Scheduled` 가 붙은 메서드에는 `@DistributedLock` 을 반드시 함께 건다.** 서버가 여러 대일 때 중복 실행을 막는 유일한 장치다. prefix 는 `lock:{용도}`.
-- **`@DistributedLock` 은 스케줄러 전용이 아니다.** 여러 인스턴스에서 동시 실행되면 안 되는 쓰기(개수 제한 검사 후 삽입 등)에도 `@DistributedLock(transactional = true)` 를 건다.
-- 스케줄러 클래스는 모듈 밖에서 부를 일이 없으면 `internal`.
-- 튜닝 상수(`chunk`, `tries`, `threads`)는 부모의 `open val` 을 override 해 조정한다.
-
-### Kafka 컨슈머
-
-`api/{Domain}Consumer.kt` 에 둔다. 외부 메시지 계약과 내부 모델이 다르면 **컨슈머에서 변환하고 왜 변환하는지 주석을 남긴다.**
-
-```kotlin
-@KafkaListener(topics = ["chat-message-sent"], groupId = "notification")
-fun onChatMessageSent(event: ChatMessageSentEvent) { ... }
-```
-
----
-
-## 8. 스키마 마이그레이션 (Flyway)
-
-- 파일 위치: `infra/rdb/src/main/resources/migration/V{n}__*.sql`
-- 운영·개발·테스트 **모두 `ddl-auto: validate`**. 통합테스트도 Flyway 를 타므로 마이그레이션 자체가 검증된다.
-- **이미 적용된 V 파일은 절대 수정하지 않는다.** 체크섬 불일치로 기동이 실패한다. 고칠 게 있으면 새 V 파일을 만든다.
-- **`@Column(nullable = false)` 를 새로 붙이면 기존 행 백필 마이그레이션이 반드시 따라와야 한다.** 안 하면 NULL 을 읽어 Kotlin non-null 프로퍼티에서 NPE 가 난다.
-- 정렬·커서는 `created_at` 이 아니라 **id 시퀀스**나 도메인 시퀀스 기준. 인스턴스 간 시계 차이로 순서가 뒤집힌다.
-
----
-
-## 9. i18n
-
-**신규 메시지 키는 `common/src/main/resources/messages_*.properties` 12개 전부에 등록한다.**
-(ko, ja, en, de, es, fr, pt, id, ru, vi, zh_CN, zh_TW)
-
-`GlobalRestControllerAdvice` 는 키를 못 찾으면 **키 문자열을 그대로 응답 본문에 담아 클라이언트에 내보낸다.** 누락이 조용히 넘어간다.
-
-확인:
-```bash
-for f in common/src/main/resources/messages_*.properties; do echo "$(basename $f) $(grep -c '^[a-z].*=' $f)"; done
-```
-전부 같은 수여야 한다.
-
----
-
-## 10. 주석
+## 3. 주석
 
 **한국어로 쓰고 "무엇"이 아니라 "왜"를 남긴다.** 코드를 보면 아는 내용은 적지 않는다.
 
@@ -454,63 +161,7 @@ for f in common/src/main/resources/messages_*.properties; do echo "$(basename $f
 
 ---
 
-## 11. 테스트
-
-### 단위 — Kotest `BehaviorSpec` + MockK
-
-```kotlin
-class MemberServiceTest : BehaviorSpec({
-
-    val repo = mockk<MemberRepository>()
-    val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    val service = MemberService(repo, creator, tracker, storage, publisher, suspendRepo)
-
-    afterEach { clearMocks(repo, publisher, answers = false) }
-
-    fun member(id: Long = 1L, status: Member.Status = Member.Status.ACTIVE) = Member(
-        id = id, email = "user$id@test.com", handle = "user$id",
-        status = status, provider = Member.Provider.GOOGLE, providerId = "p$id",
-    )
-
-    Given("회원 정지 시") {
-        When("이미 탈퇴한 회원을 정지하려 하면") {
-            every { repo.find(2L) } returns member(id = 2L, status = Member.Status.WITHDRAWN)
-
-            Then("400 LanglezException 이 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.suspendMember(2L) }
-                ex.status.value() shouldBe 400
-            }
-        }
-    }
-})
-```
-
-- **Given/When/Then 설명은 한국어 서술형.** Given 은 상황, When 은 행위, Then 은 검증할 결과.
-- 픽스처는 **스펙 안의 로컬 함수**로. 별도 `TestFixture` 클래스를 만들지 않는다. 기본값을 두고 필요한 필드만 덮어쓴다.
-- `afterEach { clearMocks(..., answers = false) }` 로 호출 기록만 초기화. **`clearMocks` 를 스텁까지 지우게 두면 `Then` 블록 사이에 돌아 `verify` 가 빈 기록을 본다.**
-- 검증하지 않을 협력자는 `mockk(relaxed = true)`.
-- 단언은 kotest 매처(`shouldBe`, `shouldThrow`, `shouldHaveSize`). JUnit `assertEquals` 를 섞지 않는다.
-- **"하지 않음"도 검증한다.** 의도적 설계는 테스트로 고정해야 나중에 안 깨진다.
-  ```kotlin
-  Then("핸들만 바뀌고 온라인 트래커는 건드리지 않는다 (id 로 keying 하므로)") {
-      verify(exactly = 0) { tracker.toOnline(any()) }
-  }
-  ```
-
-### 통합 — Testcontainers
-
-- DB 는 **Testcontainers PostgreSQL**. H2 로 대체하지 않는다.
-- 외부 인프라는 `@TestConfiguration` + `@Primary` + `mockk(relaxed = true)` 로 대체.
-- `SpringBootTest` 를 쓸 땐 `override fun extensions() = listOf(SpringExtension)`, 본문은 `init { }` 블록.
-- **부수 효과까지 검증한다.** 유스케이스 하나에 대해 "DB 반영 + Outbox 기록 + 실패 시 롤백"을 각각 `Then` 으로 나눠 확인한다.
-
-### RED 를 진짜로 확인한다
-
-테스트가 "통과해서" 넘어가지 말고 **먼저 실패하는 걸 눈으로 본다.** 이 저장소에서 relaxed mock 이 non-null 을 돌려주는 바람에 `OncePerRequestFilter` 가 아예 안 타고도 초록이 뜬 적이 있다. 의심되면 구현을 잠깐 되돌려 빨간불을 확인한다.
-
----
-
-## 12. 코틀린 스타일
+## 4. 코틀린 스타일
 
 - 들여쓰기 4칸, 최대 줄 길이 120자.
 - `import` 와일드카드 금지. 단 `jakarta.persistence.*` 처럼 엔티티에서 다수를 쓰는 경우는 허용.
@@ -519,10 +170,15 @@ class MemberServiceTest : BehaviorSpec({
 - 함수 인자가 3개를 넘으면 호출 시 **이름 붙인 인자**.
 - 클래스 밖으로 나갈 필요 없는 건 `private`, 모듈 밖으로 나갈 필요 없는 건 `internal`.
 - 버전은 반드시 `libs.*` 버전 카탈로그 별칭으로 참조한다. 하드코딩 금지.
+- 코루틴을 쓰지 않는다. Java 21 가상 스레드로 간다.
+- **`${...}` 를 문자 그대로 남겨야 하는 곳(Spring 플레이스홀더)은 백슬래시 대신 멀티-달러 문자열을 쓴다.**
+  ```kotlin
+  @Value($$"${storage.access-key}") accessKey: String
+  ```
 
 ---
 
-## 13. 반복해서 터진 함정
+## 5. 반복해서 터진 함정
 
 실제로 이 저장소에서 발생했던 것들. 전부 "조용히 잘못되는" 종류라 테스트 없이는 못 찾는다.
 
@@ -537,6 +193,8 @@ class MemberServiceTest : BehaviorSpec({
 | `Long` 을 Redis 셋에 저장 | JSON 코덱으로 `Integer` 가 돌아와 `contains(1L)` 이 조용히 false |
 | `@Modifying` 쿼리에 트랜잭션 없음 | `No EntityManager with actual transaction` |
 | i18n 키 누락 | 키 문자열이 그대로 사용자 응답에 노출 |
+| 로케일 접미사 없는 `messages.properties` 부재 | 자동설정 조건이 안 맞아 `messageSource` 빈이 아예 안 생김. 번들 12개가 멀쩡해도 **전 응답**이 키 문자열 |
+| WebSocket 구독 인가를 모듈마다 "내 접두사 아니면 통과"로 | 아무도 안 맡는 목적지가 열린 채 남음. 기본 거부로 뒤집어야 한다 |
 | 주석 안의 `/*` | Kotlin 중첩 주석이 열려 뒤 코드가 통째로 주석 처리 |
 | kotest `afterEach { clearMocks }` 로 스텁까지 삭제 | `Then` 블록 사이에 돌아 `verify` 가 빈 기록을 본다 |
 | 크래시한 클라이언트가 "보는 중"으로 남음 | 알림이 영영 안 감. `viewers()` 를 `checkOnline()` 과 교집합 |
@@ -544,19 +202,25 @@ class MemberServiceTest : BehaviorSpec({
 
 ---
 
-## 14. 새 모듈 체크리스트
+## 6. 서브에이전트 모델 선택
 
-- [ ] `build.gradle.kts` 만 만들면 `settings.gradle.kts` 가 자동 등록한다. 의존성은 member 모듈 것을 복사해 시작
-- [ ] QueryDSL 을 쓰면 `ksp(libs.dependency.querydsl.ksp)`
-- [ ] 4계층 패키지(`api`/`application`/`domain`/`infrastructure`)를 먼저 만든다
-- [ ] 다른 모듈이 써야 하는 인터페이스/이벤트는 `core` 에
-- [ ] 저장소는 포트(domain) → 어댑터(infrastructure) 순
-- [ ] Swagger 는 `{Domain}API` 인터페이스로 분리
-- [ ] 스키마가 늘면 새 Flyway `V{n}__*.sql`
-- [ ] i18n 키를 12개 번들 전부에 등록
-- [ ] 단위 테스트(BehaviorSpec + MockK) + 통합 테스트(Testcontainers)
+Orca orchestration 스킬을 쓰거나 그 밖에 서브에이전트를 띄울 때, 작업 성격에 맞춰 모델을 골라 넘긴다. 기본은 **sonnet / opus 두 개**, 정말 가벼운 것만 **haiku**.
+
+| 모델 | 맡기는 일 |
+|---|---|
+| **haiku** | 판단이 필요 없는 기계적 작업. i18n 12개 번들에 같은 키 채워넣기, 파일 위치·심볼 찾기, 단순 문자열 치환, 목록 수집 |
+| **sonnet** (기본) | 규약이 이미 정해진 반복 작업. DTO·`{Domain}API` 인터페이스·컨트롤러 매핑 작성, Flyway V 파일 추가, BehaviorSpec 단위 테스트 작성, 기존 모듈 복제형 뼈대, 명확한 컴파일 에러·테스트 실패 수정 |
+| **opus** | 조용히 잘못될 수 있는 것 전부. 동시성·정합성 판단(§5 함정표가 전부 이 종류다), 모듈 경계 설계(Kafka / `core` 포트 / Redis 직결), 크로스모듈 디버깅, 대규모 리팩토링, 이 문서 자체의 갱신, 보안 리뷰(IDOR·fail-open) |
+
+판단 기준은 **틀렸을 때 컴파일러나 테스트가 잡아주느냐**다. 잡아주면 sonnet 아래로 내려도 되고, 통과하는데 런타임에 어긋나는 종류면 opus 로 올린다.
+
+- **애매하면 sonnet.** 대략 sonnet 70 / opus 30 이 이 저장소 규약 밀도에 맞는 비율이다.
+- **여러 제약이 한 편집에 겹치면 opus.** 이 문서의 조항 수십 개를 동시에 지켜야 하는 편집에서 하위 모델은 하나씩 흘린다 — `@field:` 타깃 누락, 엔티티를 `data class` 로 선언, 조건을 메서드명으로 이은 파생 쿼리.
+- **머지 전 리뷰는 opus 로.** 규약 위반을 잡는 게 이 프로젝트에서 가장 값싼 안전망이다.
+- **haiku 에 설계 판단을 맡기지 않는다.** 지시가 "무엇을 어디에 쓸지"까지 이미 다 정해져 있을 때만 쓴다.
 
 ---
+
 
 ## 부록: 하지 말 것
 
@@ -580,3 +244,7 @@ class MemberServiceTest : BehaviorSpec({
 | 어노테이션 타깃 생략 (`@Schema`) | `@field:Schema` |
 | 이미 적용된 Flyway V 파일 수정 | 새 V 파일 추가 |
 | 고빈도 하트비트를 Kafka 로 | Redis 직결 |
+| `@DistributedLock` 메서드를 같은 클래스에서 호출 | 별도 `@Component` 빈으로 분리 |
+| 하위 모듈에 `application.yml` 생성 | `app/api` 의 두 파일에 통합 |
+| 새 모듈을 `app/api/build.gradle.kts` 에 안 넣음 | `implementation(project(":module:<name>"))` |
+| 테스트에서 `Thread.sleep()` | kotest `eventually` |
