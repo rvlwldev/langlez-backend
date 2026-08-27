@@ -10,6 +10,9 @@ dependencies {
 
     // web
     api(libs.dependency.springboot.web)
+    // WebSocketSubscriptionGate 가 STOMP 프레임을 본다. 게이트는 브로커 설정이 아니라
+    // 채널 인터셉터라서 spring-websocket 없이 spring-messaging 만 있으면 된다.
+    api("org.springframework:spring-messaging")
     api(libs.dependency.springboot.validation)
     api(libs.dependency.swagger3)
 
