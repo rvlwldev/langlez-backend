@@ -20,6 +20,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 
 class RelationshipServiceTest : BehaviorSpec({
 
@@ -219,6 +220,31 @@ class RelationshipServiceTest : BehaviorSpec({
                 saved.captured.reportedUserId shouldBe 2L
                 saved.captured.sourceId shouldBe "10"
                 saved.captured.triggerMessageId shouldBe "m7"
+            }
+        }
+
+        /**
+         * 존재 검사와 저장 사이에 같은 신고가 들어오면 UNQ_REPORT_IDENTITY 가 막는다.
+         * 그 충돌은 에러가 아니라 "이미 접수됨"이다 — 올리면 컨슈머가 재시도를 다 쓰고 DLT 로 가고,
+         * HTTP 는 두 번 누른 사용자에게 500 을 준다.
+         */
+        When("존재 검사를 통과했는데 저장에서 유니크 제약에 걸리면") {
+            Then("예외를 밖으로 올리지 않는다") {
+                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "10", "m7") } returns false
+                every { repo.save(any<Report>()) } throws DataIntegrityViolationException("UNQ_REPORT_IDENTITY")
+
+                service.report(1L, 2L, Report.SourceType.CHAT_USER, "10", "욕설", "m7")
+            }
+        }
+
+        When("저장이 유니크 제약 외의 이유로 실패하면") {
+            Then("그대로 올린다 (DB 장애를 성공으로 삼키면 신고가 조용히 사라진다)") {
+                every { repo.existsReport(1L, Report.SourceType.CHAT_USER, "11", "m8") } returns false
+                every { repo.save(any<Report>()) } throws IllegalStateException("커넥션 없음")
+
+                shouldThrow<IllegalStateException> {
+                    service.report(1L, 2L, Report.SourceType.CHAT_USER, "11", "욕설", "m8")
+                }
             }
         }
     }
