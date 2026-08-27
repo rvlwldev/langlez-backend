@@ -12,26 +12,33 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
 ## 1. 한눈에
 
 ```text
-   발행 모듈              토픽                        수신 모듈       하는 일
-  ┌─────────┐
-  │  chat   │──── chat-message-sent ────────────▶ notification    알림 저장 + 인앱/FCM
-  │         │──── chat-user-reported ───────────▶ relationship    Report 저장
-  └─────────┘
-  ┌─────────┐
-  │relation-│──── member-followed ──────────────▶ notification    팔로우 알림
-  │  ship   │
-  └─────────┘
-  ┌─────────┐
-  │ member  │──── member-created ───────────────▶  (없음)
-  │         │──── member-handle-changed ────────▶  (없음)
-  └─────────┘
-  ┌─────────┐
-  │  echo   │        (발행 코드 없음 — 빈 스캐폴딩)
-  └─────────┘
-  ┌─────────┐
-  │  wave   │        (카프카를 쓰지 않는다)
-  └─────────┘
+ 발행 모듈    발행 전에 이미 저장한 것        토픽                     수신 모듈      수신 모듈이 하는 일
+ ─────────    ────────────────────────      ────────────────────    ────────────   ─────────────────────────────
+  chat        Mongo 메시지 문서         ──▶ chat-message-sent   ──▶ notification   ① Notification 행 저장
+              (본문·첨부)                                                           ② 온라인이면 인앱(Redis pub/sub)
+                                                                                    오프라인이면 FCM 푸시
+
+  chat        없음                      ──▶ chat-user-reported  ──▶ relationship   ① Report 행 저장
+              (접수 사실만 알린다)                                                    sourceType=CHAT_USER
+                                                                                     sourceId=roomId
+                                                                                   ② existsReport 로 중복 한 번 더 거름
+
+  relation-   member_follows 행         ──▶ member-followed     ──▶ notification   ① Notification 행 저장
+   ship       (동기 저장. 이벤트는                                                  ② 온라인이면 인앱, 아니면 FCM
+              그 결과다)                                                            팔로우 관계 자체는 건드리지 않는다
+
+  member      members 행                ──▶ member-created      ──▶ (없음)         —
+  member      handle 변경               ──▶ member-handle-      ──▶ (없음)         —
+                                            changed
+
+  echo        —                             (발행 코드 없음. DTO·아웃박스만 있는 빈 스캐폴딩)
+  wave        —                             (카프카를 쓰지 않는다. Redis pub/sub 만)
 ```
+
+**읽는 법 두 가지가 갈린다.**
+
+- `member-followed` 와 `chat-message-sent` 는 **이미 저장된 것에 대한 알림**이다. 발행 모듈이 트랜잭션 안에서 원본 데이터를 저장하고, 이벤트는 그 결과다. 수신 모듈은 `Notification` 만 만든다 — 팔로우 관계나 메시지 본문을 다시 저장하지 않는다.
+- `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 relationship 이다 — 신고 데이터는 relationship 소유이기 때문이다.
 
 듣는 쪽은 **notification 과 relationship 둘뿐이다.**
 
@@ -124,6 +131,23 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 | **파티션 키** | `followedId` — 한 사람에 대한 이벤트 순서 보장 |
 | **멱등 키** | `followId` |
 
+**팔로우 관계는 발행 전에 이미 저장돼 있다.** `RelationshipService.follow()` 가 한 트랜잭션 안에서 순서대로 한다.
+
+```text
+  POST /api/v1/relationships/follows/{targetId}
+        │
+        ├─ 대상 회원이 있나                    없으면 404
+        ├─ 차단 관계인가                       맞으면 403 social.follow.blocked
+        ├─ 이미 팔로우 중인가                  맞으면 조용히 끝 (멱등)
+        │
+        ├─ member_follows 행 저장  ◀── 여기서 데이터가 남는다
+        │
+        └─ publishEvent(MemberFollowedEvent(follow.id, ...))
+                 └─▶ relationship_event_outbox 행 (같은 트랜잭션)
+```
+
+`followId` 를 실을 수 있는 것도 이 순서 덕이다 — 저장이 끝나야 행 id 가 나온다.
+
 `followId` 가 들어 있는 이유: `(followerId, followedId)` 만으로 키를 잡으면 **언팔로우 후 재팔로우가 같은 값**이라 정상 알림이 막힌다. `Follow` 행은 매번 새 id 를 받는다.
 
 **notification 이 받아서 하는 일**
@@ -142,7 +166,9 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
                     └─ 아니오 ──▶ FCM 푸시
 ```
 
-**언팔로우 이벤트는 없다.** 지금 소비할 데가 없다.
+**notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `core.FollowQuery` 포트로 조회한다.
+
+**언팔로우 이벤트는 없다.** `unfollow` 는 `member_follows` 행만 지우고 이벤트를 내지 않는다. 지금 소비할 데가 없다.
 
 ---
 
