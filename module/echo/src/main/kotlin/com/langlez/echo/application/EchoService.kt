@@ -90,7 +90,8 @@ class EchoService(
 
         if (following.isEmpty()) return emptyList()
 
-        return toViews(memberId, repo.findPosts(following, size, cursor))
+        val posts = fillPosts(memberId, size, cursor) { chunk, c -> repo.findPosts(following, chunk, c) }
+        return enrich(memberId, posts)
     }
 
     /** 특정 회원의 글. 차단 관계면 목록 자체를 막는다 — 걸러 봐야 전부 빠진다. */
@@ -98,19 +99,23 @@ class EchoService(
     fun memberTimeline(viewerId: Long, authorId: Long, size: Int, cursor: Long?): List<PostView> {
         if (isBlocked(viewerId, authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        return toViews(viewerId, repo.findPosts(listOf(authorId), size, cursor))
+        val posts = fillPosts(viewerId, size, cursor) { chunk, c -> repo.findPosts(listOf(authorId), chunk, c) }
+        return enrich(viewerId, posts)
     }
 
     @Transactional(readOnly = true)
-    fun hashtagTimeline(viewerId: Long, tag: String, size: Int, cursor: Long?): List<PostView> =
-        toViews(viewerId, repo.findPostsByHashtag(tag.removePrefix("#").lowercase(), size, cursor))
+    fun hashtagTimeline(viewerId: Long, tag: String, size: Int, cursor: Long?): List<PostView> {
+        val name = tag.removePrefix("#").lowercase()
+        val posts = fillPosts(viewerId, size, cursor) { chunk, c -> repo.findPostsByHashtag(name, chunk, c) }
+        return enrich(viewerId, posts)
+    }
 
     @Transactional(readOnly = true)
     fun getPost(viewerId: Long, postId: Long): PostView {
         val post = findPostOrThrow(postId)
         if (isBlocked(viewerId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        return toViews(viewerId, listOf(post)).firstOrNull()
+        return enrich(viewerId, listOf(post)).firstOrNull()
             ?: throw LanglezException(NOT_FOUND, "echo.post.not-found")
     }
 
@@ -128,7 +133,14 @@ class EchoService(
         if (post.authorId != memberId) publisher.publishEvent(EchoPostLikedEvent(postId, post.authorId, memberId))
     }
 
-    /** 안 누른 상태에서 또 눌러도 그냥 넘어간다 — 결과(좋아요 아님)가 같은데 에러를 낼 이유가 없다. */
+    /**
+     * 안 누른 상태에서 또 눌러도 그냥 넘어간다 — 결과(좋아요 아님)가 같은데 에러를 낼 이유가 없다.
+     *
+     * 다른 메서드와 달리 차단 여부를 검사하지 않는다. 좋아요 취소는 내 반응을 지우는 동작이라 상대에게
+     * 새로 노출되는 게 없다 — `like`/`comment` 처럼 상대에게 알림이 가거나 새 콘텐츠가 생기는 것과
+     * 다르다. 차단을 걸거나 걸린 뒤에도 예전에 눌러둔 좋아요는 정리할 수 있어야 한다. 다음에 이 코드를
+     * 보고 "빠뜨렸다"고 판단해 검사를 추가하지 않도록 남긴다.
+     */
     @Transactional
     fun unlike(memberId: Long, postId: Long) {
         val post = findPostOrThrow(postId)
@@ -157,7 +169,7 @@ class EchoService(
         val post = findPostOrThrow(postId)
         if (isBlocked(viewerId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        return repo.findComments(postId, size, cursor).filterNot { isBlocked(viewerId, it.authorId) }
+        return fillComments(viewerId, size, cursor) { chunk, c -> repo.findComments(postId, chunk, c) }
     }
 
     @Transactional
@@ -191,22 +203,15 @@ class EchoService(
         repo.linkHashtags(post.id, repo.findOrCreateHashtags(names).map(Hashtag::id))
     }
 
-    /**
-     * 글 목록에 첨부와 내 좋아요 여부를 붙인다.
-     *
-     * 차단은 여기서 한 번에 거른다 — 목록마다 따로 걸면 빠뜨리는 곳이 생긴다.
-     * ponytail: 페이지의 작성자 수만큼 `isBlockedBetween` 이 나간다(페이지 크기 상한이 있어 최대 수십 번).
-     * 느려지면 `BlockQuery` 에 id 목록을 한 번에 묻는 메서드를 추가하는 쪽으로 올린다.
-     */
-    private fun toViews(viewerId: Long, posts: List<Post>): List<PostView> {
-        val visible = posts.filterNot { isBlocked(viewerId, it.authorId) }
-        if (visible.isEmpty()) return emptyList()
+    /** 글 목록에 첨부와 내 좋아요 여부를 붙인다. 필터링은 하지 않는다 — 호출부가 이미 거른 목록만 넘긴다. */
+    private fun enrich(viewerId: Long, posts: List<Post>): List<PostView> {
+        if (posts.isEmpty()) return emptyList()
 
-        val ids = visible.map(Post::id)
+        val ids = posts.map(Post::id)
         val media = repo.findMedia(ids).groupBy(PostMedia::postId)
         val liked = repo.findLikedPostIds(viewerId, ids)
 
-        return visible.map { post ->
+        return posts.map { post ->
             PostView(
                 post = post,
                 mediaUrls = media[post.id].orEmpty().sortedBy(PostMedia::sequence).map(PostMedia::url),
@@ -214,6 +219,63 @@ class EchoService(
             )
         }
     }
+
+    /**
+     * 차단된 작성자의 글/댓글을 뺀 뒤에도 요청한 size 만큼 채운다.
+     *
+     * 저장소가 먼저 size 만큼 가져오고 그 다음에 차단을 거르면, 걸러진 만큼 페이지가 짧아진다 —
+     * 클라이언트 입장에선 스크롤이 튀거나 심하면 빈 페이지가 와서 끝으로 오해한다.
+     *
+     * echo 는 relationship 모듈의 차단 테이블을 알지 못해 쿼리에서 직접 차단을 뺄 수 없다(모듈 간 테이블
+     * 직접 조인 금지). `BlockQuery` 포트도 단건 확인(`isBlockedBetween`)만 제공한다. 그래서 쿼리는 그대로
+     * 두고, 부족하면 마지막으로 가져온 항목의 id 를 커서 삼아 다음 페이지를 이어서 가져오는 방식
+     * (over-fetch)을 택했다.
+     *
+     * 성능: 차단 비율이 낮은 보통의 경우 라운드트립 1회로 끝난다 — 저장소가 요청한 개수보다 적게
+     * 돌려주면 더 가져올 데이터가 없다는 뜻이라 그 자리에서 멈춘다. 차단한 사람들이 유독 활발히 쓰는
+     * 것처럼 병적인 경우에만 라운드트립이 늘어나는데, [MAX_FILL_ROUNDS] 로 상한을 둬서 무한정 반복하지
+     * 않는다 — 상한을 넘기면 요청한 size 보다 짧은 목록을 돌려준다(원래 버그보다는 낫지만 완전한
+     * 보장은 아니다).
+     *
+     * ponytail: 라운드마다 항목 수만큼 `isBlockedBetween` 이 개별로 나간다. `BlockQuery` 에 id 목록을
+     * 한 번에 묻는 메서드가 생기면 그쪽으로 올린다.
+     */
+    private fun <T> fill(
+        viewerId: Long,
+        size: Int,
+        cursor: Long?,
+        authorIdOf: (T) -> Long,
+        idOf: (T) -> Long,
+        fetch: (chunk: Int, cursor: Long?) -> List<T>,
+    ): List<T> {
+        val result = mutableListOf<T>()
+        var nextCursor = cursor
+        var round = 0
+
+        while (result.size < size && round < MAX_FILL_ROUNDS) {
+            val chunk = size - result.size
+            val page = fetch(chunk, nextCursor)
+            if (page.isEmpty()) break
+
+            result += page.filterNot { isBlocked(viewerId, authorIdOf(it)) }
+            nextCursor = idOf(page.last())
+            round++
+
+            if (page.size < chunk) break
+        }
+
+        return result
+    }
+
+    private fun fillPosts(viewerId: Long, size: Int, cursor: Long?, fetch: (Int, Long?) -> List<Post>): List<Post> =
+        fill(viewerId, size, cursor, Post::authorId, Post::id, fetch)
+
+    private fun fillComments(
+        viewerId: Long,
+        size: Int,
+        cursor: Long?,
+        fetch: (Int, Long?) -> List<Comment>,
+    ): List<Comment> = fill(viewerId, size, cursor, Comment::authorId, Comment::id, fetch)
 
     private fun isBlocked(viewerId: Long, authorId: Long) =
         viewerId != authorId && blocks.isBlockedBetween(viewerId, authorId)
@@ -229,6 +291,7 @@ class EchoService(
     companion object {
         const val SOURCE = "echo"
         private const val PREVIEW_LENGTH = 50
+        private const val MAX_FILL_ROUNDS = 3
         private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "webm", "m4v", "avi", "mkv")
     }
 }

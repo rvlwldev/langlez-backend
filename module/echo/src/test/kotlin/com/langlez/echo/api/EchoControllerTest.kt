@@ -128,6 +128,18 @@ class EchoControllerTest : BehaviorSpec({
                 validator.validate(request).map { it.propertyPath.toString() } shouldBe listOf("keys")
             }
         }
+
+        When("첨부 key 원소가 빈 문자열이면") {
+            Then("@Valid 가 걸러낸다") {
+                validator.validate(EchoPostCreateRequest(keys = listOf(""))).shouldHaveSize(1)
+            }
+        }
+
+        When("첨부 key 원소가 공백뿐이면") {
+            Then("@Valid 가 걸러낸다") {
+                validator.validate(EchoPostCreateRequest(keys = listOf("   "))).shouldHaveSize(1)
+            }
+        }
     }
 
     Given("글을 지울 때") {
