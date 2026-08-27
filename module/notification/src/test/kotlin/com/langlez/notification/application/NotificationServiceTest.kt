@@ -5,6 +5,7 @@ import com.langlez.core.MessageBroadcaster
 import com.langlez.core.OnlineTracker
 import com.langlez.core.PushTokenQuery
 import com.langlez.core.event.chat.ChatMessageSentEvent
+import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
@@ -119,6 +120,55 @@ class NotificationServiceTest : BehaviorSpec({
                 service.onChatMessage(event())
 
                 verify { repo.save(any()) }
+            }
+        }
+    }
+
+    Given("팔로우 알림이 도착하면") {
+
+        val followed = MemberFollowedEvent(followId = 30L, followerId = 1L, followedId = 2L)
+
+        When("팔로우당한 사람이 앱을 켜 두었으면") {
+            Then("인앱 알림으로 보내고 푸시는 보내지 않는다") {
+                every { tracker.checkOnline(2L) } returns mapOf(2L to true)
+
+                service.onMemberFollowed(followed)
+
+                verify { broadcaster.broadcast("/topic/notification/2", any()) }
+                verify(exactly = 0) { push.send(any(), any(), any(), any()) }
+            }
+        }
+
+        When("앱을 켜지 않았으면") {
+            Then("FCM 푸시로 보내고 data 에 followerId 를 싣는다") {
+                every { tracker.checkOnline(2L) } returns mapOf(2L to false)
+                every { tokens.findPushToken(2L) } returns "fcm-token"
+
+                val data = slot<Map<String, String>>()
+                every { push.send("fcm-token", any(), any(), capture(data)) } returns Unit
+
+                service.onMemberFollowed(followed)
+
+                data.captured["followerId"] shouldBe "1"
+                verify(exactly = 0) { broadcaster.broadcast(any(), any()) }
+            }
+        }
+
+        When("알림 이력을 남길 때") {
+            Then("제목은 메시지 키고 본문은 비어 있다 (표시 문구는 클라이언트가 조립한다)") {
+                every { tracker.checkOnline(2L) } returns mapOf(2L to false)
+                every { tokens.findPushToken(2L) } returns null
+
+                val saved = slot<Notification>()
+                every { repo.save(capture(saved)) } answers { firstArg() }
+
+                service.onMemberFollowed(followed)
+
+                saved.captured.recipientId shouldBe 2L
+                saved.captured.type shouldBe "MEMBER_FOLLOWED"
+                saved.captured.title shouldBe "notification.member-followed"
+                saved.captured.body shouldBe ""
+                saved.captured.data!! shouldContain "\"followerId\":\"1\""
             }
         }
     }

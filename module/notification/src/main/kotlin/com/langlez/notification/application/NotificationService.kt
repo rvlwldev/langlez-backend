@@ -6,6 +6,7 @@ import com.langlez.core.Notificator
 import com.langlez.core.OnlineTracker
 import com.langlez.core.PushTokenQuery
 import com.langlez.core.event.chat.ChatMessageSentEvent
+import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
@@ -88,6 +89,26 @@ class NotificationService(
         )
     }
 
+    /**
+     * 팔로우 알림.
+     *
+     * 자기 자신 팔로우는 `Follow` 엔티티 생성 시점에 막히므로 여기서 다시 보지 않는다.
+     * 중복 방어를 흩뿌리면 어느 쪽이 진짜 방어선인지 아무도 모르게 된다.
+     */
+    fun onMemberFollowed(event: MemberFollowedEvent) = notify(
+        memberId = event.followedId,
+        type = TYPE_MEMBER_FOLLOWED,
+        // 채팅과 같은 규약이다. 발신자 표시명을 서버가 조회하지 않고 메시지 키만 넘겨
+        // 클라이언트가 사용자 언어로 그린다.
+        title = TITLE_MEMBER_FOLLOWED,
+        // 채팅의 preview 에 해당하는 동적 본문이 없다. 표시 문구는 클라이언트가
+        // followerId 로 프로필을 붙여 조립하므로 서버가 채울 값 자체가 없고,
+        // 정적 문장을 키로 하나 더 두면 클라이언트가 안 쓰는 번역이 12개 늘 뿐이다.
+        // Notification.body 가 nullable = false 라 빈 문자열을 넣는다.
+        body = "",
+        data = mapOf("followerId" to event.followerId.toString()),
+    )
+
     fun list(memberId: Long, size: Int, cursor: Long?): List<Notification> = repo.findAll(memberId, size, cursor)
 
     fun markRead(memberId: Long, id: Long) {
@@ -101,6 +122,9 @@ class NotificationService(
     companion object {
         const val TYPE_CHAT_MESSAGE = "CHAT_MESSAGE"
         const val TITLE_CHAT_MESSAGE = "notification.chat-message.title"
+
+        const val TYPE_MEMBER_FOLLOWED = "MEMBER_FOLLOWED"
+        const val TITLE_MEMBER_FOLLOWED = "notification.member-followed"
 
         private const val NOTIFICATION_TOPIC_PREFIX = "/topic/notification/"
         private const val CHAT_ROOM_TOPIC_PREFIX = "/topic/chat/room/"

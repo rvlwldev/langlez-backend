@@ -216,8 +216,24 @@ Orca orchestration 스킬을 쓰거나 그 밖에 서브에이전트를 띄울 �
 
 - **애매하면 sonnet.** 대략 sonnet 70 / opus 30 이 이 저장소 규약 밀도에 맞는 비율이다.
 - **여러 제약이 한 편집에 겹치면 opus.** 이 문서의 조항 수십 개를 동시에 지켜야 하는 편집에서 하위 모델은 하나씩 흘린다 — `@field:` 타깃 누락, 엔티티를 `data class` 로 선언, 조건을 메서드명으로 이은 파생 쿼리.
-- **머지 전 리뷰는 opus 로.** 규약 위반을 잡는 게 이 프로젝트에서 가장 값싼 안전망이다.
 - **haiku 에 설계 판단을 맡기지 않는다.** 지시가 "무엇을 어디에 쓸지"까지 이미 다 정해져 있을 때만 쓴다.
+
+### 코드 리뷰는 `agy` 로 한다
+
+**머지 전 코드 리뷰는 위 표와 별개로 `agy`(Antigravity CLI) 에 맡긴다.** 구현한 모델이 자기 코드를 리뷰하면 같은 맹점을 그대로 지나간다 — 다른 모델을 태우는 게 이 프로젝트에서 가장 값싼 안전망이다.
+
+`agy` 는 orca 의 known-agent 목록에 없어서 `worker-start --agent agy` 로는 안 붙는다. 터미널을 먼저 만들고 거기에 붙인다.
+
+```bash
+# --worktree current 는 terminal create 에서 안 먹는다. 실제 worktree id 를 준다
+orca terminal create --worktree <worktree-id> --title "review-prN" --command "agy" --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca orchestration worker-start --task <task_id> --terminal <handle> --json
+```
+
+`--model` / `--effort` 는 `agy` 자체 플래그라 `--command "agy --model ... --effort high"` 형태로 넘긴다.
+
+리뷰 태스크는 **읽기 전용**으로 못 박고(`.omo/review-prN.md` 하나만 쓰게 한다), 판정을 `승인` / `조건부 승인(N건 수정 후)` / `반려` 중 하나로 강제한다. 지적마다 **"어떤 입력·상황에서 실제로 터지나"** 를 요구한다 — 그게 없으면 추측이고, **잘못된 지적은 잘못된 수정을 부른다.** 실제로 `SecurityContextHolder` 오진을 그대로 반영했다가 미인증 요청이 401 대신 403 을 받는 회귀가 난 적이 있다.
 
 ---
 
