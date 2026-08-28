@@ -3,6 +3,7 @@ package com.langlez.profile.api
 import com.langlez.core.Storage
 import com.langlez.profile.application.ProfileService
 import com.langlez.annotation.MemberId
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus.CREATED
 import org.springframework.http.HttpStatus.NO_CONTENT
 import org.springframework.web.bind.annotation.*
@@ -19,7 +20,7 @@ class ProfileController(private val service: ProfileService) {
     @PatchMapping("/me")
     fun updateProfile(
         @MemberId memberId: Long,
-        @RequestBody request: ProfileRequest.Update,
+        @RequestBody @Valid request: ProfileRequest.Update,
         locale: Locale,
     ): ProfileResponse.ProfileDetail =
         service.updateProfile(memberId, request, locale)

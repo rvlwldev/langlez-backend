@@ -60,9 +60,12 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
 
     /** Body 요청의 필수값 누락 등 */
     @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun handleValidationException(e: MethodArgumentNotValidException): ResponseEntity<ExceptionResponse> {
+    fun handleValidationException(
+        e: MethodArgumentNotValidException,
+        locale: Locale,
+    ): ResponseEntity<ExceptionResponse> {
         val message = e.bindingResult.fieldErrors
-            .joinToString(", ") { "${it.field}: ${it.defaultMessage ?: "invalid"}" }
+            .joinToString(", ") { "${it.field}: ${resolveMessage(it.defaultMessage ?: "invalid", locale)}" }
             .ifBlank { "common.invalid-argument" }
 
         return ResponseEntity.badRequest()
