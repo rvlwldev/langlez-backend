@@ -2,8 +2,9 @@ package com.langlez.profile.api
 
 import com.langlez.member.domain.Member
 import com.langlez.profile.domain.Profile
+import jakarta.validation.constraints.Size
 import java.time.LocalDate
-import java.util.*
+import java.util.Locale
 
 class ProfileRequest {
     /** presign 으로 받은 key. 조회용 URL 은 서버가 스토리지 확인 후 만든다. */
@@ -13,8 +14,11 @@ class ProfileRequest {
     data class ImageSelect(val url: String)
 
     data class Update(
+        @field:Size(max = 200, message = "validation.member.bio.size")
         val bio: String? = null,
+        @field:Size(max = 500, message = "validation.member.goal.size")
         val goal: String? = null,
+        @field:Size(max = 500, message = "validation.member.want.size")
         val want: String? = null,
         val gender: Member.Gender? = null,
         val mbti: Profile.MBTI? = null,

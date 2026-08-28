@@ -1,5 +1,8 @@
 package com.langlez.profile.api
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.GlobalRestControllerAdvice
+import com.langlez.annotation.MemberIdResolver
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.Member.Provider
@@ -9,7 +12,16 @@ import com.langlez.profile.domain.ProfileImage
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.mockk.*
+import org.springframework.context.support.ResourceBundleMessageSource
+import org.springframework.security.authentication.TestingAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.http.MediaType
 import java.time.Instant
 import java.util.Locale
 
@@ -81,6 +93,42 @@ class ProfileControllerTest : BehaviorSpec({
                 val result = controller.updateProfile(1L, request, locale)
                 result.bio shouldBe "new bio"
                 result.gender shouldBe "MALE"
+            }
+        }
+    }
+
+    Given("내 프로필 수정 요청의 검증 (MockMvc, @Valid + GlobalRestControllerAdvice 실동작)") {
+        val mapper = ObjectMapper()
+        val messageSource = ResourceBundleMessageSource().apply {
+            setBasename("messages")
+            setDefaultEncoding("UTF-8")
+        }
+        val mockMvc = MockMvcBuilders.standaloneSetup(controller)
+            .setControllerAdvice(GlobalRestControllerAdvice(messageSource))
+            .setCustomArgumentResolvers(MemberIdResolver())
+            .build()
+
+        beforeTest {
+            SecurityContextHolder.getContext().authentication = TestingAuthenticationToken(1L, null)
+        }
+        afterTest {
+            SecurityContextHolder.clearContext()
+        }
+
+        When("bio 가 201자로 상한(200자)을 넘으면") {
+            val body = mapper.writeValueAsString(mapOf("bio" to "a".repeat(201)))
+
+            Then("400 이 나고, 응답에 i18n 키 원문이 아니라 번역된 문장이 담긴다") {
+                val result = mockMvc.perform(
+                    patch("/api/v1/profiles/me")
+                        .header("Accept-Language", "ko")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                ).andExpect(status().isBadRequest).andReturn()
+
+                val response = result.response.contentAsString
+                response shouldNotContain "validation.member.bio.size"
+                response shouldContain "자기소개는 200자 이내여야 합니다"
             }
         }
     }
