@@ -272,10 +272,16 @@ orca orchestration send --type worker_done --subject \"...\" --body \"...\" \
 orca orchestration check --wait --types worker_done,question --timeout-ms 900000 --json
 ```
 
+**새 워크트리에서 agy 를 처음 띄우면 "Do you trust the contents of this project?" 프롬프트에서 멈춘다.** 답하기 전엔 `Google AI Pro` 가 영원히 안 뜨므로 위 `until` 루프가 그냥 타임아웃된다. 기본 선택이 `Yes, I trust this folder` 라 빈 텍스트로 엔터만 보내면 통과한다 (`orca terminal send --terminal <handle> --enter --json --text ""`). 대기 루프가 이유 없이 타임아웃하면 먼저 `terminal read` 로 이걸 확인해라.
+
 **agy 는 코드를 고치지 않는다.** 리뷰만 한다.
 **리뷰 결과는 그 PR 에 코멘트로 남긴다** (`gh pr comment <N> --body-file .omo/review-prN.md`).
 
-지시서는 **`superpowers:requesting-code-review`** 의 `code-reviewer.md` 템플릿을 따른다. 스킬을 먼저 읽어라. 핵심만 옮기면:
+지시서는 **`superpowers:requesting-code-review`** 의 `code-reviewer.md` 템플릿을 따른다. 스킬을 먼저 읽어라.
+
+**지시서 안에서 agy 에게도 그 스킬을 직접 읽으라고 시킨다.** agy 는 Claude Code 가 아니라 스킬이 자동으로 안 붙는다. 코디네이터가 템플릿대로 지시서를 쓰는 것만으로는 리뷰어 자신이 절차·점검 항목·심각도 기준을 갖지 못한다. 지시서 맨 앞에 `code-reviewer.md` 의 **절대 경로**를 주고 "이 템플릿대로 따르라"고 명시한 뒤, 그 아래에 플레이스홀더(무엇을 만들었나 / 요구사항 / `BASE_SHA`..`HEAD_SHA`)를 채워 넣는다.
+
+핵심만 옮기면:
 
 - **세션 히스토리를 주지 않는다.** 무엇을 만들었는지·요구사항·`BASE_SHA`..`HEAD_SHA` 범위만 정밀하게 준다
 - **read-only 를 명시한다.** 워킹트리·인덱스·HEAD·브랜치 금지. 다른 리비전이 필요하면 `git worktree add /tmp/review-<sha>`
