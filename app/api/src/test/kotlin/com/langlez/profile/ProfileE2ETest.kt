@@ -152,7 +152,7 @@ class ProfileE2ETest : BehaviorSpec() {
                 )
             )
             transactionTemplate.execute {
-                profileJpa.save(Profile(id = alice.id, member = memberJpa.getReferenceById(alice.id)))
+                profileJpa.save(Profile(id = alice.id))
             }
             aliceToken = jwt.createAccessToken(alice.id, "alice", "ROLE_MEMBER")
             bobToken = jwt.createAccessToken(bob.id, "bob", "ROLE_MEMBER")

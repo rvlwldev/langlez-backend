@@ -40,6 +40,26 @@ class TestProfileApplication {
     }
 
     /**
+     * JwtAuthenticationFilter 가 요구한다. 구현체는 member 모듈에 있다.
+     * relaxed mock 은 enum 반환값을 보장하지 않아 명시 대역을 쓴다.
+     */
+    @Bean
+    fun memberStatusQuery(): com.langlez.core.MemberStatusQuery = object : com.langlez.core.MemberStatusQuery {
+        override fun findStatus(memberId: Long) = com.langlez.core.MemberStatusQuery.Status.ACTIVE
+    }
+
+    /** 구현체는 member 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
+    @Bean
+    fun memberQuery(): com.langlez.core.MemberQuery = object : com.langlez.core.MemberQuery {
+        override fun findIdByHandle(handle: String): Long? = null
+
+        override fun findProfileInfo(memberId: Long): com.langlez.core.MemberQuery.ProfileInfo? = null
+
+        override fun findProfileInfos(memberIds: Collection<Long>) =
+            emptyMap<Long, com.langlez.core.MemberQuery.ProfileInfo>()
+    }
+
+    /**
      * RedisMessageBroadcaster 가 요구한다. 이 빈은 @EnableWebSocketMessageBroker 가 등록하는데,
      * 그 설정은 chat 모듈에 있어 이 모듈 단독 컨텍스트엔 없다. 대역만 올린다.
      */

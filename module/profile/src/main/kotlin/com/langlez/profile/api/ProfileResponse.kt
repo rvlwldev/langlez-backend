@@ -1,7 +1,7 @@
 package com.langlez.profile.api
 
 import com.langlez.core.FollowQuery
-import com.langlez.member.domain.Member
+import com.langlez.core.MemberQuery
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import java.time.Instant
@@ -20,15 +20,20 @@ class ProfileResponse {
         val languageLevel: String? = null,
         val interests: Set<String> = emptySet(),
     ) {
-        constructor(profile: Profile, interests: Set<String> = emptySet()) : this(
+        // 성별/국가/생년월일은 계정(Member) 소유라 core 포트로 받아 온다. 화면 하나에 요청이 둘이 되지 않게
+        // 여기 함께 실어 보내지만, 수정은 members 엔드포인트로만 한다.
+        constructor(
+            profile: Profile,
+            member: MemberQuery.ProfileInfo,
+            interests: Set<String> = emptySet(),
+        ) : this(
             bio = profile.bio,
             goal = profile.goal,
             want = profile.want,
-            // 성별/국가/생년월일은 계정(Member) 소유다.
-            gender = profile.member.gender.name,
+            gender = member.gender,
             mbti = profile.mbti?.name,
-            locale = profile.member.locale,
-            birthDay = profile.member.birthDay,
+            locale = member.locale,
+            birthDay = member.birthDay,
             languageLevel = profile.languageLevel?.name,
             interests = interests,
         )
@@ -52,7 +57,7 @@ class ProfileResponse {
         // 두 숫자를 Long 두 개로 받으면 순서를 바꿔 넘겨도 컴파일된다. 묶어서 받는다.
         constructor(
             profile: Profile,
-            member: Member,
+            member: MemberQuery.ProfileInfo,
             visitCount: Long,
             follows: FollowQuery.Counts,
             interests: Set<String> = emptySet(),
@@ -61,7 +66,7 @@ class ProfileResponse {
             bio = profile.bio,
             goal = profile.goal,
             want = profile.want,
-            gender = member.gender.name,
+            gender = member.gender,
             mbti = profile.mbti?.name,
             locale = member.locale,
             birthDay = member.birthDay,

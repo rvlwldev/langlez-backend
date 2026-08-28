@@ -1,9 +1,6 @@
 package com.langlez.profile.application
 
 import com.langlez.exception.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.Member.Provider
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
@@ -38,9 +35,6 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
     lateinit var profileService: ProfileService
 
     @Autowired
-    lateinit var memberRepository: MemberRepository
-
-    @Autowired
     lateinit var profileRepository: ProfileRepository
 
     companion object {
@@ -68,16 +62,10 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
     }
 
     init {
+        // member_image_urls 는 members 로의 FK 가 없다. 이미지 개수 제한만 보는 테스트라
+        // 회원 행을 만들지 않고 id 만 쓴다 (profile 모듈은 member 모듈에 의존하지 않는다).
         Given("회원이 가입되어 있을 때") {
-            val member = memberRepository.save(
-                Member(
-                    email = "lockuser@example.com",
-                    provider = Member.Provider.GOOGLE,
-                    providerId = "p-lockuser",
-                    providerDisplayName = "LockUser",
-                    role = Member.Role.MEMBER
-                )
-            )
+            val memberId = 90_001L
 
             When("10개의 스레드에서 동시에 confirmAdditionalImage를 호출하면") {
                 val threadCount = 10
@@ -90,7 +78,7 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
                     executor.submit(Runnable {
                         try {
                             startLatch.await()
-                            profileService.confirmAdditionalImage(member.id, "profiles/img_$index.jpg")
+                            profileService.confirmAdditionalImage(memberId, "profiles/img_$index.jpg")
                         } catch (e: Throwable) {
                             synchronized(exceptions) {
                                 exceptions.add(e)
@@ -108,7 +96,7 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
                 Then("동작이 성공적으로 완료되고, 최종 이미지 개수는 6개를 초과하지 않아야 한다") {
                     completed shouldBe true
 
-                    val totalImages = profileRepository.countImages(member.id)
+                    val totalImages = profileRepository.countImages(memberId)
                     totalImages shouldBe 6L
 
                     val limitExceededExceptions = synchronized(exceptions) {
