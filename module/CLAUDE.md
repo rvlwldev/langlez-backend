@@ -253,7 +253,7 @@ data class MemberMeResponse(
 
 ### 실시간 (WebSocket / STOMP)
 
-실시간 모듈은 각자 `config/{Domain}WebSocketConfiguration` 을 갖는다 (현재 `chat`, `wave`). 엔드포인트 등록과 모듈 고유의 부수 효과는 여기서 한다. 모바일 전용이라 SockJS 폴백은 두지 않는다.
+실시간 모듈은 각자 `{Domain}WebSocketConfiguration` 을 **모듈 루트**에 갖는다 (현재 `chat`, `wave`). 설정 클래스는 4계층(`api`/`application`/`domain`/`infrastructure`) 중 어디도 아니므로 `config` 하위 패키지를 만들지 않는다. 엔드포인트 등록과 모듈 고유의 부수 효과는 여기서 한다. 모바일 전용이라 SockJS 폴백은 두지 않는다.
 
 **인증은 채널 공통, 인가는 공용 게이트 한 곳이다.** 모듈마다 `ChannelInterceptor` 를 달고 "내 접두사가 아니면 통과"시키던 구조는 실제로 뚫렸다 — 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아서, 별표 두 개짜리 구독 패턴과 인터셉터가 없던 `/topic/notification/{id}` 가 그대로 열려 있었다. **새 모듈이 인가를 빠뜨리면 열리는 게 아니라 닫혀야 한다.**
 
