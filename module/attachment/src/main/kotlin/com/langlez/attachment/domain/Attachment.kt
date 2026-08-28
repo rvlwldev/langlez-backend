@@ -1,7 +1,5 @@
 package com.langlez.attachment.domain
 
-import com.langlez.exception.LanglezException
-import org.springframework.http.HttpStatus
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType.STRING
@@ -46,9 +44,8 @@ class Attachment(
     val id: Long = 0
 
     fun attach(sourceId: String? = null) {
-        // require 는 IllegalArgumentException 이라 advice 의 Exception 핸들러가 잡아 500 이 된다.
-        if (this.status != Status.PENDING)
-            throw LanglezException(HttpStatus.BAD_REQUEST, "common.bad-request")
+        // IllegalArgumentException 을 LanglezException(400) 으로 바꾸는 건 application 몫이다.
+        require(this.status == Status.PENDING) { "common.bad-request" }
 
         this.sourceId = sourceId
         this.attachedAt = Instant.now()

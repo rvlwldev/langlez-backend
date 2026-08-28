@@ -9,6 +9,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.*
+import org.springframework.http.HttpStatus
 import java.io.ByteArrayInputStream
 import java.io.File
 
@@ -70,6 +71,20 @@ class LocalAttachmentServiceTest : BehaviorSpec({
                 attachment.status shouldBe Attachment.Status.ATTACHED
                 attachment.sourceId shouldBe "555"
                 url shouldBe "http://localhost:8080/attachments/$key"
+            }
+        }
+
+        When("이미 ATTACHED 상태인 첨부를 다시 attach하면") {
+            val key = "chat/2026-08-03/${System.nanoTime()}_already-attached.jpg"
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key)
+            every { repo.find(key) } returns attachment
+
+            service.store(key, "image/jpeg", ByteArrayInputStream("data".toByteArray()))
+            attachment.attach("1")
+
+            Then("common.bad-request 400 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.attach(key, 555L) }
+                ex.status shouldBe HttpStatus.BAD_REQUEST
             }
         }
     }
