@@ -29,6 +29,8 @@ import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import java.time.Instant
+import java.time.temporal.ChronoUnit.DAYS
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -70,6 +72,9 @@ class RelationshipOutBoxIntegrationTest : BehaviorSpec() {
 
     @Autowired
     internal lateinit var historyScheduler: RelationshipOutBoxHistoryScheduler
+
+    @Autowired
+    internal lateinit var cleanupScheduler: RelationshipOutBoxHistoryCleanupScheduler
 
     @Autowired
     lateinit var kafka: KafkaTemplate<String, String>
@@ -215,6 +220,45 @@ class RelationshipOutBoxIntegrationTest : BehaviorSpec() {
             }
         }
 
+        Given("보존 기간 경계에 걸친 이력 행들이 있을 때") {
+            // 원본은 chat/member 와 스키마가 같은 relationship_event_outbox_history 다.
+            // id 가 IDENTITY 가 아니라 직접 채번한다 (OutBoxHistory.id 는 OutBox.id 를 그대로 복사하는 구조).
+            jdbc.update("delete from relationship_event_outbox_history")
+
+            val cutoff = Instant.now().minus(cleanupScheduler.retentionDays, DAYS)
+
+            fun insertHistoryRow(id: Long, createdAt: Instant) = jdbc.update(
+                """insert into relationship_event_outbox_history
+                   (id, domain, topic, payload, "key", tries, status, created_at, completed_at)
+                   values (?, 'RELATIONSHIP', 'member-followed', '{}', null, 1, 'COMPLETE', ?, ?)""",
+                id, java.sql.Timestamp.from(createdAt), java.sql.Timestamp.from(createdAt)
+            )
+
+            val expired = 990001L
+            val onCutoff = 990002L
+            val fresh = 990003L
+
+            insertHistoryRow(expired, cutoff.minusSeconds(60)) // 보존 기간을 막 지남 → 지워져야 한다
+            insertHistoryRow(onCutoff, cutoff) // 딱 기준 시각 → findAllByCreatedAtBefore 는 strict < 라 남아야 한다
+            insertHistoryRow(fresh, Instant.now()) // 최근 행 → 당연히 남아야 한다
+
+            When("정리 스케줄러가 돌면") {
+                // clean() 이 아니라 cleanBefore(cutoff) 를 부른다. clean() 은 자기 Instant.now() 로
+                // cutoff 를 다시 계산해서, 여기서 잡은 cutoff 보다 몇 밀리초 뒤가 된다 —
+                // 그러면 경계 행이 strict `<` 에 걸려 지워지고 경계 검증 자체가 불가능해진다.
+                cleanupScheduler.cleanBefore(cutoff)
+
+                Then("보존 기간을 지난 행만 지워지고 경계·최근 행은 남는다") {
+                    val remaining = jdbc.queryForList(
+                        "select id from relationship_event_outbox_history where id >= 990001 order by id",
+                        Long::class.java
+                    )
+
+                    remaining shouldBe listOf(onCutoff, fresh)
+                }
+            }
+        }
+
         Given("스케줄러 빈은") {
 
             Then("AOP 프록시여야 @DistributedLock 이 실제로 걸린다") {
@@ -222,6 +266,7 @@ class RelationshipOutBoxIntegrationTest : BehaviorSpec() {
                 // 프록시가 안 만들어지고 락 없이 그냥 돈다. 조용히 중복 발행된다.
                 AopUtils.isAopProxy(scheduler) shouldBe true
                 AopUtils.isAopProxy(historyScheduler) shouldBe true
+                AopUtils.isAopProxy(cleanupScheduler) shouldBe true
             }
         }
     }
