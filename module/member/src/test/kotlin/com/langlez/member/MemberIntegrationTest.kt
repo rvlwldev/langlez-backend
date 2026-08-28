@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.MemberStatusQuery
 import com.langlez.core.event.member.MemberCreatedEvent
 import com.langlez.core.event.member.MemberHandleChangedEvent
+import com.langlez.core.event.member.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.MemberRepository
@@ -491,6 +492,41 @@ class MemberIntegrationTest : BehaviorSpec() {
             When("존재하지 않는 회원 id 라면") {
                 Then("null 을 반환한다") {
                     memberStatusQuery.findStatus(-1L).shouldBeNull()
+                }
+            }
+        }
+
+        // =========================================================================
+        // 6. 탈퇴 유스케이스
+        // =========================================================================
+        Given("회원 탈퇴 시") {
+
+            When("정상적으로 탈퇴 처리하면") {
+                val m = memberService.createMember(
+                    email = "withdraw_test@example.com",
+                    providerType = Member.Provider.GOOGLE,
+                    providerId = "g789_test",
+                    providerUsername = "WithdrawUser",
+                )
+                val beforeOutboxCount = outboxJpaRepository.count()
+
+                memberService.withdrawMember(m.id)
+
+                Then("회원 상태가 WITHDRAWN 으로 바뀐다") {
+                    val found = memberRepository.find(m.id)
+                    found?.status shouldBe Member.Status.WITHDRAWN
+                }
+
+                Then("이벤트 아웃박스에 member-withdrawn 레코드가 저장된다") {
+                    outboxJpaRepository.count() shouldBe beforeOutboxCount + 1
+                    val outbox = outboxJpaRepository.findAll().last()
+                    outbox.domain shouldBe "MEMBER"
+                    outbox.topic shouldBe "member-withdrawn"
+                    outbox.status shouldBe OutBox.Status.PENDING
+                    outbox.key shouldBe m.id.toString()
+
+                    val eventPayload = objectMapper.readValue(outbox.payload, MemberWithdrawnEvent::class.java)
+                    eventPayload.id shouldBe m.id
                 }
             }
         }

@@ -3,6 +3,7 @@ package com.langlez.member.application
 import com.langlez.core.OnlineTracker
 import com.langlez.core.Storage
 import com.langlez.core.event.member.MemberHandleChangedEvent
+import com.langlez.core.event.member.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -162,6 +163,7 @@ class MemberService(
     fun withdrawMember(id: Long) {
         findOrThrow(id).apply { withdraw() }
             .also(repo::save)
+            .also { publisher.publishEvent(MemberWithdrawnEvent(id)) }
     }
 
     private fun findOrThrow(id: Long) = repo.find(id)

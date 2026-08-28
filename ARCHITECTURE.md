@@ -21,6 +21,7 @@ flowchart LR
 
     noti(["notification"])
     relR(["relationship"])
+    auth(["auth"])
     none1(["소비자 없음"])
 
     chat -- "chat-message-sent<br/>(Mongo 메시지 문서는 이미 저장됨)" --> noti
@@ -28,9 +29,11 @@ flowchart LR
     rel -- "member-followed<br/>(member_follows 행은 이미 저장됨)" --> noti
     mem -- "member-created" --> none1
     mem -- "member-handle-changed" --> none1
+    mem -- "member-withdrawn<br/>(회원 상태는 이미 WITHDRAWN 으로 저장됨)" --> auth
 
     noti --> notiDo["① Notification 행 저장<br/>② 온라인이면 인앱, 아니면 FCM"]
     relR --> relDo["① Report 행 저장<br/>② existsReport 로 중복 한 번 더 거름"]
+    auth --> authDo["리프레시 토큰·기기 바인딩 삭제<br/>(잔여 액세스 토큰은 JwtAuthenticationFilter 가 매 요청 이미 차단)"]
 
     echo -.- echoX["발행 코드 없음<br/>빈 스캐폴딩"]
     wave -.- waveX["카프카 미사용<br/>Redis pub/sub 만"]
@@ -44,7 +47,7 @@ flowchart LR
 - `member-followed` 와 `chat-message-sent` 는 **이미 저장된 것에 대한 알림**이다. 발행 모듈이 트랜잭션 안에서 원본 데이터를 저장하고, 이벤트는 그 결과다. 수신 모듈은 `Notification` 만 만든다 — 팔로우 관계나 메시지 본문을 다시 저장하지 않는다.
 - `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 relationship 이다 — 신고 데이터는 relationship 소유이기 때문이다.
 
-듣는 쪽은 **notification 과 relationship 둘뿐이다.**
+듣는 쪽은 **notification·relationship·auth 셋뿐이다.**
 
 ---
 
@@ -163,6 +166,31 @@ flowchart TD
 | **파티션 키** | `memberId` |
 
 **발행은 되는데 아무도 안 듣는다.** 저장소 전체에 `@KafkaListener` 가 3개뿐이고 이 두 토픽을 받는 건 없다. 소비처가 생길 때까지 브로커에 쌓이기만 한다.
+
+---
+
+### `member-withdrawn`
+
+> member ──▶ **auth**
+
+| | |
+|---|---|
+| **발행** | `MemberEventListener` → `member_event_outbox` → `MemberOutBoxScheduler`(2초) |
+| **페이로드** | `MemberWithdrawnEvent(id)` |
+| **파티션 키** | `memberId` |
+| **멱등 키** | `id`. 탈퇴는 `Member.withdraw()` 하나뿐이고 되돌리는 메서드가 없는 단방향 상태 전이라 같은 memberId 로 두 번째 탈퇴 사건이 생길 수 없다 |
+
+**회원 상태는 발행 전에 이미 `WITHDRAWN` 으로 저장돼 있다.** `MemberService.withdrawMember()` 가 한 트랜잭션 안에서 `member.withdraw()` → `repo.save()` → `publishEvent()` 순서로 한다.
+
+**auth 가 받아서 하는 일**
+
+```mermaid
+flowchart TD
+    A["member-withdrawn 수신"] --> B["리프레시 토큰 삭제 (refresh_token:{id})"]
+    B --> C["기기 바인딩 삭제 (refresh_device:{id})"]
+```
+
+**잔여 액세스 토큰은 여기서 추가로 블랙리스트에 넣지 않는다.** `JwtAuthenticationFilter` 가 매 요청 `MemberStatusQuery` 로 회원 상태를 확인해 `WITHDRAWN` 이면 이미 막는다(PR #3). 이 검사는 탈퇴 시점 이후 발급된 토큰이 없으므로 예외 없이 전부 걸린다 — 개별 토큰을 블랙리스트에 추가하려면 토큰 문자열이나 jti 가 필요한데 탈퇴 이벤트에는 없고, 그걸 만들기 위한 비용(리프레시 토큰 저장소 역추적 또는 별도 jti 저장)이 이미 막혀 있는 구멍을 다시 막는 값을 넘는다.
 
 ---
 

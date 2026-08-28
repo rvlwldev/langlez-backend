@@ -2,6 +2,7 @@ package com.langlez.member.application
 
 import com.langlez.core.OnlineTracker
 import com.langlez.core.Storage
+import com.langlez.core.event.member.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -123,8 +124,12 @@ class MemberServiceTest : BehaviorSpec({
 
             service.withdrawMember(1L)
 
-            Then("상태가 WITHDRAWN으로 바뀌어 저장된다") {
+            // 두 Then 사이에 afterEach 의 clearMocks 가 돌아 호출 기록이 지워진다.
+            // service.withdrawMember(1L) 는 When 블록에서 한 번만 실행되므로
+            // 이 실행에서 나온 상호작용은 반드시 같은 Then 안에서 함께 검증한다.
+            Then("상태가 WITHDRAWN으로 바뀌어 저장되고 MemberWithdrawnEvent가 발행된다") {
                 verify { repo.save(match { it.status == Member.Status.WITHDRAWN }) }
+                verify { publisher.publishEvent(MemberWithdrawnEvent(1L)) }
             }
         }
     }

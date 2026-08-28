@@ -141,6 +141,23 @@ class AuthServiceTest : BehaviorSpec({
         }
     }
 
+    Given("탈퇴 이벤트를 받아 세션만 끊을 때") {
+        val memberId = 1L
+        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
+        every { bucket.delete() } returns true
+        every { deviceBucket.delete() } returns true
+
+        When("invalidateSession을 호출하면") {
+            Then("리프레시 토큰과 기기 바인딩이 지워진다") {
+                service.invalidateSession(memberId)
+
+                verify(exactly = 1) { bucket.delete() }
+                verify(exactly = 1) { deviceBucket.delete() }
+            }
+        }
+    }
+
     // oauth2Login()은 private이라 리플렉션으로 직접 호출
     Given("OAuth2 로그인 요청 시") {
         When("신규 회원 가입 중 이메일이 누락된 프로필이면") {

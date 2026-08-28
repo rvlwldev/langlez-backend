@@ -10,6 +10,9 @@ dependencies {
     implementation(project(":infra:redis"))
     implementation(project(":infra:rdb"))
 
+    // @KafkaListener 로 member-withdrawn 을 받는다
+    implementation(project(":infra:kafka"))
+
     implementation(project(":module:member"))
 
     testImplementation(libs.test.kotest.spring)
