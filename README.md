@@ -27,7 +27,19 @@
 ```
 
 `local-infra-start.sh` 는 `docker/postgresql.yml`, `docker/redis.yml`, `docker/kafka.yml`, `docker/monitoring.yml` 을 `-p langlez` 단일 compose 프로젝트로 합쳐 올린다.
-**MongoDB 는 기본 기동에서 빠져 있다.** 채팅 메시지를 다루려면 스크립트에 `-f docker/mongodb.yml` 을 추가하거나 별도로 띄운다.
+**MongoDB 는 기본 기동에서 빠져 있다.** 그런데 §5.1-3 때문에 **Mongo 없이는 앱이 아예 뜨지 않는다.** `-f docker/mongodb.yml` 을 함께 줘야 한다.
+
+```bash
+docker compose -p langlez -f docker/postgresql.yml -f docker/redis.yml \
+  -f docker/kafka.yml -f docker/monitoring.yml -f docker/mongodb.yml up -d
+```
+
+### 인프라가 이상할 때
+
+컨테이너 볼륨은 전부 `docker/volume/` 아래 **바인드 마운트**다. 여기서 두 가지가 실제로 터졌다.
+
+- **`./local-infra-start.sh` 를 git 워크트리에서 실행하지 않는다.** 마운트 경로가 그 워크트리로 잡히고, 워크트리를 지우면 마운트가 stale 이 된다. Redis 는 RDB 저장에 실패하고 `stop-writes-on-bgsave-error` 때문에 **모든 쓰기를 거부한다**(`MISCONF ...`). 항상 저장소 루트에서 띄운다.
+- **Kafka 가 `Invalid cluster.id in: /var/lib/kafka/data/meta.properties` 로 죽으면** `docker/kafka.yml` 의 `CLUSTER_ID` 와 볼륨에 남은 값이 다른 것이다. `docker/volume/kafka/` 를 통째로 비우고 다시 띄운다. 로컬 개발 데이터라 잃을 게 없다.
 
 로컬 접속 정보(`app/api/src/main/resources/application.yml` 기준):
 
@@ -163,7 +175,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `infra/rdb/src/main/kotlin/com/langlez/rdb/outbox/`(`OutBox`, `OutBoxRepository`, `OutBoxProcessor`, `OutBoxHistoryProcessor`) → `module/member/api/MemberEventListener.kt`(`@TransactionalEventListener(BEFORE_COMMIT)`) → `module/member/infrastructure/outbox/MemberOutBoxScheduler.kt`(`@Scheduled` + `@DistributedLock`).
 
 **7단계 — 실시간 채팅**
-`module/chat/src/main/kotlin/com/langlez/chat/`: `config/ChatWebSocketConfiguration.kt`(`/ws/chat`, CONNECT 인증 + 게이트 등록) → `application/ChatService.kt` → `application/ChatMessagePublisher.kt` → `infrastructure/mongo/ChatMessageRepositoryImpl.kt` → `application/ChatReconciler.kt`(Mongo↔Postgres 이중 쓰기 창 복구).
+`module/chat/src/main/kotlin/com/langlez/chat/`: `ChatWebSocketConfiguration.kt`(모듈 루트, `/ws/chat`, CONNECT 인증 + 게이트 등록) → `application/ChatService.kt` → `application/ChatMessagePublisher.kt` → `infrastructure/mongo/ChatMessageRepositoryImpl.kt` → `application/ChatReconciler.kt`(Mongo↔Postgres 이중 쓰기 창 복구).
 
 **8단계 — 이벤트 소비와 알림**
 `module/notification/api/NotificationConsumer.kt`(`chat-message-sent`) → `application/NotificationService.kt`(3상태 판정) → `infrastructure/FcmPushSender.kt`.
@@ -173,7 +185,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `infra/redis/src/main/kotlin/com/langlez/redis/`: `cache/ResilientCache.kt`·`cache/ResilientCacheProvider.kt`(Redis + Caffeine 폴백), `distributedLock/DistributedLock.kt`·`DistributedLockAspect.kt`, `broadcast/RedisMessageBroadcaster.kt`, `config/RedissonConfiguration.kt`.
 
 **10단계 — 나머지 도메인**
-`module/echo/application/EchoService.kt`(타임라인·좋아요·댓글·해시태그), `module/wave/application/WaveService.kt` + `config/WaveWebSocketConfiguration.kt`(`/ws/wave` 등록만) + `infrastructure/WaveSubscriptionAuthorizer.kt`(참여자 판정).
+`module/echo/application/EchoService.kt`(타임라인·좋아요·댓글·해시태그), `module/wave/application/WaveService.kt` + `WaveWebSocketConfiguration.kt`(모듈 루트, `/ws/wave` 등록만) + `infrastructure/WaveSubscriptionAuthorizer.kt`(참여자 판정).
 
 ### 복잡도 핫스팟
 
@@ -278,38 +290,50 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
    `NotificationService.kt:82,98` 이 `title` 에 메시지 키(`notification.chat-message.title`, `notification.member-followed`)를 넣는다. **인앱 브로드캐스트에는 맞는 설계다** — 클라이언트가 키를 받아 번역한다. 그런데 같은 값이 `:66` `push.send(...)` → `FcmPushSender.kt:44` `.setNotification(...)` 으로 들어가고, 그렇게 만든 FCM 메시지는 **OS 가 앱 코드 개입 없이 배너를 그린다.** 번역할 기회가 없다.
    → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `core` 포트에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
 
-3. **`application-production.yml` 이 플레이스홀더 상태다**
+3. **MongoDB 가 잠깐만 응답하지 않아도 앱 전체가 부팅하지 못한다**
+   `application.yml:41` 의 `spring.data.mongodb.auto-index-creation: true` 가 `MongoTemplate` **빈 생성 시점**에 `ChatMessage` 의 인덱스(`@CompoundIndex` ×3, `@Indexed` ×1)를 실제로 Mongo 에 쏜다. 응답이 없으면 드라이버 기본 `serverSelectionTimeoutMS`(30초)만큼 블로킹한 뒤 빈 생성이 실패하고, `chatMessageMongoRepository` → `chatService` → `chatController` 로 의존 체인이 무너져 **Spring 컨텍스트 refresh 자체가 취소**된다. `chat` 은 `app/api` 가 항상 조립하므로 회피 경로가 없다.
+   → 저장소 분담표(§2)는 Mongo 를 "채팅 메시지"에만 쓴다고 하지만 **실제 결합도는 회원가입·프로필·알림까지 전부다.** 롤링 재기동 중 Mongo 가 순간 흔들리면 chat 과 무관한 신규 인스턴스까지 부팅에 실패해 배포가 멈춘다. 인덱스 생성을 기동 경로에서 떼거나(마이그레이션·배포 파이프라인으로 이관), 서버 선택 타임아웃을 짧게 잡고 실패를 격리한다. **정상 상태에서는 13.6초에 조용히 통과하므로 평소엔 안 보인다.**
+
+4. **`application-production.yml` 이 플레이스홀더 상태다**
    `:24,26,72,76,79` 에 DataSource·프론트엔드 URL·CORS 오리진·S3 설정이 TODO 로 남아 있다. production 프로필로는 기동 불가 또는 오설정 기동.
 
-4. **`interest` 재설계** — 사용자가 직접 설계 예정. 5번의 선행 조건이다
-5. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
+5. **`interest` 재설계** — 사용자가 직접 설계 예정. 6번의 선행 조건이다
+6. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
 
-6. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
+7. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
    `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
 
 ### 5.2 중간
 
-7. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
+8. **앱 전체의 `@Scheduled` 가 WebSocket 하트비트 스레드풀을 공유한다**
+   `MainApplication.kt:15` 의 `@EnableScheduling` 이 `TaskScheduler` 빈을 지정하지 않는데, 컨텍스트에 있는 유일한 `TaskScheduler` 가 `ChatWebSocketConfiguration` 의 `@EnableWebSocketMessageBroker` 가 STOMP 하트비트용으로 노출하는 `messageBrokerTaskScheduler`(스레드명 `MessageBroker-*`)뿐이다. Spring 은 그럴 때 **`@Scheduled` 전부를 그 빈에 위임**한다. 아웃박스 폴러(2초 × 3모듈)·캐시 헬스(5초)·`ChatReconciler`(5분)·접속 동기화(10분)가 전부 하트비트용 풀 위에서 돈다.
+   → **정상 상태에서는 무증상이다.** Mongo·Redis 가 느려져 스케줄러 하나가 스레드를 30초씩 잡으면 관계없는 아웃박스 발행까지 밀린다. `@DistributedLock(throwOnFailure = false)` 는 **락 획득 실패만** 넘기지 본문 블로킹은 못 막는다. 애플리케이션용 `TaskScheduler` 를 별도 등록해 분리한다. 장애 증폭기이지 상시 결함은 아니다.
+
+9. **쿼리 로깅이 로컬에서 한 번도 동작한 적 없다** — 한 줄 수정
+   `app/api/src/main/resources/logback-spring.xml:41` 이 `com.langlez.observability` 를 DEBUG 로 여는데 **그 패키지는 저장소에 존재하지 않는다.** `PerformanceLogger` 는 `com.langlez.logger` 에 있다. DEBUG 를 여는 유일한 오버라이드가 허공을 가리켜 `root INFO` 가 그대로 먹고 `logger.debug()` 호출이 전부 버려진다. `application.yml:189` 의 `logger.rdb.log-threshold-ms: 0`("로컬: 모든 쿼리 로깅")도 **실질 효과가 0 이다** — 500ms 넘는 WARN 만 보인다.
+   → 로거 이름을 `com.langlez.logger` 로 고친다. 더불어 `common/src/main/resources/logback-spring.xml` 이라는 **두 번째 logback 설정**이 클래스패스에 있다. Spring Boot 는 처음 찾은 하나만 쓰는데 어느 쪽이 이기는지 모듈 순서에 달렸다 — 결론은 같지만(둘 다 `com.langlez.logger` 를 안 연다) 같은 종류 사고가 재발할 구조라 정리해야 한다.
+
+10. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
    `MessageDeduplicator.kt:31-38` 이 한계를 직접 서술한다 — 되돌림은 같은 JVM 에서 `Exception` 이 잡혔을 때만 돈다. `Error`(OOM)나 SIGKILL·OOMKilled 로 죽으면 표시만 남고 오프셋은 미커밋이라, 재기동 후 재배달이 "중복"으로 걸러져 TTL(1시간)까지 유실된다. 그레이스풀 셧다운은 in-flight 를 기다리므로 정상 배포로는 안 터진다.
    → 표시를 **처리 성공 후**로 옮기면(전형적 idempotent-consumer) 유실 경로가 사라지고 `release` 자체가 불필요해진다. 대신 리밸런싱 중 겹치는 재배달을 못 막는다. 이 설계가 선언한 우선순위("중복 < 유실")와는 그쪽이 일치한다.
 
-8. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
+11. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
 
-9. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
-10. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
-11. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
+12. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+13. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
+14. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
 
 ### 5.3 낮음 / 정책 결정 필요
 
-12. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
-13. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-14. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
-15. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
-16. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-17. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
-18. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
-19. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
-20. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+15. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
+16. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+17. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
+18. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
+19. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+20. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
+21. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
+22. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
+23. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
 
 ### 5.4 정리 대상 (기능 영향 없음)
 

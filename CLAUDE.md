@@ -248,6 +248,8 @@ orca orchestration worker-start --task <task_id> \
 
 지시서에 **푸시와 PR 생성까지** 시킨다. 코디네이터가 대신 하지 않는다.
 
+**모든 지시서에 `./local-infra-start.sh` 실행 금지를 명시한다.** 도커 볼륨이 `docker/volume/` 바인드 마운트라, 워크트리에서 띄우면 마운트 경로가 그 워크트리로 잡힌다. 나중에 워크트리를 지우면 마운트가 stale 이 돼 Redis 가 RDB 를 못 쓰고 `stop-writes-on-bgsave-error` 로 **모든 쓰기를 거부한다.** 실제로 겪었고 원인을 찾는 데 한참 걸렸다. 인프라는 저장소 루트에서 한 번만 띄우고, 워커에게는 "`localhost` 로 붙어라"라고만 쓴다. Testcontainers 는 자기 컨테이너를 따로 띄우므로 무관하다.
+
 #### 2) 리뷰 — `agy`, 읽기 전용
 
 `agy` 는 orca 의 known-agent 가 아니라 **프롬프트 자동 주입이 안 된다.** `worker-start --agent`, `worker-start --terminal`, `dispatch --inject` 셋 다 `agent_prompt_stalled` 로 실패한다. 로그인이 끝나 유휴 상태여도 마찬가지다.
