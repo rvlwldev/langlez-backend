@@ -9,6 +9,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.*
+import org.springframework.http.HttpStatus
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
@@ -97,6 +98,18 @@ class CloudAttachmentServiceTest : BehaviorSpec({
                 attachment.status shouldBe Attachment.Status.ATTACHED
                 attachment.sourceId shouldBe "777"
                 url shouldBe "https://cdn.langlez.com/$key"
+            }
+        }
+
+        When("이미 ATTACHED 상태인 첨부를 다시 attach하면") {
+            val key = "chat/2026-08-03/uuid_already-attached.jpg"
+            val attachment = Attachment.create(1L, "chat", Attachment.Type.IMAGE, key).apply { attach("1") }
+            every { repo.find(key) } returns attachment
+            every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().contentType("image/jpeg").build()
+
+            Then("common.bad-request 400 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.attach(key, 777L) }
+                ex.status shouldBe HttpStatus.BAD_REQUEST
             }
         }
     }

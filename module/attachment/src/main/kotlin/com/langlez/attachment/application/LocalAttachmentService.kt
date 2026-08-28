@@ -35,7 +35,7 @@ class LocalAttachmentService(
         if (!resolve(key).exists())
             throw LanglezException(HttpStatus.NOT_FOUND, "attachment.file-not-found")
 
-        attachment.attach(sourceId?.toString())
+        attachment.attachOrThrow(sourceId?.toString())
         repo.save(attachment)
 
         return "$baseUrl/$key"

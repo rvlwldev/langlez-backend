@@ -60,7 +60,7 @@ class CloudAttachmentService(
         if (head.contentType() == null || !head.contentType().startsWith(attachment.type.mime))
             throw LanglezException(HttpStatus.BAD_REQUEST, "attachment.invalid-content-type")
 
-        attachment.attach(sourceId?.toString())
+        attachment.attachOrThrow(sourceId?.toString())
         repo.save(attachment)
 
         return "$baseUrl/$key"
