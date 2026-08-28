@@ -288,6 +288,20 @@ orca orchestration check --wait --types worker_done,question --timeout-ms 900000
 
 리뷰에 Critical·Important 가 있으면 **구현했던 그 sonnet 에이전트에게** 리뷰를 보여주고 고치게 한다. 새 에이전트를 띄우지 않는다 — 그 에이전트가 코드 맥락을 이미 갖고 있다.
 
+**코디네이터는 코드를 직접 고치지 않는다.** 리뷰 지적이 아무리 작아 보여도 sonnet 에게 넘긴다. 코디네이터가 손대면 그 변경만 리뷰를 안 거친 채 머지되고, 컨텍스트도 코디네이터 쪽으로 쏠려 다음 판단이 흐려진다. 문서 수정은 코디네이터가 해도 된다.
+
+**정착된 dispatch 에는 `orchestration send` 가 안 먹는다.** 에이전트는 `worker_done` 을 보낸 뒤 턴을 끝내고 대기하며 인박스를 폴링하지 않는다. 후속 작업은 **새 태스크를 만들어 같은 터미널에 다시 붙인다.**
+
+```bash
+H=$(orca orchestration worker-show --dispatch <settled_dispatch> --json | grep -o '"agent_terminal_handle": "[^"]*"' | cut -d'"' -f4)
+orca orchestration task-create --spec "<리뷰 반영 지시>" --json
+orca orchestration worker-start --task <new_task_id> --worktree id:<worktree> --terminal $H --json
+```
+
+`--worktree` 를 함께 주지 않으면 `terminal_worktree_mismatch` 로 실패한다.
+
+**sonnet 이 사용량 한도에 걸려 못 이어갈 때만** 코디네이터가 이어받는다. 그때도 이어받는다는 사실과 이유를 사용자에게 먼저 말한다.
+
 ```bash
 orca orchestration send --to dispatch:<sonnet_dispatch_id> \
   --subject "리뷰 반영" --body "<리뷰 경로와 반영 지시>" --json
