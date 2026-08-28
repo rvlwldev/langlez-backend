@@ -38,7 +38,11 @@ spring:
   data:
     mongodb:
       uri: mongodb://localhost:27017/langlez_db?directConnection=true
-      auto-index-creation: true
+      # true 로 두면 MongoTemplate 빈 생성 시점(컨텍스트 refresh 중)에 ChatMessage 인덱스를 동기로 쏜다.
+      # Mongo 가 응답하지 않으면 서버 선택 타임아웃(30초)까지 블로킹한 뒤 컨텍스트 refresh 자체가 취소돼
+      # chat 과 무관한 기동까지 막는다. 인덱스는 module:chat 의 ChatMessageIndexInitializer 가
+      # 기동 후 별도 스케줄로 만든다 — 이 플래그를 다시 true 로 되돌리지 않는다.
+      auto-index-creation: false
     redis:
       host: localhost
       port: 6379
