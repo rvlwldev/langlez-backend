@@ -1,4 +1,4 @@
-package com.langlez.member.config
+package com.langlez.member
 
 import org.springframework.context.annotation.Configuration
 import org.springframework.retry.annotation.EnableRetry

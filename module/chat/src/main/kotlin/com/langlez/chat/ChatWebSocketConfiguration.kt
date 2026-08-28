@@ -1,4 +1,4 @@
-package com.langlez.chat.config
+package com.langlez.chat
 
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.OnlineTracker

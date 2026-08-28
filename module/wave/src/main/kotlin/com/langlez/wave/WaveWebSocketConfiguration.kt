@@ -1,4 +1,4 @@
-package com.langlez.wave.config
+package com.langlez.wave
 
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry

@@ -1,4 +1,4 @@
-package com.langlez.chat.config
+package com.langlez.chat
 
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.infrastructure.ChatSubscriptionAuthorizer
