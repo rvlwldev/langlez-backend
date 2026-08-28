@@ -2,6 +2,7 @@ package com.langlez.notification.domain
 
 interface NotificationRepository {
     fun save(notification: Notification): Notification
+    fun saveAll(notifications: Collection<Notification>): List<Notification>
 
     fun find(id: Long): Notification?
 
