@@ -78,7 +78,8 @@ class MemberOnlineTracker(
      * 구독 기록만 믿으면 안 된다. 앱이 죽어 DISCONNECT 를 못 보낸 사용자가 남고,
      * 같은 방을 보는 다른 사람의 핑이 TTL 을 계속 갱신해 그 항목이 영원히 살아 있다.
      * 그러면 그 사람은 "보고 있으니 푸시 불필요"로 판정돼 알림을 영영 못 받는다.
-     * 접속 여부(핑 TTL 10초)와 교집합을 취해 걸러낸다.
+     * 접속 여부(핑 TTL 1분)와 교집합을 취해 걸러낸다. 크래시로 DISCONNECT 를 못 보낸 클라이언트는
+     * 이제 최대 1분간 "보는 중"으로 남아 그동안 채팅 알림이 조용히 안 간다(예전엔 이 창이 10초였다).
      */
     override fun viewers(topic: String): Set<Long> {
         val subscribed = viewersOf(topic).readAll().mapNotNull(String::toLongOrNull).toSet()
@@ -178,7 +179,7 @@ class MemberOnlineTracker(
         private const val FIELD_DEVICE = "device"
         private const val VIEWING_PREFIX = "viewing:"
         private const val VIEWING_MEMBER_PREFIX = "viewing:member:"
-        private val TTL: Duration = Duration.ofSeconds(10)
+        private val TTL: Duration = Duration.ofMinutes(1)
         private val VIEWING_TTL: Duration = Duration.ofMinutes(5)
         private const val SYNC_INTERVAL_MINUTES = 10L
     }

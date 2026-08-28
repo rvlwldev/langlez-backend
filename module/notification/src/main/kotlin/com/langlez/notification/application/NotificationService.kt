@@ -52,11 +52,8 @@ class NotificationService(
             )
         )
 
-        // 앱이 켜져 있으면 푸시 대신 인앱으로 준다. 둘 다 보내면 같은 알림이 두 번 뜬다.
-        if (tracker.checkOnline(memberId)[memberId] == true) {
-            broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX$memberId", NotificationView(saved, data))
-            return
-        }
+        // 포그라운드에서는 OS 가 FCM 배너를 안 그리므로 인앱과 푸시를 항상 같이 보내도 중복 노출이 없다.
+        broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX$memberId", NotificationView(saved, data))
 
         // 토큰이 없으면(로그아웃·푸시 거부) 보낼 곳이 없다. 이력은 이미 남았으니 조용히 끝낸다.
         val token = tokens.findPushToken(memberId) ?: return
