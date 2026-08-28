@@ -130,7 +130,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 ### 스키마 관리
 
-Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V5__drop_wave_messages.sql`.
+Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V8__outbox_history_retention_indexes.sql`.
 운영·개발·테스트 모두 `ddl-auto: validate`. **이미 적용된 V 파일은 절대 수정하지 않는다** (체크섬 불일치로 기동 실패). 고칠 게 있으면 새 V 파일을 만든다.
 
 ---
@@ -264,7 +264,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 ## 5. 남은 작업
 
-**완성도 약 88%** (2026-08-28, 커밋 `552225c` 기준). 산출 방식은 §5.5.
+**완성도 약 88%** (2026-08-28, 커밋 `15c6473` 기준). 산출 방식은 §5.5.
 
 각 항목에 `file:line` 근거와 "어떤 상황에서 실제로 터지나"를 함께 적는다. 그게 없으면 추측이고, **추측으로 고치면 회귀가 난다** — 이 저장소에서 `SecurityContextHolder` 오진을 반영했다가 미인증 요청이 401 대신 403 을 받은 적이 있다.
 
@@ -278,52 +278,38 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
    `NotificationService.kt:82,98` 이 `title` 에 메시지 키(`notification.chat-message.title`, `notification.member-followed`)를 넣는다. **인앱 브로드캐스트에는 맞는 설계다** — 클라이언트가 키를 받아 번역한다. 그런데 같은 값이 `:66` `push.send(...)` → `FcmPushSender.kt:44` `.setNotification(...)` 으로 들어가고, 그렇게 만든 FCM 메시지는 **OS 가 앱 코드 개입 없이 배너를 그린다.** 번역할 기회가 없다.
    → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `core` 포트에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
 
-3. **프로필 수정 요청에 검증이 전혀 없다**
-   `ProfileRequest.kt:15-24` 의 `Update` 에 Bean Validation 어노테이션이 하나도 없고 `ProfileController.kt:22` 에 `@Valid` 도 없다. `bio`/`goal`/`want` 길이 제한이 없어 DB 컬럼 상한(`varchar(1000)`)을 넘기면 `DataIntegrityViolationException` 으로 500 이 난다. i18n 에 `validation.member.bio.size`(200) 등이 준비돼 있는데 참조하는 코드가 없어 **의도한 제한이 사문화됐다.**
-
-4. **`application-production.yml` 이 플레이스홀더 상태다**
+3. **`application-production.yml` 이 플레이스홀더 상태다**
    `:24,26,72,76,79` 에 DataSource·프론트엔드 URL·CORS 오리진·S3 설정이 TODO 로 남아 있다. production 프로필로는 기동 불가 또는 오설정 기동.
 
-5. **`interest` 재설계** — 사용자가 직접 설계 예정. 6번의 선행 조건이다
-6. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
+4. **`interest` 재설계** — 사용자가 직접 설계 예정. 5번의 선행 조건이다
+5. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
 
-7. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
+6. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
    `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
 
 ### 5.2 중간
 
-8. **`chat`·`echo` 아웃박스에 히스토리 아카이버가 없다**
-   `OutBoxHistoryProcessor` 를 상속한 클래스는 `MemberOutBoxHistoryScheduler`, `RelationshipOutBoxHistoryScheduler` 둘뿐이다. `ChatOutBoxHistory`, `EchoOutBoxHistory` 엔티티는 있으나 채우는 쪽이 없다.
-   `OutBoxProcessor.send` 는 `complete()` 후 `repo.save` 만 하고 삭제하지 않으므로 **`chat_event_outbox` 에 완료 행이 영원히 남는다.** 조회 인덱스가 커지며 `fetch` 가 점점 느려진다. (echo 는 아웃박스 자체를 안 쓰므로 §5.4 정리 대상과 함께 판단해야 한다)
-
-9. **`*_outbox_history` 를 비우는 배치가 아예 없다**
-   `OutBoxHistoryProcessor` 는 완료 건을 `*_outbox_history` 로 옮기기만 한다. 저장소 전체에 그 테이블을 삭제하거나 파티션을 드롭하는 코드가 없다. **무한 증가한다.** 지금 `member_outbox_history`, `relationship_event_outbox_history` 가 그 상태다.
-   → 보존 기간 기준 `@Scheduled` + `@DistributedLock` 삭제 배치. 한 번에 지우는 양에 상한을 둬야 한다 — 수백만 행을 한 트랜잭션에서 지우면 락과 WAL 이 터진다.
-
-10. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
+7. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
    `MessageDeduplicator.kt:31-38` 이 한계를 직접 서술한다 — 되돌림은 같은 JVM 에서 `Exception` 이 잡혔을 때만 돈다. `Error`(OOM)나 SIGKILL·OOMKilled 로 죽으면 표시만 남고 오프셋은 미커밋이라, 재기동 후 재배달이 "중복"으로 걸러져 TTL(1시간)까지 유실된다. 그레이스풀 셧다운은 in-flight 를 기다리므로 정상 배포로는 안 터진다.
    → 표시를 **처리 성공 후**로 옮기면(전형적 idempotent-consumer) 유실 경로가 사라지고 `release` 자체가 불필요해진다. 대신 리밸런싱 중 겹치는 재배달을 못 막는다. 이 설계가 선언한 우선순위("중복 < 유실")와는 그쪽이 일치한다.
 
-11. **`attachment` 의 domain 계층이 웹 타입을 참조한다**
-   `Attachment.kt:3-4` 가 `LanglezException`, `HttpStatus` 를 import 한다. 다른 8개 모듈 domain 은 전부 준수한다. → `require { "메시지키" }` 로 바꾸고 `AttachmentService` 에서 변환.
+8. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
 
-12. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
-
-13. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
-14. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
-15. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
+9. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+10. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
+11. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
 
 ### 5.3 낮음 / 정책 결정 필요
 
-16. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
-17. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-18. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
-19. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
-20. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-21. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
-22. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
-23. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
-24. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+12. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
+13. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+14. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다
+15. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
+16. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+17. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
+18. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
+19. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
+20. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
 
 ### 5.4 정리 대상 (기능 영향 없음)
 
@@ -332,7 +318,6 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 - **`member-created` / `member-handle-changed` 컨슈머 부재** — 발행되지만 듣는 사람이 없다
 - **`EchoRepository.aggregateDailyStats` 호출자 없음** — `hashtag_daily_stat` 이 영원히 비어 있다
 - **`Post.reportCount` 증가시키는 코드 없음** — 항상 0
-- **와일드카드 import** — `ProfileRequest.kt:6` `java.util.*`
 - **`ResilientCacheProvider.kt:38` 헬스 스케줄러에 `@DistributedLock` 없음** — **의도적이다.** 노드별 로컬 폴백 상태를 각자 판단해야 한다. 규약(§5 "`@Scheduled` 에는 반드시 `@DistributedLock`")의 유일한 예외이니 "누락"으로 보고 붙이지 마라
 
 ### 5.5 완성도 산출 방식
@@ -349,16 +334,25 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 | 모듈 | 점수 | 가중치 | | 모듈 | 점수 | 가중치 |
 |---|---|---|---|---|---|---|
-| member | 97% | 12 | | attachment | 85% | 5 |
-| chat | 90% | 14 | | common | 90% | 6 |
+| member | 97% | 12 | | attachment | 88% | 5 |
+| chat | 92% | 14 | | common | 92% | 6 |
 | auth | 92% | 10 | | app/api | 78% | 6 |
-| relationship | 92% | 9 | | infra/rdb | 93% | 4 |
+| relationship | 92% | 9 | | infra/rdb | 95% | 4 |
 | echo | 70% | 9 | | core | 96% | 3 |
-| profile | 80% | 8 | | infra/redis | 96% | 3 |
+| profile | 84% | 8 | | infra/redis | 96% | 3 |
 | notification | 85% | 7 | | infra/kafka | 80% | 2 |
 | wave | 88% | 7 | | | | |
 
-가중 합계 **91.94 / 105 = 87.6% → 약 88%**
+가중 합계 **92.89 / 105 = 88.5% → 약 88%**
+
+직전 갱신(`552225c`, 91.94)에서 오른 곳과 근거:
+
+| 모듈 | 변화 | 근거 |
+|---|---|---|
+| chat 90→92, infra/rdb 93→95 | 인프라 결선 | `5320b99` — `OutBoxHistoryCleaner` 베이스와 chat 아카이버. 완료 행이 영원히 남던 것과 히스토리 무한 증가가 둘 다 해소 |
+| attachment 85→88 | 4계층 구조 | `#18` — domain 이 웹 타입을 참조하던 유일한 모듈이었다 |
+| profile 80→84 | 도메인·서비스 로직 | `#19` — 입력 검증 부재로 500 이 나던 경로 차단 |
+| common 90→92 | 도메인·서비스 로직 | `#19` — 검증 실패 메시지가 i18n 키 원문으로 나가던 것 해소 |
 
 **다음 갱신 때 이 방식과 가중치를 그대로 써라.** 방식을 바꾸면 이전 숫자와 비교가 안 된다.
 
