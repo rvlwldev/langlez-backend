@@ -316,6 +316,7 @@ fun join(roomId: Long, memberId: Long)
 
 - **스케줄러 전용이 아니다.** 여러 인스턴스에서 동시 실행되면 안 되는 쓰기(개수 제한 검사 후 삽입 등)에도 `transactional = true` 로 건다.
 - **self-invocation 에 주의한다.** Spring AOP 는 프록시 기반이라 같은 클래스 안에서 `this.method()` 로 부르면 advice 가 아예 안 탄다. 락이 걸려야 하는 메서드는 별도 `@Component` 빈으로 분리한다. (`ProfileImageLocker` 가 `ProfileService` 와 분리된 이유)
+- **프록시가 씌워진 클래스의 메서드는 `open` 이어야 한다.** `@DistributedLock` 이 붙으면 CGLIB 프록시가 만들어지는데, **프록시 인스턴스는 필드가 비어 있고 `final` 메서드는 오버라이드되지 않아 위임 없이 프록시에서 그대로 실행된다.** `@Autowired lateinit` 필드를 쓰는 순간 `has not been initialized` 로 터진다. self-invocation 과 뿌리는 같지만 **이건 외부에서 호출해도** 터진다. (`OutBoxHistoryCleaner.cleanBefore` 가 `final` 이라 실제로 겪었다.) Kotlin 은 기본이 `final` 이라 놓치기 쉽다 — `kotlin-spring` 플러그인이 `@Component` 등이 붙은 **클래스**는 자동으로 열어주지만 **베이스 클래스의 일반 메서드는 안 열어준다.**
 - 스케줄러 중복 실행 방지처럼 **놓쳐도 다음 주기에 만회되는 경우**는 `throwOnFailure = false` 로 둔다.
 - **체크+저장 원자화를 Lua(EVAL)로 직접 짜기 전에 `@DistributedLock` 을 먼저 고려한다.** Redisson 기본 코덱은 바이너리 직렬화라 Lua 인자가 원시 바이트로 넘어가고 `tonumber()`/`SISMEMBER` 비교가 조용히 깨진다. Lua 가 꼭 필요하면 `getScript(StringCodec.INSTANCE)` 로 코덱을 명시한다 — `DailyRateLimiter`(일일 카운터 INCR + EXPIRE)가 그 방식이다.
 
@@ -335,7 +336,11 @@ fun onChatMessageSent(event: ChatMessageSentEvent) { ... }
 - 파일 위치: `infra/rdb/src/main/resources/migration/V{n}__*.sql`
 - 운영·개발·테스트 **모두 `ddl-auto: validate`**. 통합테스트도 Flyway 를 타므로 마이그레이션 자체가 검증된다.
 - **이미 적용된 V 파일은 절대 수정하지 않는다.** 체크섬 불일치로 기동이 실패한다. 고칠 게 있으면 새 V 파일을 만든다.
-- **데이터가 이미 있는 테이블에 인덱스를 걸 때는 `create index concurrently` 를 검토한다.** 일반 `create index` 는 `SHARE` 락을 잡아 빌드가 끝날 때까지 그 테이블의 `INSERT`/`UPDATE`/`DELETE` 를 전부 세운다. 지금까지의 V 파일은 전부 같은 마이그레이션에서 방금 만든 빈 테이블에 걸어서 락이 0초였고, `V6` 도 운영 배포 전이라 그대로 뒀다. **행이 쌓인 뒤에 같은 패턴을 복사하면 배포 중 쓰기가 멈춘다.** `concurrently` 는 트랜잭션 안에서 못 돌므로 그 스크립트에 `-- flyway executeInTransaction=false` 를 붙여야 하고, 실패 시 `INVALID` 인덱스가 남아 수동 정리가 필요하다.
+- **인덱스 생성 방식은 테이블에 행이 있는지로 갈린다.**
+  - 일반 `create index` 는 `SHARE` 락을 잡아 빌드가 끝날 때까지 그 테이블의 `INSERT`/`UPDATE`/`DELETE` 를 전부 세운다. 지금까지의 V 파일은 전부 같은 마이그레이션에서 방금 만든 빈 테이블에 걸어 락이 0초였다.
+  - **그렇다고 `concurrently` 를 기본으로 삼지 마라.** `CREATE INDEX CONCURRENTLY` 는 **기존의 모든 트랜잭션이 끝나기를 기다린다.** 커넥션 풀이 스냅샷을 잡고 있으면 **영영 끝나지 않는다** — `INVALID` 인덱스가 남는 것보다 나쁘다. 실제로 `V8` 을 `concurrently` 로 썼을 때 통합테스트가 Flyway 로그 `Migrating ... [non-transactional]` 에서 **3시간 반 멈췄고**, 일반 `create index` 로 바꾸니 전체 빌드가 **2분 52초**에 끝났다. 운영에서도 장수 트랜잭션이 하나 있으면 배포가 그대로 선다.
+  - **판단 기준**: 운영에 행이 없으면(이 저장소는 아직 배포 전이다) 일반 `create index`. 행이 쌓인 뒤라면 **먼저 데이터를 줄이는 마이그레이션을 따로 배포**하고, 그다음 `concurrently` 를 별도 V 파일로 분리해 열린 트랜잭션이 없는 시점에 돌린다. `concurrently` 는 트랜잭션 안에서 못 돌므로 그 스크립트에 `-- flyway executeInTransaction=false` 가 필요하고, 실패하면 `INVALID` 인덱스가 남아 수동 정리를 부른다.
+  - 어느 쪽을 택하든 **그 이유를 SQL 주석에 남긴다.** 다음 사람이 반대로 바꾸는 걸 막는 게 목적이다.
 - **`@Column(nullable = false)` 를 새로 붙이면 기존 행 백필 마이그레이션이 반드시 따라와야 한다.** 안 하면 NULL 을 읽어 Kotlin non-null 프로퍼티에서 NPE 가 난다.
 - 정렬·커서는 `created_at` 이 아니라 **id 시퀀스**나 도메인 시퀀스 기준. 인스턴스 간 시계 차이로 순서가 뒤집힌다.
 

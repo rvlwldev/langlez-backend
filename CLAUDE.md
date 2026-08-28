@@ -199,6 +199,8 @@ class MemberRepositoryImpl(
 | kotest `afterEach { clearMocks }` 로 스텁까지 삭제 | `Then` 블록 사이에 돌아 `verify` 가 빈 기록을 본다 |
 | 크래시한 클라이언트가 "보는 중"으로 남음 | 알림이 영영 안 감. `viewers()` 를 `checkOnline()` 과 교집합 |
 | `@Retryable` 을 `@EnableRetry` 없이 사용 | 조용히 안 돈다 |
+| 프록시 대상 클래스의 `final` 메서드 | CGLIB 이 오버라이드를 못 해 프록시에서 그대로 실행. 필드가 비어 있어 `lateinit ... has not been initialized` |
+| `create index concurrently` 를 열린 트랜잭션과 함께 | 기존 트랜잭션이 끝나기를 무한정 기다린다. 통합테스트가 3시간 반 멈춘 적이 있다 |
 
 ---
 
