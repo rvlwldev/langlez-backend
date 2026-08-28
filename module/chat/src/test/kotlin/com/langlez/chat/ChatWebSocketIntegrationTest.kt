@@ -1,4 +1,4 @@
-package com.langlez.chat.config
+package com.langlez.chat
 
 import com.langlez.core.MessageBroadcaster
 import com.langlez.core.OnlineTracker
