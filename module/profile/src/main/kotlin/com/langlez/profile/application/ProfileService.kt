@@ -1,6 +1,7 @@
 package com.langlez.profile.application
 
 import com.langlez.core.FollowQuery
+import com.langlez.core.MemberQuery
 import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.profile.api.ProfileRequest
@@ -8,6 +9,8 @@ import com.langlez.profile.api.ProfileResponse
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
+import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -19,7 +22,31 @@ class ProfileService(
     private val storage: Storage,
     private val profileImageLocker: ProfileImageLocker,
     private val follows: FollowQuery,
+    private val members: MemberQuery,
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 가입 이벤트를 받아 프로필 행을 만든다. 프로필 id 는 회원 id 와 같다.
+     *
+     * 카프카는 at-least-once 라 같은 이벤트가 다시 온다. 이미 있으면 아무것도 하지 않는다.
+     * 존재 확인과 INSERT 사이에 백필 마이그레이션이나 다른 인스턴스가 끼어들 수 있어
+     * PK 충돌도 함께 삼킨다 — 여기서 던지면 예외가 리스너로 올라가 파티션이 막힌다.
+     *
+     * 일부러 `@Transactional` 을 걸지 않았다. 트랜잭션을 열면 INSERT 가 커밋 시점까지 미뤄져
+     * 제약 위반이 이 try/catch 밖에서 터진다. `repo.saveProfile` 이 자기 트랜잭션을 가지므로
+     * 그 경계에서 예외가 올라와야 여기서 잡을 수 있다.
+     */
+    fun createProfileIfAbsent(memberId: Long) {
+        if (repo.findProfile(memberId) != null) return
+
+        try {
+            repo.saveProfile(Profile(id = memberId))
+        } catch (e: DataIntegrityViolationException) {
+            log.debug("프로필이 이미 있다. memberId={}", memberId, e)
+        }
+    }
 
     @Transactional(readOnly = true)
     fun getProfile(username: String): Profile =
@@ -31,15 +58,18 @@ class ProfileService(
         // HLL 키와 dirty 셋 항목이 생기고, 플러시 대상이 아니라 영영 안 지워진다.
         val profile = repo.findProfileByUsername(username)
             ?: throw LanglezException(404, "profile.not-found")
+        // 프로필 id 는 회원 id 와 같다. 조회 직후 계정이 지워지는 경우만 null 이다.
+        val member = members.findProfileInfo(profile.id)
+            ?: throw LanglezException(404, "profile.not-found")
         increaseVisitCount(visitorId, username)
         val visitDelta = getVisitCount(username)
         // 팔로워/팔로잉 수는 relationship 소유라 core 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
         // 여기 실어 보낸다 — 클라이언트가 relationship 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
         return ProfileResponse.Detail(
             profile,
-            profile.member,
+            member,
             profile.visitCount + visitDelta,
-            follows.counts(profile.member.id),
+            follows.counts(member.id),
         )
     }
 
@@ -92,6 +122,8 @@ class ProfileService(
     fun updateProfile(memberId: Long, request: ProfileRequest.Update, locale: Locale): ProfileResponse.ProfileDetail {
         val profile = repo.findProfile(memberId)
             ?: throw LanglezException(404, "profile.not-found")
+        val member = members.findProfileInfo(memberId)
+            ?: throw LanglezException(404, "member.not-found")
 
         request.bio?.let { profile.bio = it }
         request.goal?.let { profile.goal = it }
@@ -99,13 +131,8 @@ class ProfileService(
         request.mbti?.let { profile.mbti = it }
         request.languageLevel?.let { profile.languageLevel = it }
 
-        // 개인식별 정보는 계정 소유라 Member 에 반영한다. Profile 이 member 를 물고 있어 같은 트랜잭션에서 함께 flush 된다.
-        request.gender?.let { profile.member.gender = it }
-        request.locale?.let { profile.member.locale = it }
-        request.birthDay?.let { profile.member.birthDay = it }
-
         val saved = repo.saveProfile(profile)
-        return ProfileResponse.ProfileDetail(saved)
+        return ProfileResponse.ProfileDetail(saved, member)
     }
 
     private fun replaceRepresentImage(memberId: Long, newUrl: String): ProfileImage {

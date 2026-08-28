@@ -6,6 +6,7 @@ import com.langlez.exception.LanglezException
 import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
 import com.langlez.member.api.request.MemberUpdateHandleRequest
 import com.langlez.member.api.request.MemberUpdateImageRequest
+import com.langlez.member.api.request.MemberUpdatePersonalInfoRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
 import com.langlez.member.api.response.MemberPublicResponse
@@ -39,6 +40,15 @@ class MemberController(private val service: MemberService, private val repo: Mem
         @RequestBody @Valid request: MemberUpdateHandleRequest
     ): MemberMeResponse {
         val member = service.updateHandle(memberId, request.handle)
+        return MemberMeResponse(member)
+    }
+
+    @PatchMapping("/me")
+    override fun patchPersonalInfo(
+        @MemberId memberId: Long,
+        @RequestBody @Valid request: MemberUpdatePersonalInfoRequest
+    ): MemberMeResponse {
+        val member = service.updatePersonalInfo(memberId, request.gender, request.birthDay, request.country)
         return MemberMeResponse(member)
     }
 

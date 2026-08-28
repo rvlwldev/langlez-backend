@@ -4,6 +4,7 @@ import com.langlez.core.Storage
 import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
 import com.langlez.member.api.request.MemberUpdateHandleRequest
 import com.langlez.member.api.request.MemberUpdateImageRequest
+import com.langlez.member.api.request.MemberUpdatePersonalInfoRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
 import com.langlez.member.api.response.MemberPublicResponse
@@ -19,6 +20,13 @@ interface MemberAPI {
 
     @Operation(summary = "핸들 변경", description = "로그인한 회원의 handle(고유 아이디)을 변경한다. 15일 쿨다운 및 중복 검사가 있다.")
     fun patchHandle(memberId: Long, request: MemberUpdateHandleRequest): MemberMeResponse
+
+    @Operation(
+        summary = "개인정보 수정",
+        description = "성별/생년월일/국가를 부분 수정한다. 보내지 않은 항목은 그대로 유지된다. " +
+            "프로필(PATCH /api/v1/profiles/me)에서 이 세 항목이 이쪽으로 옮겨왔다.",
+    )
+    fun patchPersonalInfo(memberId: Long, request: MemberUpdatePersonalInfoRequest): MemberMeResponse
 
     @Operation(summary = "FCM 토큰 갱신", description = "푸시 알림 발송을 위한 FCM 토큰을 갱신한다.")
     fun patchFcmToken(memberId: Long, request: MemberUpdateFcmTokenRequest)

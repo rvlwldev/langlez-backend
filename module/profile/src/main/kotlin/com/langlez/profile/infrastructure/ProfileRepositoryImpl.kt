@@ -1,5 +1,6 @@
 package com.langlez.profile.infrastructure
 
+import com.langlez.core.MemberQuery
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -17,6 +18,8 @@ class ProfileRepositoryImpl(
     private val imageJpa: ProfileImageJpaRepository,
     private val redisson: RedissonClient,
     private val dsl: JPAQueryFactory,
+    // handle → 회원 id 는 member 소유다. QueryDSL 이 members 를 조인하면 모듈 경계가 다시 무너진다.
+    private val members: MemberQuery,
 ) : ProfileRepository {
 
     override fun saveImage(image: ProfileImage): ProfileImage = imageJpa.save(image)
@@ -28,10 +31,8 @@ class ProfileRepositoryImpl(
     override fun countImages(id: Long): Long = imageJpa.countByIdAndDeletedAtIsNull(id)
 
     /**
-     * 캐시하지 않는다. Profile 은 LAZY 로 Member 를 물고 있어서,
-     * 캐시에서 꺼내면 (1) detached 라 `profile.member` 변경이 merge 로 전파되지 않고
-     * (2) 초기화 안 된 프록시가 직렬화되며 (3) 오래된 visitCount/@Version 을 되쓴다.
-     * PK 조회라 캐시 이득도 작다.
+     * 캐시하지 않는다. 캐시에서 꺼낸 엔티티는 detached 라 오래된 visitCount/@Version 을 되써서
+     * `VisitCountSyncScheduler` 가 DB 에 더해 둔 방문수를 덮어쓴다. PK 조회라 캐시 이득도 작다.
      */
     override fun findProfile(id: Long): Profile? = profileJpa.findByIdOrNull(id)
 
@@ -41,10 +42,7 @@ class ProfileRepositoryImpl(
     }
 
     override fun findProfileByUsername(username: String): Profile? =
-        dsl.selectFrom(profile)
-            .innerJoin(profile.member).fetchJoin()
-            .where(profile.member.handle.eq(username))
-            .fetchOne()
+        members.findIdByHandle(username)?.let(profileJpa::findByIdOrNull)
 
     override fun findAllProfiles(): List<Profile> = profileJpa.findAll()
 
@@ -101,13 +99,9 @@ class ProfileRepositoryImpl(
     }
 
     override fun incrementVisitCountInDb(username: String, delta: Long) {
-        // 벌크 UPDATE 에 암시적 조인(profile.member.handle)을 쓰면 JPQL 상 불법이다.
-        // 서브쿼리로 대상 id 를 먼저 뽑는다.
-        val targetId = dsl.select(profile.id)
-            .from(profile)
-            .innerJoin(profile.member)
-            .where(profile.member.handle.eq(username))
-            .fetchOne() ?: return
+        // 이미 지워진 handle 이면 조용히 넘어간다. 스케줄러가 플러시 대상을 통째로 들고 오므로
+        // 여기서 던지면 나머지 회원의 방문수까지 같이 롤백된다.
+        val targetId = members.findIdByHandle(username) ?: return
 
         dsl.update(profile)
             .set(profile.visitCount, profile.visitCount.add(delta))

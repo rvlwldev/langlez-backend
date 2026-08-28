@@ -1,10 +1,10 @@
 package com.langlez.profile.application
 
 import com.langlez.core.FollowQuery
+import com.langlez.core.MemberQuery
 import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.Member.Provider
+import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -23,20 +23,21 @@ class ProfileServiceTest : BehaviorSpec({
     val profileImageLocker = mockk<ProfileImageLocker>()
 
     val follows = mockk<FollowQuery>()
+    val members = mockk<MemberQuery>()
 
-    val service = ProfileService(repo, storage, profileImageLocker, follows)
+    val service = ProfileService(repo, storage, profileImageLocker, follows, members)
 
-    afterEach { clearMocks(repo, storage, profileImageLocker, follows, answers = false) }
+    afterEach { clearMocks(repo, storage, profileImageLocker, follows, members, answers = false) }
 
-    fun member(id: Long) = Member(
+    fun memberInfo(id: Long, handle: String = "user$id") = MemberQuery.ProfileInfo(
         id = id,
-        email = "user$id@test.com",
-        provider = Member.Provider.GOOGLE,
-        providerId = "p$id",
-        providerDisplayName = "User$id"
+        handle = handle,
+        gender = "SECRET",
+        locale = null,
+        birthDay = null,
     )
 
-    fun profile(id: Long) = Profile(id = id, member = member(id))
+    fun profile(id: Long) = Profile(id = id)
 
     fun image(memberId: Long, url: String, represent: Boolean = false, sequence: Long = 1) =
         ProfileImage(memberId, url, sequence, 0L, represent)
@@ -47,6 +48,7 @@ class ProfileServiceTest : BehaviorSpec({
         When("팔로워와 팔로잉이 있는 회원이면") {
             Then("두 숫자가 응답에 실려 나간다") {
                 every { repo.findProfileByUsername("target") } returns profile(9L)
+                every { members.findProfileInfo(9L) } returns memberInfo(9L, "target")
                 every { repo.increaseVisitCount(1L, "target") } returns Unit
                 every { repo.getVisitCountDelta("target") } returns 2L
                 every { follows.counts(9L) } returns FollowQuery.Counts(followers = 12L, followings = 3L)
@@ -201,6 +203,45 @@ class ProfileServiceTest : BehaviorSpec({
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
                     service.getProfile("ghost")
+                }.status.value() shouldBe HttpStatus.NOT_FOUND.value()
+            }
+        }
+    }
+
+    Given("내 프로필 수정 시") {
+
+        // 성별/국가/생년월일은 PATCH /api/v1/members/me 로 옮겼다. 요청 DTO 에 아예 없어서 컴파일로 드러난다.
+        When("자기소개 항목만 보내면") {
+            val target = profile(1L).apply { bio = "old"; goal = "old goal" }
+            every { repo.findProfile(1L) } returns target
+            every { members.findProfileInfo(1L) } returns memberInfo(1L)
+            every { repo.saveProfile(any()) } answers { firstArg() }
+
+            val result = service.updateProfile(
+                1L,
+                ProfileRequest.Update(bio = "new bio", mbti = Profile.MBTI.INTJ),
+                Locale.KOREA,
+            )
+
+            Then("보낸 항목만 바뀌고 안 보낸 goal 은 보존된다") {
+                result.bio shouldBe "new bio"
+                result.mbti shouldBe "INTJ"
+                target.goal shouldBe "old goal"
+            }
+
+            Then("성별/국가/생년월일은 계정에서 읽어 응답에 실린다") {
+                result.gender shouldBe "SECRET"
+                result.locale shouldBe null
+                result.birthDay shouldBe null
+            }
+        }
+
+        When("프로필 행이 없으면") {
+            every { repo.findProfile(2L) } returns null
+
+            Then("NOT_FOUND 예외가 발생한다") {
+                shouldThrow<LanglezException> {
+                    service.updateProfile(2L, ProfileRequest.Update(bio = "x"), Locale.KOREA)
                 }.status.value() shouldBe HttpStatus.NOT_FOUND.value()
             }
         }

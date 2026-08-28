@@ -3,9 +3,8 @@ package com.langlez.profile.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.GlobalRestControllerAdvice
 import com.langlez.annotation.MemberIdResolver
+import com.langlez.core.MemberQuery
 import com.langlez.exception.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.Member.Provider
 import com.langlez.profile.application.ProfileService
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -33,13 +32,12 @@ class ProfileControllerTest : BehaviorSpec({
 
     afterEach { clearMocks(service, answers = false) }
 
-    fun createMember(id: Long = 1L, handle: String = "testuser", displayName: String = "Test User") = Member(
+    fun memberInfo(id: Long = 1L, handle: String = "testuser", gender: String = "SECRET") = MemberQuery.ProfileInfo(
         id = id,
-        email = "$handle@example.com",
         handle = handle,
-        provider = Member.Provider.GOOGLE,
-        providerId = "g$id",
-        providerDisplayName = displayName
+        gender = gender,
+        locale = null,
+        birthDay = null,
     )
 
     Given("프로필 상세 조회 시") {
@@ -82,11 +80,9 @@ class ProfileControllerTest : BehaviorSpec({
 
     Given("내 프로필 수정 시") {
         When("서비스가 정상 처리하면") {
-            val member = createMember()
-            val member2 = createMember().apply { gender = Member.Gender.MALE }
-            val profile = Profile(id = 1L, member = member2, bio = "new bio")
+            val profile = Profile(id = 1L, bio = "new bio")
             val request = ProfileRequest.Update(bio = "new bio")
-            val detail = ProfileResponse.ProfileDetail(profile)
+            val detail = ProfileResponse.ProfileDetail(profile, memberInfo(gender = "MALE"))
             every { service.updateProfile(1L, request, locale) } returns detail
 
             Then("변경된 프로필이 반환된다") {
