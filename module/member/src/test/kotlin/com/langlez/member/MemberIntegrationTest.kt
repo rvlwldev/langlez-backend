@@ -340,6 +340,51 @@ class MemberIntegrationTest : BehaviorSpec() {
         }
 
         // =========================================================================
+        // 2-1. 닉네임 수정 유스케이스 (V11 마이그레이션 + 다국어 저장 확인)
+        // =========================================================================
+        Given("닉네임 수정 시") {
+
+            When("가입 직후에는") {
+                val m = memberService.createMember(
+                    email = "nickname_default@test.com",
+                    providerType = Member.Provider.GOOGLE,
+                    providerId = "p_nickname_default",
+                    providerUsername = "NicknameDefault",
+                )
+
+                Then("닉네임이 null 이다 (백필하지 않는다)") {
+                    memberRepository.find(m.id)?.nickname shouldBe null
+                }
+            }
+
+            listOf(
+                "한국어닉네임",
+                "にほんごニックネーム",
+                "中文昵称",
+                "Кириллица",
+                "Émile Zøe",
+            ).forEach { nickname ->
+                When("$nickname 로 수정하면") {
+                    val m = memberService.createMember(
+                        email = "nickname_${nickname.hashCode()}@test.com",
+                        providerType = Member.Provider.GOOGLE,
+                        providerId = "p_nickname_${nickname.hashCode()}",
+                        providerUsername = "NicknameUser",
+                    )
+
+                    val updated = memberService.updatePersonalInfo(
+                        id = m.id, gender = null, birthDay = null, country = null, nickname = nickname,
+                    )
+
+                    Then("DB 에 그대로 저장되고 다시 조회해도 같다") {
+                        updated.nickname shouldBe nickname
+                        memberRepository.find(m.id)?.nickname shouldBe nickname
+                    }
+                }
+            }
+        }
+
+        // =========================================================================
         // 3. FCM 토큰 업데이트 유스케이스
         // =========================================================================
         Given("FCM 토큰 업데이트 시") {

@@ -21,6 +21,7 @@ class MemberQueryImpl(private val repo: MemberRepository) : MemberQuery {
     private fun Member.toProfileInfo() = MemberQuery.ProfileInfo(
         id = id,
         handle = handle,
+        nickname = nickname,
         gender = gender.name,
         locale = locale,
         birthDay = birthDay,

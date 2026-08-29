@@ -48,7 +48,13 @@ class MemberController(private val service: MemberService, private val repo: Mem
         @MemberId memberId: Long,
         @RequestBody @Valid request: MemberUpdatePersonalInfoRequest
     ): MemberMeResponse {
-        val member = service.updatePersonalInfo(memberId, request.gender, request.birthDay, request.country)
+        val member = service.updatePersonalInfo(
+            id = memberId,
+            gender = request.gender,
+            birthDay = request.birthDay,
+            country = request.country,
+            nickname = request.nickname,
+        )
         return MemberMeResponse(member)
     }
 

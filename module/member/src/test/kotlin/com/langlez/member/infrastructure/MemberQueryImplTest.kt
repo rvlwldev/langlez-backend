@@ -76,6 +76,22 @@ class MemberQueryImplTest : BehaviorSpec({
             }
         }
 
+        When("닉네임을 정하지 않은 회원이면") {
+            every { repo.find(1L) } returns member()
+
+            Then("nickname 은 null 로 나온다") {
+                query.findProfileInfo(1L)?.nickname shouldBe null
+            }
+        }
+
+        When("닉네임을 정한 회원이면") {
+            every { repo.find(1L) } returns member().apply { changeNickname("지수") }
+
+            Then("nickname 이 그대로 나온다") {
+                query.findProfileInfo(1L)?.nickname shouldBe "지수"
+            }
+        }
+
         When("없는 회원이면") {
             every { repo.find(99L) } returns null
 

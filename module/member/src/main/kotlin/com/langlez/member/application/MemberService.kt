@@ -113,17 +113,32 @@ class MemberService(
     }
 
     /**
-     * 성별·생년월일·국가 부분 수정. null 인 항목은 그대로 둔다.
+     * 성별·생년월일·국가·닉네임 부분 수정. null 인 항목은 그대로 둔다.
      *
      * 값을 지우는 경로는 없다. null 이 "지움"이면 안 보낸 필드까지 같이 날아간다.
      */
     @Transactional
-    fun updatePersonalInfo(id: Long, gender: Member.Gender?, birthDay: LocalDate?, country: String?): Member =
-        findOrThrow(id).apply {
+    fun updatePersonalInfo(
+        id: Long,
+        gender: Member.Gender?,
+        birthDay: LocalDate?,
+        country: String?,
+        nickname: String?,
+    ): Member {
+        val member = findOrThrow(id).apply {
             gender?.let { this.gender = it }
             birthDay?.let { this.birthDay = it }
             country?.let { this.country = it }
-        }.let(repo::save)
+        }
+
+        try {
+            nickname?.let { member.changeNickname(it) }
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        return repo.save(member)
+    }
 
     @Transactional
     fun updateFcmToken(id: Long, token: String) {
