@@ -12,34 +12,37 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
 ## 1. 한눈에
 
 ```mermaid
-flowchart LR
-    chat["chat"]
-    rel["relationship"]
-    mem["member"]
-    echo["echo"]
-    wave["wave"]
+sequenceDiagram
+    autonumber
+    participant chat
+    participant rel as relationship
+    participant member
+    participant K as Kafka
+    participant noti as notification
+    participant prof as profile
+    participant auth
 
-    noti(["notification"])
-    relR(["relationship"])
-    auth(["auth"])
-    none1(["소비자 없음"])
+    Note over chat,auth: 발행 모듈은 원본을 이미 저장한 뒤 이벤트를 낸다
 
-    chat -- "chat-message-sent<br/>(Mongo 메시지 문서는 이미 저장됨)" --> noti
-    chat -- "chat-user-reported<br/>(chat 은 아무것도 저장하지 않음)" --> relR
-    rel -- "member-followed<br/>(member_follows 행은 이미 저장됨)" --> noti
-    mem -- "member-created" --> none1
-    mem -- "member-handle-changed" --> none1
-    mem -- "member-withdrawn<br/>(회원 상태는 이미 WITHDRAWN 으로 저장됨)" --> auth
+    chat->>K: chat-message-sent
+    K->>noti: Notification 행 저장 → 인앱 + FCM
 
-    noti --> notiDo["① Notification 행 저장<br/>② 온라인이면 인앱, 아니면 FCM"]
-    relR --> relDo["① Report 행 저장<br/>② existsReport 로 중복 한 번 더 거름"]
-    auth --> authDo["리프레시 토큰·기기 바인딩 삭제<br/>(잔여 액세스 토큰은 JwtAuthenticationFilter 가 매 요청 이미 차단)"]
+    chat->>K: chat-user-reported
+    K->>rel: Report 행 저장 (chat 은 아무것도 저장하지 않는다)
 
-    echo -.- echoX["발행 코드 없음<br/>빈 스캐폴딩"]
-    wave -.- waveX["카프카 미사용<br/>Redis pub/sub 만"]
+    rel->>K: member-followed
+    K->>noti: Notification 행 저장 → 인앱 + FCM
 
-    classDef gone fill:#eee,stroke:#999,color:#666
-    class none1,echoX,waveX gone
+    member->>K: member-created
+    K->>prof: Profile 행 생성 (id = memberId)
+
+    member->>K: member-withdrawn
+    K->>auth: 리프레시 토큰·기기 바인딩 삭제
+
+    member->>K: member-handle-changed
+    Note right of K: 소비자 없음 — 쌓이기만 한다
+
+    Note over chat,auth: echo 는 발행 배선이 없고, wave 는 Kafka 를 쓰지 않는다
 ```
 
 **읽는 법 두 가지가 갈린다.**
@@ -47,7 +50,7 @@ flowchart LR
 - `member-followed` 와 `chat-message-sent` 는 **이미 저장된 것에 대한 알림**이다. 발행 모듈이 트랜잭션 안에서 원본 데이터를 저장하고, 이벤트는 그 결과다. 수신 모듈은 `Notification` 만 만든다 — 팔로우 관계나 메시지 본문을 다시 저장하지 않는다.
 - `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 relationship 이다 — 신고 데이터는 relationship 소유이기 때문이다.
 
-듣는 쪽은 **notification·relationship·auth 셋뿐이다.**
+듣는 쪽은 **notification·relationship·auth·profile 넷이다.**
 
 ---
 
@@ -69,13 +72,31 @@ flowchart LR
 **notification 이 받아서 하는 일**
 
 ```mermaid
-flowchart TD
-    A["chat-message-sent 수신"] --> B{"수신자가 그 방을<br/>보고 있나?"}
-    B -- 예 --> C["아무것도 안 함<br/>(발행 폴러가 한 번 걸렀지만,<br/>발행과 소비 사이에 방에 들어온<br/>사람은 여기서 다시 걸린다)"]
-    B -- 아니오 --> D["Notification 저장 · type=CHAT_MESSAGE<br/>title = notification.chat-message.title (i18n 키)<br/>body = event.preview<br/>data = roomId, messageId, senderId"]
-    D --> E{"앱이 켜져 있나?"}
-    E -- 예 --> F["Redis pub/sub<br/>/topic/notification/{수신자}"]
-    E -- 아니오 --> G["FCM 푸시<br/>(토큰 없으면 조용히 끝)"]
+sequenceDiagram
+    autonumber
+    participant K as Kafka
+    participant C as NotificationConsumer
+    participant S as NotificationService
+    participant T as OnlineTracker
+    participant DB as notifications
+    participant R as Redis pub/sub
+    participant F as FCM
+
+    K->>C: chat-message-sent
+    C->>S: onChatMessage(event)
+    S->>T: viewers(/topic/chat/room/{roomId})
+
+    alt 수신자가 그 방을 보고 있다
+        T-->>S: 포함됨
+        Note over S: 아무것도 안 한다<br/>발행 폴러가 한 번 걸렀지만 발행과 소비 사이에<br/>방에 들어온 사람은 여기서 다시 걸린다
+    else 아니다
+        T-->>S: 미포함
+        S->>DB: Notification 저장 (type=CHAT_MESSAGE)
+        Note over S,DB: title = notification.chat-message.title (i18n 키)<br/>body = event.preview<br/>data = roomId, messageId, senderId
+        S->>R: /topic/notification/{수신자}
+        S->>F: 푸시 (토큰 없으면 조용히 끝)
+        Note over S,F: 인앱과 푸시를 항상 같이 보낸다 — 포그라운드에서는<br/>OS 가 FCM 배너를 안 그려 중복 노출이 없다
+    end
 ```
 
 이력을 **먼저** 남기고 전달한다. 전달이 실패해도 알림함에는 남아야 한다.
@@ -98,11 +119,28 @@ chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 re
 **relationship 이 받아서 하는 일**
 
 ```mermaid
-flowchart TD
-    A["chat-user-reported 수신"] --> B{"중복 배달인가?"}
-    B -- 예 --> C["버림"]
-    B -- 아니오 --> D["Report 저장<br/>reporterId = event.reporterId<br/>reportedUserId = event.reportedUserId<br/>sourceType = CHAT_USER<br/>sourceId = event.roomId<br/>reason / triggerMessageId"]
-    D --> E["existsReport 로 한 번 더 거름<br/>동시 경합은 UNQ_REPORT_IDENTITY 가 막는다"]
+sequenceDiagram
+    autonumber
+    participant K as Kafka
+    participant C as RelationshipConsumer
+    participant D as MessageDeduplicator
+    participant S as RelationshipService
+    participant DB as reports
+
+    K->>C: chat-user-reported
+    C->>D: isDuplicate(topic, payload)
+
+    alt 중복 배달
+        D-->>C: true
+        Note over C: 버림
+    else 처음 보는 메시지
+        D-->>C: false
+        C->>S: report(...)
+        S->>DB: existsReport 로 한 번 더 거름
+        S->>DB: Report 저장
+        Note over S,DB: sourceType = CHAT_USER · sourceId = event.roomId<br/>reason / triggerMessageId
+        Note over DB: 동시 경합은 UNQ_REPORT_IDENTITY 가 막는다
+    end
 ```
 
 방 id 를 `sourceId` 로 남겨야 운영이 "어느 대화에서 벌어진 일인지" 추적한다.
@@ -142,11 +180,20 @@ flowchart TD
 **notification 이 받아서 하는 일**
 
 ```mermaid
-flowchart TD
-    A["member-followed 수신"] --> B["Notification 저장 · type=MEMBER_FOLLOWED<br/>대상 = event.followedId (팔로우 당한 사람)<br/>title = notification.member-followed (i18n 키)<br/>body = 빈 문자열<br/>data = followerId"]
-    B --> C{"앱이 켜져 있나?"}
-    C -- 예 --> D["Redis pub/sub<br/>/topic/notification/{followedId}"]
-    C -- 아니오 --> E["FCM 푸시"]
+sequenceDiagram
+    autonumber
+    participant K as Kafka
+    participant S as NotificationService
+    participant DB as notifications
+    participant R as Redis pub/sub
+    participant F as FCM
+
+    K->>S: member-followed
+    S->>DB: Notification 저장 (type=MEMBER_FOLLOWED)
+    Note over S,DB: 대상 = event.followedId (팔로우 당한 사람)<br/>title = notification.member-followed (i18n 키)<br/>body = 빈 문자열 · data = followerId
+    S->>R: /topic/notification/{followedId}
+    S->>F: 푸시
+    Note over S,F: 팔로우 관계는 저장하지 않는다 — 알림만 만든다
 ```
 
 **notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `core.FollowQuery` 포트로 조회한다.
@@ -157,7 +204,7 @@ flowchart TD
 
 ### `member-created` · `member-handle-changed`
 
-> member ──▶ **(소비자 없음)**
+> member ──▶ **profile** / **(소비자 없음)**
 
 | | |
 |---|---|
@@ -165,7 +212,33 @@ flowchart TD
 | **페이로드** | `MemberCreatedEvent`, `MemberHandleChangedEvent` |
 | **파티션 키** | `memberId` |
 
-**발행은 되는데 아무도 안 듣는다.** 저장소 전체에 `@KafkaListener` 가 3개뿐이고 이 두 토픽을 받는 건 없다. 소비처가 생길 때까지 브로커에 쌓이기만 한다.
+`member-created` 는 **profile 이 듣는다.** 프로필 행을 만드는 코드가 저장소 어디에도 없어서 프로필 기능이 전부 404 였다 — `ProfileConsumer` 가 그걸 메운다.
+
+**profile 이 받아서 하는 일**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Kafka
+    participant C as ProfileConsumer
+    participant DB as member_profiles
+
+    K->>C: member-created
+    C->>DB: 이미 있나?
+
+    alt 이미 있다 (재배달)
+        DB-->>C: 있음
+        Note over C: 아무것도 안 한다 (멱등)
+    else 없다
+        DB-->>C: 없음
+        C->>DB: Profile 행 생성
+        Note over C,DB: id = event.id — 프로필 id 는 회원 id 와 같다
+    end
+```
+
+**프로필 id 는 회원 id 와 같다.** `member_profiles.id` 가 PK 이자 `members(id)` FK 라 별도 키가 없다. 재배달로 같은 이벤트가 두 번 와도 존재 확인으로 걸러진다 — PK 충돌이 컨슈머를 죽이면 파티션이 막힌다.
+
+**`member-handle-changed` 는 아직 아무도 안 듣는다.** 소비처가 생길 때까지 브로커에 쌓이기만 한다.
 
 ---
 
@@ -185,9 +258,28 @@ flowchart TD
 **auth 가 받아서 하는 일**
 
 ```mermaid
-flowchart TD
-    A["member-withdrawn 수신"] --> B["리프레시 토큰 삭제 (refresh_token:{id})"]
-    B --> C["기기 바인딩 삭제 (refresh_device:{id})"]
+sequenceDiagram
+    autonumber
+    participant K as Kafka
+    participant C as AuthConsumer
+    participant D as MessageDeduplicator
+    participant S as AuthService
+    participant R as Redis
+
+    K->>C: member-withdrawn
+    C->>D: isDuplicate(topic, payload)
+
+    alt 중복 배달
+        D-->>C: true
+        Note over C: 버림
+    else 처음 보는 메시지
+        D-->>C: false
+        C->>S: invalidateSession(event.id)
+        S->>R: delete refresh_token:{id}
+        S->>R: delete refresh_device:{id}
+    end
+
+    Note over C,S: 역직렬화도 try 안에 있다 — 깨진 페이로드를 밖에서 풀면<br/>중복 표시만 남고 그 메시지가 영영 사라진다
 ```
 
 **잔여 액세스 토큰은 여기서 추가로 블랙리스트에 넣지 않는다.** `JwtAuthenticationFilter` 가 매 요청 `MemberStatusQuery` 로 회원 상태를 확인해 `WITHDRAWN` 이면 이미 막는다(PR #3). 이 검사는 탈퇴 시점 이후 발급된 토큰이 없으므로 예외 없이 전부 걸린다 — 개별 토큰을 블랙리스트에 추가하려면 토큰 문자열이나 jti 가 필요한데 탈퇴 이벤트에는 없고, 그걸 만들기 위한 비용(리프레시 토큰 저장소 역추적 또는 별도 jti 저장)이 이미 막혀 있는 구멍을 다시 막는 값을 넘는다.
@@ -211,20 +303,23 @@ flowchart TD
 STOMP 브로커가 인메모리라 **자기 JVM 에 붙은 세션에만** 전달한다. 인스턴스가 여러 대면 다른 서버에 붙은 상대가 못 받는다. Redis pub/sub 이 그 간극을 메운다.
 
 ```mermaid
-flowchart LR
-    subgraph A["인스턴스 A"]
-        SA["broadcast(topic, payload)"]
-        WA["자기 세션에 push"]
-    end
-    R[("Redis<br/>pub/sub")]
-    subgraph B["인스턴스 B"]
-        WB["자기 세션에 push"]
-    end
-    SA -- PUBLISH --> R
-    R -- 구독 --> WA
-    R -- 구독 --> WB
-    WA --> APPA["앱 (A 에 붙음)"]
-    WB --> APPB["앱 (B 에 붙음)"]
+sequenceDiagram
+    autonumber
+    participant SA as 인스턴스 A
+    participant R as Redis pub/sub
+    participant SB as 인스턴스 B
+    participant AppA as 앱 (A 에 붙음)
+    participant AppB as 앱 (B 에 붙음)
+
+    Note over SA,SB: 두 인스턴스 모두 기동 시 채널을 구독해 둔다
+
+    SA->>R: PUBLISH(topic, payload)
+    R->>SA: 전달
+    R->>SB: 전달
+    SA->>AppA: 자기 세션에 push
+    SB->>AppB: 자기 세션에 push
+
+    Note over SA,AppB: STOMP 브로커가 인메모리라 자기 JVM 세션에만 닿는다
 ```
 
 **서비스 코드는 `SimpMessagingTemplate` 이 아니라 `core.MessageBroadcaster` 포트를 쓴다.** 직접 쓰면 다중 인스턴스에서 조용히 깨진다.
@@ -257,11 +352,22 @@ flowchart LR
 메시지 전송은 **두 갈래로 동시에 나간다.**
 
 ```mermaid
-flowchart TD
-    S["ChatService.send()"] --> R["Redis pub/sub → WebSocket<br/>지금 그 방을 보고 있는 사람용 (즉시)"]
-    S --> M["Mongo 저장 (published=false)"]
-    M --> P["ChatMessagePublisher (1초)"]
-    P --> K["chat-message-sent (Kafka)<br/>안 보고 있는 사람용 (알림)"]
+sequenceDiagram
+    autonumber
+    participant S as ChatService.send()
+    participant R as Redis pub/sub
+    participant M as Mongo
+    participant P as ChatMessagePublisher
+    participant K as Kafka
+
+    par 지금 그 방을 보고 있는 사람용 (즉시)
+        S->>R: broadcast → WebSocket
+    and 안 보고 있는 사람용 (알림)
+        S->>M: 저장 (published=false)
+        P->>M: 1초 주기 폴링
+        M-->>P: 미발행 문서
+        P->>K: chat-message-sent
+    end
 ```
 
 ### `/topic/wave/{roomId}/chat`
@@ -274,7 +380,9 @@ flowchart TD
 
 > notification 발행 · 본인만 구독
 
-Kafka 이벤트를 처리한 결과가 여기로 나간다. **수신자가 온라인일 때만** 발행하고, 오프라인이면 FCM 으로 대체한다 — 둘 다 보내면 같은 알림이 두 번 뜬다.
+Kafka 이벤트를 처리한 결과가 여기로 나간다. **인앱과 FCM 을 항상 같이 보낸다** — 접속 여부를 보지 않는다.
+
+전에는 온라인이면 인앱만, 오프라인이면 FCM 만 보냈다. 그 전제("둘 다 보내면 두 번 뜬다")가 틀렸다 — FCM `notification` 페이로드는 앱이 **포그라운드면 iOS·Android 둘 다 OS 가 배너를 그리지 않는다.** 중복 배너가 애초에 안 뜨므로 서버가 접속 여부를 확인할 이유가 없다.
 
 페이로드는 `NotificationView`(저장된 `Notification` + `data`).
 
@@ -309,7 +417,7 @@ flowchart TD
 
 | 신호 | 수단 | 이유 |
 |---|---|---|
-| 접속 핑 (5초 간격) | Redis 버킷 직결 | 고빈도·저가치. 브로커 왕복 비용이 가치보다 크다 |
+| 접속 핑 (30초 간격) | Redis 버킷 직결 | 고빈도·저가치. 브로커 왕복 비용이 가치보다 크다 |
 | 화면 보는 중 상태 | Redis | 휘발성 |
 | 팔로우 그래프 조회 | `core.FollowQuery` 포트 | 이벤트로 복제하면 두 벌이 어긋난다. 언팔로우 이벤트도 없어 복제본은 늘기만 한다 |
 | 차단 여부 판정 | `core.BlockQuery` 포트 | 〃 |
@@ -324,11 +432,22 @@ flowchart TD
 ### 아웃박스 (기본)
 
 ```mermaid
-flowchart TD
-    A["Service"] -- publishEvent --> B["{Domain}EventListener<br/>@TransactionalEventListener(BEFORE_COMMIT)"]
-    B --> C["{domain}_event_outbox 행 저장<br/>도메인 행과 같은 트랜잭션"]
-    C --> D["{Domain}OutBoxScheduler (2초)<br/>@DistributedLock"]
-    D --> E["Kafka"]
+sequenceDiagram
+    autonumber
+    participant S as Service
+    participant L as {Domain}EventListener
+    participant O as {domain}_event_outbox
+    participant Sc as {Domain}OutBoxScheduler
+    participant K as Kafka
+
+    S->>L: publishEvent
+    Note over L: @TransactionalEventListener(BEFORE_COMMIT)
+    L->>O: 아웃박스 행 저장
+    Note over S,O: 도메인 행과 같은 트랜잭션 — 함께 커밋되거나 함께 롤백된다
+    Sc->>O: 2초 주기로 미발행 행 조회 (@DistributedLock)
+    O-->>Sc: 미발행 행
+    Sc->>K: 발행
+    Sc->>O: complete()
 ```
 
 도메인 행과 아웃박스 행이 함께 커밋되거나 함께 롤백된다. "저장은 됐는데 이벤트는 유실"이 원천 차단된다.
@@ -336,11 +455,23 @@ flowchart TD
 ### `published` 플래그 (채팅 메시지 전용)
 
 ```mermaid
-flowchart TD
-    A["Mongo 문서 (published=false)"] --> B["ChatMessagePublisher (1초)<br/>@DistributedLock"]
-    B --> C["Kafka 발행"]
-    C -- 성공 --> D["markPublished()"]
-    C -- 실패 --> E["그대로 둠<br/>다음 주기에 다시 잡힘"]
+sequenceDiagram
+    autonumber
+    participant P as ChatMessagePublisher
+    participant M as Mongo 문서
+    participant K as Kafka
+
+    P->>M: 1초 주기로 published=false 조회 (@DistributedLock)
+    M-->>P: 미발행 문서
+    P->>K: 발행
+
+    alt 성공
+        K-->>P: ok
+        P->>M: markPublished()
+    else 실패
+        K-->>P: 예외
+        Note over P,M: 그대로 둔다 — 다음 주기에 다시 잡힌다
+    end
 ```
 
 가장 빈번한 쓰기라 별도 아웃박스 행을 만들면 쓰기가 그대로 두 배가 된다.
@@ -359,7 +490,7 @@ flowchart TD
 **빠뜨리기 쉬운 것**
 
 - 아웃박스 행만 만들고 **스케줄러를 안 만들면** 테이블에 쌓이기만 하고 한 건도 안 나간다
-- 발행만 하고 **소비자를 안 만들면** 브로커에 쌓이기만 한다 (`member-created` 가 지금 그렇다)
+- 발행만 하고 **소비자를 안 만들면** 브로커에 쌓이기만 한다 (`member-handle-changed` 가 지금 그렇다)
 - **이벤트에 고유 id 가 없으면** 같은 내용의 두 사건이 하나로 합쳐진다
 - 역직렬화를 `try` 밖에 두면 깨진 페이로드가 왔을 때 중복 표시가 남은 채 예외가 나가 **그 메시지가 영영 사라진다**
 - i18n 키를 빠뜨리면 **키 문자열이 그대로 사용자에게 나간다**
@@ -370,11 +501,9 @@ flowchart TD
 
 | 무엇 | 상태 |
 |---|---|
-| `member-created` · `member-handle-changed` | 발행되지만 소비자 없음 |
-| echo 이벤트 배선 | DTO·아웃박스만 있고 발행 코드 없음 |
-| `chat` · `echo` 히스토리 이관 스케줄러 | 없음 — 완료 행이 아웃박스 테이블에 영원히 남는다 |
-| `*_outbox_history` 정리 배치 | **아예 없음** — 무한 증가 |
-| `existsReport` | 유니크 제약이 없는 check-then-insert. 동시 요청에 뚫린다 |
+| `member-handle-changed` | 발행되지만 소비자 없음 |
+| echo 이벤트 배선 | `EchoService` 가 `publishEvent` 는 하는데 **아웃박스로 잇는 `@TransactionalEventListener` 가 없다.** Spring 앱 이벤트가 그냥 버려져 좋아요·댓글 알림이 안 간다 |
+| `echo` 히스토리 이관 스케줄러 | 없음 (echo 는 아웃박스 자체를 안 써서 당장은 무해) |
 | FCM 제목 | i18n 키 원문(`notification.member-followed`)이 OS 배너에 그대로 뜬다 |
 | 컨슈머 중복 표시 | 강제 종료(SIGKILL·OOM) 시 표시만 남아 TTL(1시간)까지 재배달이 걸러진다 |
 | 알림 `title` 키 명명 | chat 은 `notification.chat-message.title`, 팔로우는 `notification.member-followed` — 접미사 규칙이 어긋난다 |
