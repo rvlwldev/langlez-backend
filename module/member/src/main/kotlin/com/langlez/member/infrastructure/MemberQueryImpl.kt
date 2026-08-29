@@ -5,11 +5,7 @@ import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import org.springframework.stereotype.Repository
 
-/**
- * 회원 계정 조회 포트 구현.
- *
- * `MemberRepository.find` 는 2단계 캐시를 타므로 프로필 조회마다 DB 를 치지는 않는다.
- */
+/** 회원 계정 조회 포트 구현. */
 @Repository
 class MemberQueryImpl(private val repo: MemberRepository) : MemberQuery {
 
