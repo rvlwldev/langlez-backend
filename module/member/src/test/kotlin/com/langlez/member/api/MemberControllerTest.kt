@@ -58,17 +58,36 @@ class MemberControllerTest : BehaviorSpec({
     Given("개인정보 수정 시") {
         When("성별과 국가만 보내면") {
             val updated = member().apply { gender = Member.Gender.MALE; country = "US" }
-            every { service.updatePersonalInfo(1L, Member.Gender.MALE, null, "US") } returns updated
+            every {
+                service.updatePersonalInfo(id = 1L, gender = Member.Gender.MALE, birthDay = null, country = "US", nickname = null)
+            } returns updated
 
             val response = controller.patchPersonalInfo(
                 1L,
                 MemberUpdatePersonalInfoRequest(gender = Member.Gender.MALE, country = "US"),
             )
 
-            Then("보내지 않은 birthDay 는 null 로 넘어가고 응답에 갱신된 값이 실린다") {
+            Then("보내지 않은 birthDay·nickname 은 null 로 넘어가고 응답에 갱신된 값이 실린다") {
                 response.gender shouldBe "MALE"
                 response.country shouldBe "US"
-                verify { service.updatePersonalInfo(1L, Member.Gender.MALE, null, "US") }
+                verify {
+                    service.updatePersonalInfo(
+                        id = 1L, gender = Member.Gender.MALE, birthDay = null, country = "US", nickname = null,
+                    )
+                }
+            }
+        }
+
+        When("닉네임만 보내면") {
+            val updated = member().apply { changeNickname("지수") }
+            every {
+                service.updatePersonalInfo(id = 1L, gender = null, birthDay = null, country = null, nickname = "지수")
+            } returns updated
+
+            val response = controller.patchPersonalInfo(1L, MemberUpdatePersonalInfoRequest(nickname = "지수"))
+
+            Then("응답에 닉네임이 실린다") {
+                response.nickname shouldBe "지수"
             }
         }
     }

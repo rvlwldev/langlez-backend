@@ -8,6 +8,7 @@ import java.time.LocalDate
 data class MemberMeResponse(
     @field:Schema(description = "이메일") val email: String,
     @field:Schema(description = "handle(고유 아이디)") val handle: String,
+    @field:Schema(description = "닉네임 (표시용 이름, handle 과 달리 유니크하지 않다)", nullable = true) val nickname: String?,
     @field:Schema(description = "권한", example = "MEMBER") val role: String,
     @field:Schema(description = "프로필 이미지 URL", nullable = true) val imageUrl: String?,
     // 개인식별 정보는 프로필이 아니라 계정 소유다. 수정도 PATCH /api/v1/members/me 로만 한다.
@@ -20,6 +21,7 @@ data class MemberMeResponse(
     constructor(member: Member) : this(
         email = member.email,
         handle = member.handle,
+        nickname = member.nickname,
         role = member.role.name,
         imageUrl = member.imageUrl,
         gender = member.gender.name,

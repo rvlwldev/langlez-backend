@@ -23,8 +23,9 @@ interface MemberAPI {
 
     @Operation(
         summary = "개인정보 수정",
-        description = "성별/생년월일/국가를 부분 수정한다. 보내지 않은 항목은 그대로 유지된다. " +
-            "프로필(PATCH /api/v1/profiles/me)에서 이 세 항목이 이쪽으로 옮겨왔다.",
+        description = "성별/생년월일/국가/닉네임을 부분 수정한다. 보내지 않은 항목은 그대로 유지된다. " +
+            "성별/생년월일/국가는 프로필(PATCH /api/v1/profiles/me)에서 이쪽으로 옮겨왔다. " +
+            "닉네임은 handle 과 달리 유니크하지 않고, 지우는 기능은 없다.",
     )
     fun patchPersonalInfo(memberId: Long, request: MemberUpdatePersonalInfoRequest): MemberMeResponse
 

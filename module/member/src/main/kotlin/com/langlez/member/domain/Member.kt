@@ -28,6 +28,9 @@ class Member(
     val email: String,
 
     @Column(length = 20) var handle: String = randomHandle(),
+    // handle 과 달리 유니크가 아니다 - 표시용 이름일 뿐 식별자가 아니다. nullable - 기존 회원은
+    // 정하지 않았으므로 백필하지 않는다(handle 을 복사해 넣으면 사용자가 안 고른 값이 이름으로 굳는다).
+    @Column(length = NICKNAME_MAX_LENGTH) var nickname: String? = null,
     @Enumerated(STRING) var status: Status = Status.CREATED,
     @Enumerated(STRING) var role: Role = Role.MEMBER,
 
@@ -87,6 +90,14 @@ class Member(
         audit.lastHandleUpdatedAt = now
     }
 
+    /** 12개 언어 앱이라 문자 종류를 제한하지 않는다. 공백만 있는 입력과 앞뒤 공백만 막는다. */
+    fun changeNickname(newNickname: String) {
+        val trimmed = newNickname.trim()
+        require(trimmed.isNotEmpty() && trimmed.length <= NICKNAME_MAX_LENGTH) { "member.nickname.invalid" }
+
+        nickname = trimmed
+    }
+
     /** 정지/탈퇴 회원은 서비스를 계속 쓸 수 없다. 로그인·토큰 갱신 경로에서 호출한다. */
     fun requireActive() {
         require(status != Status.SUSPENDED) { "member.suspended" }
@@ -135,6 +146,10 @@ class Member(
         const val HANDLE_REGEX = "^[a-zA-Z0-9_.]{3,20}$"
         private val HANDLE_PATTERN = Regex(HANDLE_REGEX)
         private val CHANGE_COOLDOWN: Duration = Duration.ofDays(15)
+
+        // handle(20자, 라틴 문자 전용)과 별개 상수다. CJK 는 글자당 정보량이 많아 20자면 대부분의
+        // 실명·애칭이 들어가고, 리스트·채팅 헤더 같은 한 줄 UI 에서도 자연스럽게 잘리는 폭이다.
+        const val NICKNAME_MAX_LENGTH = 20
 
         fun randomHandle(): String = (1..20)
             .map { "._ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".random() }

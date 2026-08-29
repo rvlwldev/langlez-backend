@@ -3,6 +3,7 @@ package com.langlez.member.api.request
 import com.langlez.member.domain.Member
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Pattern
+import jakarta.validation.constraints.Size
 import java.time.LocalDate
 
 /** 부분 수정이다. null 인 필드는 건드리지 않는다. */
@@ -18,4 +19,9 @@ data class MemberUpdatePersonalInfoRequest(
     @field:Schema(description = "국가 코드 (ISO 3166-1 alpha-2)", example = "KR", nullable = true)
     @field:Pattern(regexp = "^[A-Z]{2}$", message = "validation.member.country.invalid")
     val country: String? = null,
+
+    // 공백만 있는 입력 거부와 앞뒤 공백 제거는 Bean Validation 으로는 못 하니 도메인(Member.changeNickname)이 한다.
+    @field:Schema(description = "닉네임 (표시용 이름, handle 과 달리 유니크하지 않다)", example = "지수", nullable = true)
+    @field:Size(max = Member.NICKNAME_MAX_LENGTH, message = "member.nickname.invalid")
+    val nickname: String? = null,
 )

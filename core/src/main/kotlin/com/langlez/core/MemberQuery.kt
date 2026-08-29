@@ -25,6 +25,7 @@ interface MemberQuery {
     data class ProfileInfo(
         val id: Long,
         val handle: String,
+        val nickname: String? = null,
         val gender: String,
         val locale: Locale?,
         val birthDay: LocalDate?,

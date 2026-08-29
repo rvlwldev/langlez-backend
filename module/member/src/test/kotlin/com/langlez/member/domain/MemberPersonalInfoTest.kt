@@ -1,5 +1,6 @@
 package com.langlez.member.domain
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import java.time.LocalDate
@@ -47,6 +48,82 @@ class MemberPersonalInfoTest : BehaviorSpec({
 
         Then("country 로 넣으면 locale 로 읽힌다") {
             member().apply { country = "US" }.locale?.country shouldBe "US"
+        }
+    }
+
+    Given("닉네임을 새로 만들면") {
+        Then("null 이 기본값이다") {
+            member().nickname shouldBe null
+        }
+    }
+
+    Given("닉네임을 바꾸면") {
+        When("정상 범위의 닉네임이면") {
+            val target = member().apply { changeNickname("지수") }
+
+            Then("그대로 저장된다") {
+                target.nickname shouldBe "지수"
+            }
+        }
+
+        When("앞뒤 공백이 섞여 있으면") {
+            val target = member().apply { changeNickname("  지수  ") }
+
+            Then("trim 되어 저장된다") {
+                target.nickname shouldBe "지수"
+            }
+        }
+
+        When("최대 길이(${Member.NICKNAME_MAX_LENGTH}자) 그대로면") {
+            val exact = "a".repeat(Member.NICKNAME_MAX_LENGTH)
+            val target = member().apply { changeNickname(exact) }
+
+            Then("저장된다") {
+                target.nickname shouldBe exact
+            }
+        }
+
+        When("최대 길이를 1 초과하면") {
+            Then("IllegalArgumentException(member.nickname.invalid) 이 발생한다") {
+                val ex = shouldThrow<IllegalArgumentException> {
+                    member().changeNickname("a".repeat(Member.NICKNAME_MAX_LENGTH + 1))
+                }
+                ex.message shouldBe "member.nickname.invalid"
+            }
+        }
+
+        When("공백만 있으면") {
+            Then("IllegalArgumentException(member.nickname.invalid) 이 발생한다") {
+                val ex = shouldThrow<IllegalArgumentException> {
+                    member().changeNickname("   ")
+                }
+                ex.message shouldBe "member.nickname.invalid"
+            }
+        }
+
+        When("빈 문자열이면") {
+            Then("IllegalArgumentException(member.nickname.invalid) 이 발생한다") {
+                val ex = shouldThrow<IllegalArgumentException> {
+                    member().changeNickname("")
+                }
+                ex.message shouldBe "member.nickname.invalid"
+            }
+        }
+
+        listOf(
+            "한국어닉네임",
+            "にほんごニックネーム",
+            "中文昵称",
+            "Кириллица",
+            "Émile Zøe",
+        ).forEach { nickname ->
+            When("$nickname 처럼 다국어 문자면") {
+                val target = member().apply { changeNickname(nickname) }
+
+                Then("문자 종류 제한 없이 그대로 저장된다") {
+                    target.nickname shouldBe nickname
+                }
+            }
         }
     }
 })

@@ -53,12 +53,92 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
             every { repo.find(1L) } returns target
             every { repo.save(any()) } answers { firstArg() }
 
-            val updated = service.updatePersonalInfo(1L, Member.Gender.MALE, null, null)
+            val updated = service.updatePersonalInfo(1L, Member.Gender.MALE, null, null, null)
 
             Then("성별만 바뀌고 나머지는 보존된다") {
                 updated.gender shouldBe Member.Gender.MALE
                 updated.birthDay shouldBe LocalDate.of(1995, 3, 14)
                 updated.country shouldBe "KR"
+            }
+        }
+    }
+
+    Given("닉네임이 이미 있는 회원이면") {
+        val target = member().apply { changeNickname("기존닉네임") }
+
+        When("성별만 보내면") {
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+
+            val updated = service.updatePersonalInfo(1L, Member.Gender.MALE, null, null, null)
+
+            Then("닉네임은 보존된다") {
+                updated.nickname shouldBe "기존닉네임"
+            }
+        }
+
+        When("새 닉네임을 보내면") {
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+
+            val updated = service.updatePersonalInfo(1L, null, null, null, "새닉네임")
+
+            Then("닉네임이 바뀐다") {
+                updated.nickname shouldBe "새닉네임"
+            }
+        }
+
+        When("공백만 있는 닉네임을 보내면") {
+            every { repo.find(1L) } returns target
+
+            Then("400 LanglezException 이 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.updatePersonalInfo(1L, null, null, null, "   ")
+                }
+                ex.status.value() shouldBe 400
+                ex.message shouldBe "member.nickname.invalid"
+            }
+        }
+
+        When("앞뒤 공백이 섞인 닉네임을 보내면") {
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+
+            val updated = service.updatePersonalInfo(1L, null, null, null, "  공백지수  ")
+
+            Then("trim 되어 저장된다") {
+                updated.nickname shouldBe "공백지수"
+            }
+        }
+
+        When("최대 길이를 초과한 닉네임을 보내면") {
+            every { repo.find(1L) } returns target
+
+            Then("400 LanglezException 이 발생한다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.updatePersonalInfo(1L, null, null, null, "a".repeat(Member.NICKNAME_MAX_LENGTH + 1))
+                }
+                ex.status.value() shouldBe 400
+                ex.message shouldBe "member.nickname.invalid"
+            }
+        }
+
+        listOf(
+            "한국어닉네임",
+            "にほんごニックネーム",
+            "中文昵称",
+            "Кириллица",
+            "Émile Zøe",
+        ).forEach { nickname ->
+            When("$nickname 처럼 다국어 문자를 보내면") {
+                every { repo.find(1L) } returns target
+                every { repo.save(any()) } answers { firstArg() }
+
+                val updated = service.updatePersonalInfo(1L, null, null, null, nickname)
+
+                Then("그대로 저장된다") {
+                    updated.nickname shouldBe nickname
+                }
             }
         }
     }
@@ -69,7 +149,7 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
             every { repo.find(1L) } returns member()
             every { repo.save(any()) } answers { firstArg() }
 
-            val updated = service.updatePersonalInfo(1L, Member.Gender.FEMALE, LocalDate.of(2000, 1, 2), "US")
+            val updated = service.updatePersonalInfo(1L, Member.Gender.FEMALE, LocalDate.of(2000, 1, 2), "US", null)
 
             Then("전부 반영되고 country 는 locale 로도 읽힌다") {
                 updated.gender shouldBe Member.Gender.FEMALE
@@ -83,7 +163,7 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
             every { repo.find(1L) } returns member().apply { gender = Member.Gender.MALE; country = "JP" }
             every { repo.save(any()) } answers { firstArg() }
 
-            val updated = service.updatePersonalInfo(1L, null, null, null)
+            val updated = service.updatePersonalInfo(1L, null, null, null, null)
 
             Then("기존 값이 그대로 남는다") {
                 updated.gender shouldBe Member.Gender.MALE
@@ -98,7 +178,7 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
 
             Then("404 LanglezException 이 발생한다") {
                 shouldThrow<LanglezException> {
-                    service.updatePersonalInfo(99L, Member.Gender.MALE, null, null)
+                    service.updatePersonalInfo(99L, Member.Gender.MALE, null, null, null)
                 }.status.value() shouldBe 404
             }
         }
