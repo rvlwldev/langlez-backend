@@ -107,6 +107,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 **설정은 `app/api/src/main/resources/` 두 파일에만 둔다.** `application.yml`(기본값이자 로컬용, `docker/` 인프라 설정과 짝을 맞춘다. 여기 든 로컬 dummy 시크릿은 운영에서 안 쓰이므로 커밋해도 된다)과 `application-production.yml`(운영용, 민감값은 전부 `${ENV_VAR}` 주입). `module/*`, `infra/*`, `common/*` 에 `application.yml` 을 만들지 않는다 — 기본값이 필요하면 `@Value`/`@ConfigurationProperties` 로 코드에 둔다.
 
+**`logback-spring.xml` 은 예외다 — `app/api` 와 `common` 양쪽에 둔다.** `module/*`·`infra/*` 는 `app/api` 를 의존하지 않아 단독 테스트(`./gradlew :module:<name>:test`)에서는 `app/api` 의 logback 이 클래스패스에 없다. `common` 것을 지우면 그 실행 경로가 아무 logback 설정 없이(스프링 부트 기본값으로) 돈다. 둘 다 살아있는 파일이니 "중복"으로 보고 하나를 지우지 않는다.
+
 **보안에 직결되는 설정값에 `@Value("${key:fallback}")` 같은 조용한 기본값을 넣지 않는다.** 운영에서 프로퍼티가 빠져도 기본값으로 부팅해 문제를 숨긴다. 프로덕션 코드는 필수값으로 두고, 부분 컨텍스트만 띄우는 통합테스트가 `@SpringBootTest(properties = [...])` 로 명시적으로 넣는다.
 
 쿼리 로깅은 `common/.../logger/PerformanceLogger` 한 곳을 통해 나간다 (현재는 P6Spy(RDB)만). 임계값은 `logger.rdb/mongo/redis.{log-threshold-ms, warn-threshold-ms}`, **`warn-threshold` 이상만 `WARN` 이고 나머지는 `DEBUG`** — 일반 쿼리 로그를 INFO 로 올리면 콘솔이 스케줄러 로그로 덮인다. 로그 파일은 `APP_LOG_PATH` 기본값이 `build/test-logs` 라 테스트가 소스 옆을 더럽히지 않고, `bootRun` 만 `app/log/langlez-server/logs` 를 주입해 Promtail 이 수집한다.
