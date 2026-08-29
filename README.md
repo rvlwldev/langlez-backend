@@ -309,33 +309,29 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
    `MainApplication.kt:15` 의 `@EnableScheduling` 이 `TaskScheduler` 빈을 지정하지 않는데, 컨텍스트에 있는 유일한 `TaskScheduler` 가 `ChatWebSocketConfiguration` 의 `@EnableWebSocketMessageBroker` 가 STOMP 하트비트용으로 노출하는 `messageBrokerTaskScheduler`(스레드명 `MessageBroker-*`)뿐이다. Spring 은 그럴 때 **`@Scheduled` 전부를 그 빈에 위임**한다. 아웃박스 폴러(2초 × 3모듈)·캐시 헬스(5초)·`ChatReconciler`(5분)·접속 동기화(10분)가 전부 하트비트용 풀 위에서 돈다.
    → **정상 상태에서는 무증상이다.** Mongo·Redis 가 느려져 스케줄러 하나가 스레드를 30초씩 잡으면 관계없는 아웃박스 발행까지 밀린다. `@DistributedLock(throwOnFailure = false)` 는 **락 획득 실패만** 넘기지 본문 블로킹은 못 막는다. 애플리케이션용 `TaskScheduler` 를 별도 등록해 분리한다. 장애 증폭기이지 상시 결함은 아니다.
 
-9. **쿼리 로깅이 로컬에서 한 번도 동작한 적 없다** — 한 줄 수정
-   `app/api/src/main/resources/logback-spring.xml:41` 이 `com.langlez.observability` 를 DEBUG 로 여는데 **그 패키지는 저장소에 존재하지 않는다.** `PerformanceLogger` 는 `com.langlez.logger` 에 있다. DEBUG 를 여는 유일한 오버라이드가 허공을 가리켜 `root INFO` 가 그대로 먹고 `logger.debug()` 호출이 전부 버려진다. `application.yml:189` 의 `logger.rdb.log-threshold-ms: 0`("로컬: 모든 쿼리 로깅")도 **실질 효과가 0 이다** — 500ms 넘는 WARN 만 보인다.
-   → 로거 이름을 `com.langlez.logger` 로 고친다. 더불어 `common/src/main/resources/logback-spring.xml` 이라는 **두 번째 logback 설정**이 클래스패스에 있다. Spring Boot 는 처음 찾은 하나만 쓰는데 어느 쪽이 이기는지 모듈 순서에 달렸다 — 결론은 같지만(둘 다 `com.langlez.logger` 를 안 연다) 같은 종류 사고가 재발할 구조라 정리해야 한다.
-
-10. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
+9. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
    `MessageDeduplicator.kt:31-38` 이 한계를 직접 서술한다 — 되돌림은 같은 JVM 에서 `Exception` 이 잡혔을 때만 돈다. `Error`(OOM)나 SIGKILL·OOMKilled 로 죽으면 표시만 남고 오프셋은 미커밋이라, 재기동 후 재배달이 "중복"으로 걸러져 TTL(1시간)까지 유실된다. 그레이스풀 셧다운은 in-flight 를 기다리므로 정상 배포로는 안 터진다.
    → 표시를 **처리 성공 후**로 옮기면(전형적 idempotent-consumer) 유실 경로가 사라지고 `release` 자체가 불필요해진다. 대신 리밸런싱 중 겹치는 재배달을 못 막는다. 이 설계가 선언한 우선순위("중복 < 유실")와는 그쪽이 일치한다.
 
-11. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
+10. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
 
-12. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
-13. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
-14. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
+11. **`TokenBlacklist` 정리** — `TokenRevoker` 로 개명, `remainingValiditySeconds` → `Duration` (코드에 TODO 있음)
+12. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
+13. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
 
 ### 5.3 낮음 / 정책 결정 필요
 
-15. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
-16. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-17. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
+14. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
+15. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+16. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
     **기반(pg_trgm + unaccent)은 만들었다** — `infra/rdb` 의 `V10__trgm_search_base.sql`(확장 + `f_unaccent` IMMUTABLE 래퍼)과 `StringPathSearch.kt`(`StringPath.search()` QueryDSL 확장, `MIN_SEARCH_LENGTH = 2`). 실제 테이블(`members.handle` 등)에 GIN 인덱스를 걸고 검색 API 를 붙이는 건 아직이다 — **호출자가 0건**이라 이 기반이 죽은 스캐폴딩으로 남지 않으려면 다음 작업이 필요하다. 컬럼 적용 시 `create index using gin (f_unaccent(컬럼) gin_trgm_ops)` 를 Flyway 로 만들어야 함수 인덱스를 탄다.
     **운영 배포 전 확인 필요**: `V10` 의 `create extension pg_trgm/unaccent` 는 슈퍼유저(또는 AWS RDS `rds_superuser`) 권한이 필요하다. 로컬·Testcontainers 는 슈퍼유저 계정이라 통과하지만, 운영 Flyway 실행 계정이 최소 권한이면 `permission denied to create extension` 으로 배포가 그 자리에서 죽는다. 마스터 계정으로 두 확장을 미리 설치해 두거나 Flyway 계정에 권한을 부여해야 한다.
-18. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
-19. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-20. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
-21. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
-22. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
-23. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+17. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
+18. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+19. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
+20. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
+21. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
+22. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
 
 ### 5.4 정리 대상 (기능 영향 없음)
 

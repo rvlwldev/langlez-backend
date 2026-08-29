@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- app/api 것과 중복이 아니다. module/*·infra/* 는 app/api 를 의존하지 않아 `./gradlew :module:<name>:test` 처럼
+     단독 실행할 때는 이 파일이 클래스패스의 유일한 logback 설정이다(대조 방법: JAVA_TOOL_OPTIONS="-Dlogback.debug=true").
+     지우면 그 실행 경로의 JSON 파일 롤링·macOS DNS 노이즈 억제가 통째로 없어진다.
+
+     com.langlez.logger DEBUG 오버라이드와 p6spy OFF 를 일부러 안 넣었다.
+     - DEBUG: PerformanceLogger.log() 의 기본값은 thresholdMs=0/warnThresholdMs=MAX_VALUE 라, application.yml
+       (app/api 전용, 이 클래스패스엔 없음)이 없는 모듈 단독 테스트에서 열면 전 쿼리가 무조건 DEBUG 로 찍힌다.
+       Testcontainers 통합테스트 전체가 이 설정을 공유하므로 CI 로그가 급격히 불어난다.
+     - p6spy OFF: 이 로거는 spy.properties 의 appender=Slf4JLogger 일 때만 의미가 있는데, 그 설정은 app/api
+       리소스에만 있다. module/infra 단독 테스트는 spy.properties 가 없어 p6spy 가 자체 기본값(FileLogger)으로
+       작업 디렉터리에 spy.log 를 직접 쓴다(logback 을 안 거친다) — 실제로 infra/rdb/spy.log 로 확인함.
+       여기서 "p6spy" 로거를 OFF 해도 그 경로엔 영향이 없어 넣지 않았다. -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>

@@ -37,8 +37,9 @@
         <appender-ref ref="ASYNC_FILE"/>
     </root>
 
-    <!-- 성능 로깅은 별도 관리 권장 -->
-    <logger name="com.langlez.observability" level="DEBUG" additivity="false">
+    <!-- root 가 INFO 라 PerformanceLogger 의 일반 쿼리 로그(logger.debug)는 그냥 두면 전부 버려진다.
+         application.yml 의 logger.rdb/mongo/redis.log-threshold-ms 가 이 DEBUG 오버라이드와 짝을 이룬다. -->
+    <logger name="com.langlez.logger" level="DEBUG" additivity="false">
         <appender-ref ref="ASYNC_CONSOLE"/>
         <appender-ref ref="ASYNC_FILE"/>
     </logger>
