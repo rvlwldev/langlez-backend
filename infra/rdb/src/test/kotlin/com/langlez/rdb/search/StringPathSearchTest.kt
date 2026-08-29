@@ -1,5 +1,6 @@
 package com.langlez.rdb.search
 
+import com.langlez.exception.LanglezException
 import com.querydsl.core.types.dsl.Expressions
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -12,8 +13,9 @@ class StringPathSearchTest : BehaviorSpec({
 
     Given("검색어 길이 경계값") {
         When("1자로 검색하면") {
-            Then("IllegalArgumentException 이 발생하고 메시지는 i18n 키다") {
-                val ex = shouldThrow<IllegalArgumentException> { path.search("a") }
+            Then("400 LanglezException 이 발생하고 메시지는 i18n 키다 (require 로 던지면 핸들러가 없어 500 이 된다)") {
+                val ex = shouldThrow<LanglezException> { path.search("a") }
+                ex.status.value() shouldBe 400
                 ex.message shouldBe "validation.search.min-length"
             }
         }
@@ -33,8 +35,8 @@ class StringPathSearchTest : BehaviorSpec({
         }
 
         When("trim 후 1자만 남으면") {
-            Then("IllegalArgumentException 이 발생한다") {
-                shouldThrow<IllegalArgumentException> { path.search("  a  ") }
+            Then("400 LanglezException 이 발생한다") {
+                shouldThrow<LanglezException> { path.search("  a  ") }
             }
         }
     }

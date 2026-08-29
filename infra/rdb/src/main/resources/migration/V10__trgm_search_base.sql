@@ -7,6 +7,12 @@
 --   3. 부분 문자열이 안 된다 - "apple" 이 든 글을 "pp" 로 검색하면 매칭 실패
 --   4. 띄어쓰기 없는 한국어("한국어공부하실분구해요")가 통째로 토큰 하나가 돼 "한국어" 로 안 걸린다
 -- pg_trgm 은 문자 3개씩 잘라 저장하므로 언어를 모른다. 12개 언어가 인덱스 하나를 공유한다.
+--
+-- create extension 은 슈퍼유저(또는 AWS RDS 의 rds_superuser) 권한이 필요하다.
+-- 로컬·Testcontainers 는 admin 계정이 슈퍼유저라 조용히 통과하지만, 운영에서 Flyway 를
+-- 최소 권한 계정으로 돌리면 "permission denied to create extension" 으로 여기서 죽고
+-- 배포 전체가 중단된다. 운영 배포 전에 마스터 계정으로 두 확장을 미리 설치해 두거나
+-- Flyway 실행 계정에 확장 설치 권한을 부여해야 한다 (README §5 참고).
 create extension if not exists pg_trgm;
 
 -- 사용자가 발음부호 없이 친다 (espanol -> español, francais -> français). CJK 는 건드리지 않는다.

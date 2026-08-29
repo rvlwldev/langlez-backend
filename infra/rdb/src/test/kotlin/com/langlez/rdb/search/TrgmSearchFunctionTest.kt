@@ -148,5 +148,28 @@ class TrgmSearchFunctionTest : BehaviorSpec() {
                 results shouldHaveSize 2
             }
         }
+
+        // 이스케이프가 없었다면 % 와 _ 가 와일드카드로 해석돼 "리터럴로는 안 맞아야 할" 행까지 오탐으로 걸린다.
+        // 단순히 "1건 나온다"만 보면 이스케이프를 지워도 통과하므로, 오탐이 났을 데이터를 반드시 같이 넣는다.
+        Given("검색어에 %, _ 가 있고 그 문자를 담은 행과 안 담은 행이 함께 있으면") {
+            execute("insert into search_spike_documents (content) values ('할인 100% 진행중')")
+            // % 를 와일드카드로 해석하면 "100" 만 있어도 걸린다 - 이 행이 그 오탐 대상이다.
+            execute("insert into search_spike_documents (content) values ('할인 1000원 진행중')")
+            execute("insert into search_spike_documents (content) values ('user_name 필드')")
+            // _ 를 와일드카드(임의의 한 글자)로 해석하면 이 행도 걸린다 - 오탐 대상.
+            execute("insert into search_spike_documents (content) values ('user1name 필드')")
+
+            Then("%가 든 검색어(100%)는 % 를 담은 행만 리터럴로 매칭된다") {
+                val results = dsl.selectFrom(doc).where(doc.content.search("100%")).fetch().map { it.content }
+                results shouldHaveSize 1
+                results shouldContain "할인 100% 진행중"
+            }
+
+            Then("_가 든 검색어(user_name)는 _ 를 담은 행만 리터럴로 매칭된다") {
+                val results = dsl.selectFrom(doc).where(doc.content.search("user_name")).fetch().map { it.content }
+                results shouldHaveSize 1
+                results shouldContain "user_name 필드"
+            }
+        }
     }
 }
