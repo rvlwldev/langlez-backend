@@ -23,6 +23,14 @@ dependencies {
 
     // OutBox 베이스가 @MappedSuperclass라, 상속받는 모듈의 Q클래스가 참조할 부모 Q클래스를 여기서 생성한다
     ksp(libs.dependency.querydsl.ksp)
+    // 검색 통합테스트 전용 엔티티(SearchDocument)의 Q클래스를 테스트 소스셋에도 생성한다
+    kspTest(libs.dependency.querydsl.ksp)
 
     runtimeOnly(libs.runtimeonly.postgresql)
+
+    testImplementation(libs.test.kotest.spring)
+    testImplementation(libs.test.springboot)
+    testImplementation(libs.test.testcontainers)
+    testImplementation(libs.test.testcontainers.junit)
+    testImplementation(libs.test.testcontainers.postgresql)
 }

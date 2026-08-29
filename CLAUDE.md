@@ -201,6 +201,7 @@ class MemberRepositoryImpl(
 | `@Retryable` 을 `@EnableRetry` 없이 사용 | 조용히 안 돈다 |
 | 프록시 대상 클래스의 `final` 메서드 | CGLIB 이 오버라이드를 못 해 프록시에서 그대로 실행. 필드가 비어 있어 `lateinit ... has not been initialized` |
 | `create index concurrently` 를 열린 트랜잭션과 함께 | 기존 트랜잭션이 끝나기를 무한정 기다린다. 통합테스트가 3시간 반 멈춘 적이 있다 |
+| `StringPath.search()`(`infra/rdb`, pg_trgm+unaccent) 적용 시 컬럼에 `f_unaccent()` GIN 인덱스를 안 걺 | 쿼리는 통과하지만 매번 Seq Scan. 컬럼과 검색어 양쪽이 같은 `f_unaccent()` 를 거쳐야 인덱스를 탄다 |
 
 ---
 
