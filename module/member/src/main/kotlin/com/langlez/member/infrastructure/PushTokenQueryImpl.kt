@@ -15,4 +15,9 @@ class PushTokenQueryImpl(private val repo: MemberRepository) : PushTokenQuery {
 
     override fun findPushToken(memberId: Long): String? =
         repo.find(memberId)?.fcm?.takeIf { it.isNotBlank() }
+
+    override fun findPushTokens(memberIds: Collection<Long>): Map<Long, String> =
+        repo.findAll(memberIds)
+            .mapNotNull { member -> member.fcm?.takeIf(String::isNotBlank)?.let { member.id to it } }
+            .toMap()
 }

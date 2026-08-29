@@ -9,4 +9,7 @@ package com.langlez.core
 interface PushTokenQuery {
     /** 토큰이 없으면(로그아웃·푸시 거부) null */
     fun findPushToken(memberId: Long): String?
+
+    /** 토큰이 없는 회원은 결과 맵에서 뺀다. */
+    fun findPushTokens(memberIds: Collection<Long>): Map<Long, String>
 }

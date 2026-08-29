@@ -18,6 +18,7 @@ class NotificationRepositoryImpl(
 ) : NotificationRepository {
 
     override fun save(notification: Notification): Notification = jpa.save(notification)
+    override fun saveAll(notifications: Collection<Notification>): List<Notification> = jpa.saveAll(notifications)
 
     override fun find(id: Long): Notification? = jpa.findByIdOrNull(id)
 

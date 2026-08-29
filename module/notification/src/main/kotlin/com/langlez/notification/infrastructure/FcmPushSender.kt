@@ -4,7 +4,7 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
-import com.google.firebase.messaging.Message
+import com.google.firebase.messaging.MulticastMessage
 import com.langlez.notification.domain.PushSender
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -30,21 +30,32 @@ class FcmPushSender(
 
     private val messaging: FirebaseMessaging? by lazy { initialize() }
 
-    override fun send(token: String, title: String, body: String, data: Map<String, String>) {
+    override fun sendAll(
+        tokens: Collection<String>,
+        title: String,
+        body: String,
+        data: Map<String, String>,
+    ): List<String> {
+        if (tokens.isEmpty()) return emptyList()
+
         val fcm = messaging
         if (fcm == null) {
             logger.warn("FCM 자격증명(fcm.credentials)이 없어 푸시를 보내지 못했다. 알림 이력만 남는다.")
-            return
+            return emptyList()
         }
 
-        fcm.send(
-            Message.builder()
-                .setToken(token)
-                // notification 은 앱이 꺼져 있어도 OS 가 띄운다. data 는 탭했을 때 이동할 화면 정보다.
-                .setNotification(FcmNotification.builder().setTitle(title).setBody(body).build())
-                .putAllData(data)
-                .build()
-        )
+        return tokens.chunked(MULTICAST_TOKEN_LIMIT).flatMap { chunk ->
+            val response = fcm.sendEachForMulticast(
+                MulticastMessage.builder()
+                    .addAllTokens(chunk)
+                    // notification 은 앱이 꺼져 있어도 OS 가 띄운다. data 는 탭했을 때 이동할 화면 정보다.
+                    .setNotification(FcmNotification.builder().setTitle(title).setBody(body).build())
+                    .putAllData(data)
+                    .build()
+            )
+
+            chunk.filterIndexed { i, _ -> !response.responses[i].isSuccessful }
+        }
     }
 
     private fun initialize(): FirebaseMessaging? {
@@ -66,5 +77,8 @@ class FcmPushSender(
 
     private companion object {
         const val APP_NAME = "langlez-notification"
+
+        // sendEachForMulticast 는 한 번에 최대 500 개 토큰만 받는다. 넘기면 예외가 난다.
+        const val MULTICAST_TOKEN_LIMIT = 500
     }
 }

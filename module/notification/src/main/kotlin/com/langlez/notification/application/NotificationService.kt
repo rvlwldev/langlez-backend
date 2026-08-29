@@ -35,33 +35,52 @@ class NotificationService(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    // 수신자 하나짜리 호출도 다건 경로 하나로 태운다. 두 벌을 두면 한쪽만 고치는 사고가 난다.
+    override fun notify(memberId: Long, type: String, title: String, body: String, data: Map<String, String>) =
+        notifyAll(listOf(memberId), type, title, body, data)
+
     /**
      * 이력을 먼저 남기고 전달한다. 전달이 실패해도 목록에는 남아야 한다.
      *
-     * 트랜잭션을 걸지 않았다 — `repo.save` 가 자기 트랜잭션을 갖고, 뒤따르는 브로드캐스트와
+     * 트랜잭션을 걸지 않았다 — `repo.saveAll` 이 자기 트랜잭션을 갖고, 뒤따르는 브로드캐스트와
      * FCM 은 네트워크 I/O 라 DB 커넥션을 쥔 채 외부를 기다리면 풀이 마른다.
      */
-    override fun notify(memberId: Long, type: String, title: String, body: String, data: Map<String, String>) {
-        val saved = repo.save(
-            Notification(
-                recipientId = memberId,
-                type = type,
-                title = title,
-                body = body,
-                data = data.takeIf { it.isNotEmpty() }?.let(mapper::writeValueAsString),
-            )
+    override fun notifyAll(
+        memberIds: Collection<Long>,
+        type: String,
+        title: String,
+        body: String,
+        data: Map<String, String>,
+    ) {
+        val recipients = memberIds.toSet()
+        if (recipients.isEmpty()) return
+
+        val payload = data.takeIf { it.isNotEmpty() }?.let(mapper::writeValueAsString)
+        val saved = repo.saveAll(
+            recipients.map { memberId ->
+                Notification(recipientId = memberId, type = type, title = title, body = body, data = payload)
+            }
         )
 
         // 포그라운드에서는 OS 가 FCM 배너를 안 그리므로 인앱과 푸시를 항상 같이 보내도 중복 노출이 없다.
-        broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX$memberId", NotificationView(saved, data))
+        // 수신자별 토픽이라 N 번 발행할 수밖에 없다 — Redis pub/sub 이라 싸다.
+        saved.forEach {
+            broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX${it.recipientId}", NotificationView(it, data))
+        }
 
         // 토큰이 없으면(로그아웃·푸시 거부) 보낼 곳이 없다. 이력은 이미 남았으니 조용히 끝낸다.
-        val token = tokens.findPushToken(memberId) ?: return
+        val tokensByMember = tokens.findPushTokens(recipients)
+        if (tokensByMember.isEmpty()) return
 
         // 전송 실패로 컨슈머를 실패시키지 않는다. 죽은 토큰은 재시도해도 같은 결과인데,
         // 그동안 파티션이 막혀 뒤에 쌓인 다른 사람 알림까지 늦어진다.
-        runCatching { push.send(token, title, body, data) }
-            .onFailure { logger.warn("FCM 푸시 실패, 알림 이력만 남는다: memberId={}", memberId, it) }
+        val failed = runCatching { push.sendAll(tokensByMember.values, title, body, data) }
+            .onFailure { logger.warn("FCM 다건 푸시 실패, 알림 이력만 남는다: recipients={}", recipients.size, it) }
+            .getOrDefault(emptyList())
+
+        if (failed.isNotEmpty()) {
+            logger.warn("FCM 푸시 일부 실패: {}건 중 {}건", tokensByMember.size, failed.size)
+        }
     }
 
     /**
