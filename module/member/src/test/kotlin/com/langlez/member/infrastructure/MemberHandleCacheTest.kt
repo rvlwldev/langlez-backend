@@ -12,6 +12,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 
 /** 실제 put/get/evict 동작을 그대로 재현하는 인메모리 캐시. */
 private class FakeCache : Cache {
@@ -29,54 +30,73 @@ private class FakeCache : Cache {
     override fun evictMany(keys: Collection<Any>) { keys.forEach(::evict) }
 }
 
+private fun queryDsl(result: Member?): Pair<JPAQueryFactory, JPAQuery<Member>> {
+    val dsl = mockk<JPAQueryFactory>()
+    val query = mockk<JPAQuery<Member>>()
+    every { dsl.selectFrom(any<EntityPath<Member>>()) } returns query
+    every { query.leftJoin(any<EntityPath<Any>>()) } returns query
+    every { query.fetchJoin() } returns query
+    every { query.where(any<Predicate>()) } returns query
+    every { query.where(any<Predicate>(), any<Predicate>()) } returns query
+    every { query.fetchOne() } returns result
+    return dsl to query
+}
+
 /**
- * handle 은 바뀔 수 있는 키다. 캐시에 남은 구 handle 로 조회하면
- * 이미 그 handle 을 쓰지 않는 회원이 돌아온다(핸들 스쿼팅 창).
+ * handle·email·provider 는 유니크 제약이 걸린 컬럼이라 별도 캐시 인덱스 없이도
+ * QueryDSL 조회 한 번이면 찾는다. 캐시가 없으므로 구 handle 이 TTL 까지 남아
+ * 낡은 회원을 돌려주는 경로 자체가 존재하지 않는다.
  */
 class MemberHandleCacheTest : BehaviorSpec({
 
-    val byName = mutableMapOf<String, FakeCache>()
     val caches = mockk<CacheProvider>()
-    every { caches.getCache(any()) } answers { byName.getOrPut(firstArg()) { FakeCache() } }
-
+    every { caches.getCache(any()) } returns FakeCache()
     val jpa = mockk<MemberJpaRepository>()
-    val dsl = mockk<JPAQueryFactory>()
-    val repo = MemberRepositoryImpl(jpa, dsl, caches)
 
     val member = Member(
         id = 1L,
         email = "u1@test.com",
-        handle = "alice",
+        handle = "bob",
         provider = Member.Provider.GOOGLE,
         providerId = "p1",
     )
 
-    Given("alice 로 캐시가 채워진 뒤 핸들을 bob 으로 바꾸면") {
-        every { jpa.save(any<Member>()) } answers { firstArg() }
-        every { jpa.findWithAuditById(1L) } answers { member }
+    Given("handle 로 조회하면") {
+        val (dsl, query) = queryDsl(member)
+        val repo = MemberRepositoryImpl(jpa, dsl, caches)
 
-        // DB 에는 alice 라는 핸들을 쓰는 회원이 더는 없다
-        val query = mockk<JPAQuery<Member>>()
-        every { dsl.selectFrom(any<EntityPath<Member>>()) } returns query
-        every { query.leftJoin(any<EntityPath<Any>>()) } returns query
-        every { query.fetchJoin() } returns query
-        every { query.where(any<Predicate>()) } returns query
-        every { query.fetchOne() } returns null
-
-        repo.save(member) // handles["alice"] = 1
-        member.changeHandle("bob")
-        repo.save(member) // handles["bob"] = 1
-
-        Then("새 핸들로는 조회된다") {
+        Then("DB 조회 한 번으로 찾는다") {
             repo.find("bob")?.id shouldBe 1L
+            verify(exactly = 1) { query.fetchOne() }
         }
+    }
 
-        Then("구 핸들로는 조회되지 않는다") {
+    Given("이제 쓰지 않는 구 handle 로 조회하면") {
+        val (dsl, _) = queryDsl(null)
+        val repo = MemberRepositoryImpl(jpa, dsl, caches)
+
+        Then("찾지 못한다") {
             repo.find("alice") shouldBe null
         }
+    }
 
-        Then("낡은 구 핸들 키는 캐시에서 제거된다") {
-            byName.getValue("member-handle").map.containsKey("alice") shouldBe false
+    Given("email 로 조회하면") {
+        val (dsl, query) = queryDsl(member)
+        val repo = MemberRepositoryImpl(jpa, dsl, caches)
+
+        Then("DB 조회 한 번으로 찾는다") {
+            repo.findByEmail("u1@test.com")?.id shouldBe 1L
+            verify(exactly = 1) { query.fetchOne() }
+        }
+    }
+
+    Given("provider 로 조회하면") {
+        val (dsl, query) = queryDsl(member)
+        val repo = MemberRepositoryImpl(jpa, dsl, caches)
+
+        Then("DB 조회 한 번으로 찾는다") {
+            repo.find(Member.Provider.GOOGLE, "p1")?.id shouldBe 1L
+            verify(exactly = 1) { query.fetchOne() }
         }
     }
 })
