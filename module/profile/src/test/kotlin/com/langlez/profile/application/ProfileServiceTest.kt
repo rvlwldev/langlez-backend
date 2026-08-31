@@ -1,13 +1,13 @@
 package com.langlez.profile.application
 
-import com.langlez.core.FollowQuery
-import com.langlez.core.MemberQuery
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberQuery
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
+import com.langlez.relationship.contract.FollowQuery
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -51,7 +51,7 @@ class ProfileServiceTest : BehaviorSpec({
                 every { members.findProfileInfo(9L) } returns memberInfo(9L, "target")
                 every { repo.increaseVisitCount(1L, "target") } returns Unit
                 every { repo.getVisitCountDelta("target") } returns 2L
-                every { follows.counts(9L) } returns FollowQuery.Counts(followers = 12L, followings = 3L)
+                every { follows.counts(9L) } returns FollowQuery.CountInfo(followers = 12L, followings = 3L)
 
                 val detail = service.getProfileDetail(1L, "target", Locale.KOREA)
 
@@ -64,20 +64,20 @@ class ProfileServiceTest : BehaviorSpec({
     Given("프로필 이미지 업로드 URL 발급 시") {
 
         When("image/jpeg contentType으로 요청하면") {
-            every { storage.presign(1L, "profiles", com.langlez.core.Storage.Type.IMAGE, "photo.jpg") } returns
-                com.langlez.core.Storage.PresignedResult(key = "profiles/photo.jpg", presigned = "https://presigned.url")
+            every { storage.presign(1L, "profiles", com.langlez.attachment.contract.Storage.Type.IMAGE, "photo.jpg") } returns
+                com.langlez.attachment.contract.Storage.PresignedResult(key = "profiles/photo.jpg", presigned = "https://presigned.url")
 
             val url = service.generateImageUploadUrl(1L, "photo.jpg", "image/jpeg").presigned
 
             Then("Presigned URL을 반환한다") {
                 url shouldBe "https://presigned.url"
-                verify { storage.presign(1L, "profiles", com.langlez.core.Storage.Type.IMAGE, "photo.jpg") }
+                verify { storage.presign(1L, "profiles", com.langlez.attachment.contract.Storage.Type.IMAGE, "photo.jpg") }
             }
         }
 
         When("image/png contentType으로 요청하면") {
-            every { storage.presign(1L, "profiles", com.langlez.core.Storage.Type.IMAGE, "photo.png") } returns
-                com.langlez.core.Storage.PresignedResult(key = "profiles/photo.png", presigned = "https://presigned.url/png")
+            every { storage.presign(1L, "profiles", com.langlez.attachment.contract.Storage.Type.IMAGE, "photo.png") } returns
+                com.langlez.attachment.contract.Storage.PresignedResult(key = "profiles/photo.png", presigned = "https://presigned.url/png")
 
             Then("정상적으로 URL을 반환한다") {
                 service.generateImageUploadUrl(1L, "photo.png", "image/png").presigned shouldContain "presigned"

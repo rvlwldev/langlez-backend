@@ -190,7 +190,7 @@ class MemberService(
 
 ### 이벤트
 
-- 도메인 이벤트 DTO 는 `core/event/{domain}/` 에 `data class` 로 둔다. 모듈 간 공유 계약이다.
+- 도메인 이벤트 DTO 는 발행 모듈의 계약 모듈 `module/{domain}-api` (`com.langlez.{domain}.contract`) 에 `data class` 로 둔다. 모듈 간 공유 계약이다.
 - 발행은 `ApplicationEventPublisher.publishEvent`.
 - 수신 후 Outbox 기록은 **`@TransactionalEventListener(phase = BEFORE_COMMIT)`**. 원 트랜잭션이 아직 열려 있어 Outbox insert 가 같은 트랜잭션에 묶이고 롤백 시 함께 사라진다. `AFTER_COMMIT` 을 쓰면 이벤트만 남고 원본이 롤백되는 불일치가 생긴다.
 
@@ -249,7 +249,7 @@ data class MemberMeResponse(
 
 ### 파일 업로드
 
-`core.Storage.presign` 으로 presigned URL 을 내주고, 확정은 **key 로만** 받는다. **클라이언트가 준 URL 을 그대로 저장하면 외부 주소를 심을 수 있다.** (`module/chat`, `module/profile`, `module/echo` 가 같은 패턴)
+`attachment-api` 의 `Storage.presign` 으로 presigned URL 을 내주고, 확정은 **key 로만** 받는다. **클라이언트가 준 URL 을 그대로 저장하면 외부 주소를 심을 수 있다.** (`module/chat`, `module/profile`, `module/echo` 가 같은 패턴)
 
 ### 실시간 (WebSocket / STOMP)
 
@@ -437,7 +437,8 @@ class MemberServiceTest : BehaviorSpec({
 - [ ] `build.gradle.kts` 를 만든다 (아래 템플릿). `settings.gradle.kts` 가 자동 등록한다
 - [ ] **`app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 를 추가한다.** 빠뜨리면 앱에 아예 안 실린다
 - [ ] 4계층 패키지(`api`/`application`/`domain`/`infrastructure`)를 먼저 만든다
-- [ ] 다른 모듈이 써야 하는 인터페이스/이벤트는 `core` 에
+- [ ] 다른 모듈이 써야 하는 인터페이스/이벤트는 계약 모듈 `module/<name>-api` 에 (`build.gradle.kts` 에 `kotlin.jvm` 플러그인만, 의존성 0). 인프라가 소유하는 계약이거나 소유자가 애매하면 `core`
+- [ ] 소비하는 쪽 `build.gradle.kts` 에 **실제로 쓰는 `*-api` 만** 추가한다. 계약 모듈은 `app/api` 에 등록하지 않는다
 - [ ] 저장소는 포트(domain) → 어댑터(infrastructure) 순
 - [ ] Swagger 는 `{Domain}API` 인터페이스로 분리
 - [ ] 스키마가 늘면 새 Flyway `V{n}__*.sql`
@@ -456,7 +457,8 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":core"))
+    implementation(project(":core"))          // 캐시·브로드캐스터 등 인프라 계약을 쓸 때만
+    implementation(project(":module:<name>-api"))   // 자기 계약 모듈
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:kafka"))

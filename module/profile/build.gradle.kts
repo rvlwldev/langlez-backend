@@ -9,7 +9,9 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":core"))
+    implementation(project(":module:member-api"))
+    implementation(project(":module:relationship-api"))
+    implementation(project(":module:attachment-api"))
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:kafka"))

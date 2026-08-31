@@ -2,7 +2,7 @@ package com.langlez.attachment.application
 
 import com.langlez.attachment.domain.Attachment
 import com.langlez.attachment.domain.AttachmentRepository
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec

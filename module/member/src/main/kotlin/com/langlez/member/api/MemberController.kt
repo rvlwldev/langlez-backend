@@ -1,7 +1,7 @@
 package com.langlez.member.api
 
 import com.langlez.annotation.MemberId
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.api.request.MemberUpdateFcmTokenRequest
 import com.langlez.member.api.request.MemberUpdateHandleRequest

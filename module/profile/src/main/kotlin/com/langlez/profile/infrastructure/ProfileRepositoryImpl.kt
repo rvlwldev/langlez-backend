@@ -1,6 +1,6 @@
 package com.langlez.profile.infrastructure
 
-import com.langlez.core.MemberQuery
+import com.langlez.member.contract.MemberQuery
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository

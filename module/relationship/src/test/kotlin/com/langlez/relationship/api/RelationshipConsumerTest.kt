@@ -2,10 +2,10 @@ package com.langlez.relationship.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.langlez.core.BlockQuery
 import com.langlez.core.MessageDeduplicator
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
+import com.langlez.relationship.contract.BlockQuery
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.domain.Report
 import io.kotest.assertions.throwables.shouldThrow

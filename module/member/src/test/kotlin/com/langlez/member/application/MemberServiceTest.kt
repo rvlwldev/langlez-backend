@@ -1,9 +1,9 @@
 package com.langlez.member.application
 
-import com.langlez.core.OnlineTracker
-import com.langlez.core.Storage
-import com.langlez.core.event.member.MemberWithdrawnEvent
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberWithdrawnEvent
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.MemberSuspendHistory

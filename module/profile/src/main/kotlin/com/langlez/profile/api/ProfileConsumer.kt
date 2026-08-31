@@ -1,7 +1,7 @@
 package com.langlez.profile.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.event.member.MemberCreatedEvent
+import com.langlez.member.contract.MemberCreatedEvent
 import com.langlez.profile.application.ProfileService
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component

@@ -1,5 +1,6 @@
 package com.langlez.chat.api
 
+import com.langlez.attachment.contract.Storage
 import com.langlez.chat.api.request.ChatMessageSendRequest
 import com.langlez.chat.api.request.ChatReportRequest
 import com.langlez.chat.api.request.ChatRoomCreateRequest
@@ -8,7 +9,6 @@ import com.langlez.chat.application.ChatService
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomSummary
-import com.langlez.core.Storage
 import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec

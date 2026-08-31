@@ -1,7 +1,7 @@
 package com.langlez.member.application
 
-import com.langlez.core.OnlineTracker
-import com.langlez.core.event.member.MemberCreatedEvent
+import com.langlez.member.contract.MemberCreatedEvent
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import org.springframework.context.ApplicationEventPublisher

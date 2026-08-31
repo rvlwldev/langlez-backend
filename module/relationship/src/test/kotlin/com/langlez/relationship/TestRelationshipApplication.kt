@@ -1,6 +1,6 @@
 package com.langlez.relationship
 
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan

@@ -1,6 +1,6 @@
 package com.langlez.profile.api
 
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.profile.application.ProfileService
 import com.langlez.annotation.MemberId
 import jakarta.validation.Valid

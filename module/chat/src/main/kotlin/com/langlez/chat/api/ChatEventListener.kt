@@ -1,9 +1,9 @@
 package com.langlez.chat.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.chat.infrastructure.jpa.ChatOutBoxRepository
 import com.langlez.chat.infrastructure.outbox.ChatOutBox
-import com.langlez.core.event.chat.ChatUserReportedEvent
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase.BEFORE_COMMIT
 import org.springframework.transaction.event.TransactionalEventListener

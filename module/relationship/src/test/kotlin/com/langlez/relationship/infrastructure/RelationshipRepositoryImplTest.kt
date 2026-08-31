@@ -1,7 +1,7 @@
 package com.langlez.relationship.infrastructure
 
-import com.langlez.core.BlockQuery
-import com.langlez.core.FollowQuery
+import com.langlez.relationship.contract.BlockQuery
+import com.langlez.relationship.contract.FollowQuery
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
@@ -173,7 +173,7 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
             }
 
             Then("FollowQuery 포트도 같은 숫자를 한 번에 돌려준다") {
-                follows.counts(me) shouldBe FollowQuery.Counts(followers = 3L, followings = 2L)
+                follows.counts(me) shouldBe FollowQuery.CountInfo(followers = 3L, followings = 2L)
             }
 
             Then("언팔로우하면 카운트가 바로 줄어든다") {

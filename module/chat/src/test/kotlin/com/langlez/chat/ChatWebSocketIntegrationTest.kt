@@ -1,7 +1,7 @@
 package com.langlez.chat
 
 import com.langlez.core.MessageBroadcaster
-import com.langlez.core.OnlineTracker
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.utility.JwtTokenProvider
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow

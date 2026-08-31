@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -18,8 +18,8 @@ class ProfileImageConfirmTest : BehaviorSpec({
     val repo = mockk<ProfileRepository>()
     val storage = mockk<Storage>()
     val locker = mockk<ProfileImageLocker>()
-    val follows = mockk<com.langlez.core.FollowQuery>(relaxed = true)
-    val members = mockk<com.langlez.core.MemberQuery>(relaxed = true)
+    val follows = mockk<com.langlez.relationship.contract.FollowQuery>(relaxed = true)
+    val members = mockk<com.langlez.member.contract.MemberQuery>(relaxed = true)
     val service = ProfileService(repo, storage, locker, follows, members)
 
     Given("업로드 URL 을 발급하면") {

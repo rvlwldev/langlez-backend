@@ -1,7 +1,7 @@
 package com.langlez.relationship.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.event.relationship.MemberFollowedEvent
+import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.infrastructure.jpa.RelationshipOutBoxRepository
 import com.langlez.relationship.infrastructure.outbox.RelationshipOutBox
 import io.kotest.core.spec.style.BehaviorSpec

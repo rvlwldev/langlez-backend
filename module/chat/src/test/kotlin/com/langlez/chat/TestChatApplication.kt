@@ -1,7 +1,7 @@
 package com.langlez.chat
 
-import com.langlez.core.BlockQuery
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
+import com.langlez.relationship.contract.BlockQuery
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan

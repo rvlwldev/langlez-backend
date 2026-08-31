@@ -1,7 +1,7 @@
 package com.langlez.profile
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.event.member.MemberCreatedEvent
+import com.langlez.member.contract.MemberCreatedEvent
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository

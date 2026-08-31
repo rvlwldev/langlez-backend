@@ -30,7 +30,7 @@ class ProfileRepositoryImplTest : BehaviorSpec({
     val profileJpa = mockk<ProfileJpaRepository>()
     val imageJpa = mockk<ProfileImageJpaRepository>()
     val dsl = mockk<JPAQueryFactory>()
-    val members = mockk<com.langlez.core.MemberQuery>()
+    val members = mockk<com.langlez.member.contract.MemberQuery>()
 
     val repository: ProfileRepository = ProfileRepositoryImpl(
         profileJpa = profileJpa,

@@ -1,8 +1,8 @@
 package com.langlez.profile.application
 
-import com.langlez.core.FollowQuery
-import com.langlez.core.MemberQuery
-import com.langlez.core.Storage
+import com.langlez.relationship.contract.FollowQuery
+import com.langlez.member.contract.MemberQuery
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse

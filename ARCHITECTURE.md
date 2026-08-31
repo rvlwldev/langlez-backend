@@ -196,7 +196,7 @@ sequenceDiagram
     Note over S,F: 팔로우 관계는 저장하지 않는다 — 알림만 만든다
 ```
 
-**notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `core.FollowQuery` 포트로 조회한다.
+**notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `relationship-api` 의 `FollowQuery` 포트로 조회한다.
 
 **언팔로우 이벤트는 없다.** `unfollow` 는 `member_follows` 행만 지우고 이벤트를 내지 않는다. 지금 소비할 데가 없다.
 
@@ -282,7 +282,7 @@ sequenceDiagram
     Note over C,S: 역직렬화도 try 안에 있다 — 깨진 페이로드를 밖에서 풀면<br/>중복 표시만 남고 그 메시지가 영영 사라진다
 ```
 
-**잔여 액세스 토큰은 여기서 추가로 블랙리스트에 넣지 않는다.** `JwtAuthenticationFilter` 가 매 요청 `MemberStatusQuery` 로 회원 상태를 확인해 `WITHDRAWN` 이면 이미 막는다(PR #3). 이 검사는 탈퇴 시점 이후 발급된 토큰이 없으므로 예외 없이 전부 걸린다 — 개별 토큰을 블랙리스트에 추가하려면 토큰 문자열이나 jti 가 필요한데 탈퇴 이벤트에는 없고, 그걸 만들기 위한 비용(리프레시 토큰 저장소 역추적 또는 별도 jti 저장)이 이미 막혀 있는 구멍을 다시 막는 값을 넘는다.
+**잔여 액세스 토큰은 여기서 추가로 블랙리스트에 넣지 않는다.** `JwtAuthenticationFilter` 가 매 요청 `MemberQuery.findStatus` 로 회원 상태를 확인해 `WITHDRAWN` 이면 이미 막는다(PR #3). 이 검사는 탈퇴 시점 이후 발급된 토큰이 없으므로 예외 없이 전부 걸린다 — 개별 토큰을 블랙리스트에 추가하려면 토큰 문자열이나 jti 가 필요한데 탈퇴 이벤트에는 없고, 그걸 만들기 위한 비용(리프레시 토큰 저장소 역추적 또는 별도 jti 저장)이 이미 막혀 있는 구멍을 다시 막는 값을 넘는다.
 
 ---
 
@@ -290,8 +290,8 @@ sequenceDiagram
 
 | 대상 | 상태 |
 |---|---|
-| `core/event/echo/EchoPostLikedEvent` | DTO 만 있고 발행하는 코드가 없다 |
-| `core/event/echo/EchoCommentCreatedEvent` | 〃 |
+| `echo-api` 의 `EchoPostLikedEvent` | DTO 만 있고 발행하는 코드가 없다 |
+| `echo-api` 의 `EchoCommentCreatedEvent` | 〃 |
 | `echo_event_outbox` (+ 엔티티·저장소) | 쓰는 코드도 스케줄러도 없는 빈 스캐폴딩 |
 
 좋아요·댓글이 알림으로 이어지지 않는다.
@@ -419,11 +419,11 @@ flowchart TD
 |---|---|---|
 | 접속 핑 (30초 간격) | Redis 버킷 직결 | 고빈도·저가치. 브로커 왕복 비용이 가치보다 크다 |
 | 화면 보는 중 상태 | Redis | 휘발성 |
-| 팔로우 그래프 조회 | `core.FollowQuery` 포트 | 이벤트로 복제하면 두 벌이 어긋난다. 언팔로우 이벤트도 없어 복제본은 늘기만 한다 |
-| 차단 여부 판정 | `core.BlockQuery` 포트 | 〃 |
-| 회원 상태 조회 | `core.MemberStatusQuery` 포트 | 매 요청 필요. 응답을 기다려야 한다 |
+| 팔로우 그래프 조회 | `relationship-api` 의 `FollowQuery` 포트 | 이벤트로 복제하면 두 벌이 어긋난다. 언팔로우 이벤트도 없어 복제본은 늘기만 한다 |
+| 차단 여부 판정 | `relationship-api` 의 `BlockQuery` 포트 | 〃 |
+| 회원 상태 조회 | `member-api` 의 `MemberQuery.findStatus` | 매 요청 필요. 응답을 기다려야 한다 |
 
-**응답을 기다려야 하는 조회는 `core` 포트, 상태 변경 전파는 Kafka** 가 기준선이다.
+**응답을 기다려야 하는 조회는 소유 모듈의 `{도메인}-api` 포트, 상태 변경 전파는 Kafka** 가 기준선이다.
 
 ---
 
@@ -482,7 +482,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A["1. 이벤트 DTO 를 core/event/{domain}/ 에<br/>그 발생 건을 유일하게 가리키는 id 를 넣는다 (멱등 키)"] --> B["2. 발행 측<br/>Service 에서 publishEvent<br/>EventListener 가 BEFORE_COMMIT 으로 아웃박스 행 저장<br/>OutBoxScheduler + OutBoxHistoryScheduler"]
+    A["1. 이벤트 DTO 를 발행 모듈의 module/{domain}-api 에<br/>그 발생 건을 유일하게 가리키는 id 를 넣는다 (멱등 키)"] --> B["2. 발행 측<br/>Service 에서 publishEvent<br/>EventListener 가 BEFORE_COMMIT 으로 아웃박스 행 저장<br/>OutBoxScheduler + OutBoxHistoryScheduler"]
     B --> C["3. 수신 측<br/>api/{Domain}Consumer.kt 에 @KafkaListener<br/>중복 검사 → try 역직렬화·처리 → catch 표시 되돌림·throw"]
     C --> D["4. 사용자에게 보이면<br/>i18n 키를 messages_*.properties 12개 전부에<br/>title 에는 키를, data 에는 id 를"]
 ```

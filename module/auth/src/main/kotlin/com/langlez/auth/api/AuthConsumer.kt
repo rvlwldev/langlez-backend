@@ -3,7 +3,7 @@ package com.langlez.auth.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.auth.application.AuthService
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.event.member.MemberWithdrawnEvent
+import com.langlez.member.contract.MemberWithdrawnEvent
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
 

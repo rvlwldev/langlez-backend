@@ -1,10 +1,10 @@
 package com.langlez.notification.api
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.event.chat.ChatMessageSentEvent
-import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.notification.application.NotificationService
+import com.langlez.relationship.contract.MemberFollowedEvent
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.Runs

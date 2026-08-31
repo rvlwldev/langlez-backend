@@ -22,6 +22,9 @@ dependencies {
 
     developmentOnly(libs.development.springboot.devtools)
 
+    // *-api 계약 모듈은 따로 등록하지 않는다. 빈이 없는 인터페이스·DTO 뿐이고,
+    // 각 도메인 모듈이 implementation 으로 물어 런타임 클래스패스에 그대로 올라온다.
+    testImplementation(project(":module:member-api"))
     testImplementation(project(":common"))
     testImplementation(project(":infra:redis"))
     testImplementation(libs.dependency.redisson)

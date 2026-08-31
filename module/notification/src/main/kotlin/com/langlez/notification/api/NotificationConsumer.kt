@@ -1,10 +1,10 @@
 package com.langlez.notification.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.event.chat.ChatMessageSentEvent
-import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.notification.application.NotificationService
+import com.langlez.relationship.contract.MemberFollowedEvent
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
 

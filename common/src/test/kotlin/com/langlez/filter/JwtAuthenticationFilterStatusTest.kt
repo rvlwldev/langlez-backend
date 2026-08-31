@@ -1,8 +1,8 @@
 package com.langlez.filter
 
-import com.langlez.core.MemberStatusQuery
 import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberQuery
 import com.langlez.utility.JwtTokenProvider
 import io.jsonwebtoken.Claims
 import io.kotest.core.spec.style.BehaviorSpec
@@ -30,7 +30,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
     val jwt = mockk<JwtTokenProvider>()
     val blacklist = mockk<TokenBlacklist>()
-    val members = mockk<MemberStatusQuery>()
+    val members = mockk<MemberQuery>()
     val resolver = mockk<HandlerExceptionResolver>(relaxed = true)
 
     val filter = JwtAuthenticationFilter(jwt, blacklist, members, resolver)
@@ -79,7 +79,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
         When("회원이 ACTIVE 면") {
             val req = request()
-            every { members.findStatus(1L) } returns MemberStatusQuery.Status.ACTIVE
+            every { members.findStatus(1L) } returns MemberQuery.Status.ACTIVE
 
             Then("체인을 그대로 통과한다") {
                 filter.doFilter(req, res, chain)
@@ -91,7 +91,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
         When("회원이 SUSPENDED 면") {
             val req = request()
-            every { members.findStatus(1L) } returns MemberStatusQuery.Status.SUSPENDED
+            every { members.findStatus(1L) } returns MemberQuery.Status.SUSPENDED
 
             Then("403 member.suspended 로 거부한다") {
                 val e = rejection(req)
@@ -109,7 +109,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
         When("회원이 WITHDRAWN 이면") {
             val req = request()
-            every { members.findStatus(1L) } returns MemberStatusQuery.Status.WITHDRAWN
+            every { members.findStatus(1L) } returns MemberQuery.Status.WITHDRAWN
 
             Then("403 member.withdrawn 로 거부한다") {
                 val e = rejection(req)
@@ -135,7 +135,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
         // 엔드포인트가 아직 없다. 여기서 막으면 신규 가입자가 전부 잠긴다.
         When("회원이 CREATED 면") {
             val req = request()
-            every { members.findStatus(1L) } returns MemberStatusQuery.Status.CREATED
+            every { members.findStatus(1L) } returns MemberQuery.Status.CREATED
 
             Then("막지 않고 통과시킨다") {
                 filter.doFilter(req, res, chain)
@@ -149,7 +149,7 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
         When("로그아웃을 요청하면") {
             val req = request(uri = "/api/v1/auth/logout")
-            every { members.findStatus(1L) } returns MemberStatusQuery.Status.SUSPENDED
+            every { members.findStatus(1L) } returns MemberQuery.Status.SUSPENDED
 
             Then("리프레시 토큰과 기기 바인딩을 정리할 수 있게 통과시킨다") {
                 filter.doFilter(req, res, chain)

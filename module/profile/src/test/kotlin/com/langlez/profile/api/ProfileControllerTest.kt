@@ -3,7 +3,7 @@ package com.langlez.profile.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.GlobalRestControllerAdvice
 import com.langlez.annotation.MemberIdResolver
-import com.langlez.core.MemberQuery
+import com.langlez.member.contract.MemberQuery
 import com.langlez.exception.LanglezException
 import com.langlez.profile.application.ProfileService
 import com.langlez.profile.domain.Profile
@@ -132,7 +132,7 @@ class ProfileControllerTest : BehaviorSpec({
     Given("이미지 업로드 URL 발급 시") {
         When("정상적인 contentType으로 요청하면") {
             every { service.generateImageUploadUrl(1L, "photo.jpg", "image/jpeg") } returns
-                com.langlez.core.Storage.PresignedResult(key = "profiles/photo.jpg", presigned = "https://cdn/upload/photo.jpg")
+                com.langlez.attachment.contract.Storage.PresignedResult(key = "profiles/photo.jpg", presigned = "https://cdn/upload/photo.jpg")
 
             Then("업로드 URL이 반환된다") {
                 val result = controller.getImageUploadUrl(1L, "photo.jpg", "image/jpeg")

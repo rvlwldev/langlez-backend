@@ -2,11 +2,11 @@ package com.langlez.notification.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.MessageBroadcaster
-import com.langlez.core.Notificator
-import com.langlez.core.OnlineTracker
-import com.langlez.core.PushTokenQuery
-import com.langlez.core.event.chat.ChatMessageSentEvent
-import com.langlez.core.event.relationship.MemberFollowedEvent
+import com.langlez.notification.contract.Notificator
+import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.PushTokenQuery
+import com.langlez.chat.contract.ChatMessageSentEvent
+import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
