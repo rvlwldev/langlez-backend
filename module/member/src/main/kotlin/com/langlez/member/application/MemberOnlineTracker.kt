@@ -1,6 +1,6 @@
 package com.langlez.member.application
 
-import com.langlez.core.OnlineTracker
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.redisson.api.RedissonClient

@@ -1,7 +1,7 @@
 package com.langlez.member.api
 
 import com.langlez.annotation.MemberId
-import com.langlez.core.OnlineTracker
+import com.langlez.member.contract.OnlineTracker
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping

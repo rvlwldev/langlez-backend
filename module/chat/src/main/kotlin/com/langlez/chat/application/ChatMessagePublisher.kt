@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
-import com.langlez.core.OnlineTracker
-import com.langlez.core.event.chat.ChatMessageSentEvent
+import com.langlez.member.contract.OnlineTracker
+import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.redis.distributedLock.DistributedLock
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.core.KafkaTemplate

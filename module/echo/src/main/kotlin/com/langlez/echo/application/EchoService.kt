@@ -1,10 +1,10 @@
 package com.langlez.echo.application
 
-import com.langlez.core.BlockQuery
-import com.langlez.core.FollowQuery
-import com.langlez.core.Storage
-import com.langlez.core.event.echo.EchoCommentCreatedEvent
-import com.langlez.core.event.echo.EchoPostLikedEvent
+import com.langlez.relationship.contract.BlockQuery
+import com.langlez.relationship.contract.FollowQuery
+import com.langlez.attachment.contract.Storage
+import com.langlez.echo.contract.EchoCommentCreatedEvent
+import com.langlez.echo.contract.EchoPostLikedEvent
 import com.langlez.echo.domain.Comment
 import com.langlez.echo.domain.EchoRepository
 import com.langlez.echo.domain.Hashtag

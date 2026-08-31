@@ -68,19 +68,22 @@ docker compose -p langlez -f docker/postgresql.yml -f docker/redis.yml \
 ### 모듈 구조
 
 ```
-core            프레임워크 없는 순수 계약(포트 인터페이스 + 이벤트 DTO). 의존성 0
+core            소유자가 인프라인 순수 계약. 의존성 0
 common          웹·보안·예외·필터·i18n 공용
 infra/rdb       JPA + QueryDSL + Outbox 베이스 + Flyway
 infra/redis     Redisson, 캐시 어댑터, 분산 락, pub/sub 브로드캐스터
 infra/kafka     프로듀서·컨슈머 설정, DLT
 module/*        도메인 모듈 (api / application / domain / infrastructure 4계층)
+module/*-api    계약 모듈. 그 도메인이 남에게 내주는 포트·이벤트만. 의존성 0
 app/api         조립 + 실행
 ```
 
 `settings.gradle.kts` 가 `infra/`, `module/` 하위를 자동 스캔한다. `build.gradle.kts` 만 만들면 서브프로젝트로 등록된다.
 다만 **등록만으로는 앱이 그 모듈을 로드하지 않는다** — `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다.
+**계약 모듈(`module/*-api`)만 예외다** — 빈이 없어 소비 모듈이 물면 런타임 클래스패스에 그대로 올라온다.
 
 현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `chat`, `notification`, `relationship`, `echo`, `wave`.
+현재 계약 모듈: `member-api`, `relationship-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
 
 ### 4계층
 
@@ -103,32 +106,43 @@ api ──▶ application ──▶ domain ◀── infrastructure
 - `domain` 은 다른 계층을 import 하지 않는다. 프레임워크 의존은 영속성/감사 애노테이션까지만.
 - `application` 은 `domain` 의 포트 인터페이스만 안다. `infrastructure` 구현 클래스를 직접 참조하지 않는다.
 - `infrastructure` 가 `domain` 인터페이스를 구현하며 방향을 뒤집는다.
-- 모듈 간에는 서로를 직접 참조하지 않는다. `core` 의 포트와 Kafka 이벤트를 거친다.
+- 모듈 간에는 서로를 직접 참조하지 않는다. 상대 모듈의 `{도메인}-api` 계약(포트·이벤트)만 본다.
 
 ### 통신 규칙
 
 | 목적 | 수단 |
 |---|---|
-| 모듈 간 상태 변경 전파, 유실되면 안 되는 것 | **Kafka** (아웃박스 경유) |
-| 응답을 기다려야 하는 조회 | **`core` 포트** |
+| 모듈 간 상태 변경 전파, 유실되면 안 되는 것 | **Kafka** (아웃박스 경유). 이벤트 DTO 는 발행 모듈의 `{도메인}-api` 에 |
+| 응답을 기다려야 하는 조회 | **소유 모듈의 `{도메인}-api` 포트** |
 | 접속 중인 사용자에게 실시간 전달 | **`core.MessageBroadcaster`** → Redis pub/sub → WebSocket |
 | 고빈도 하트비트 | **Redis 직결** (Kafka 금지) |
 
-현재 `core` 포트 (`core/src/main/kotlin/com/langlez/core/`):
+**계약을 어디에 두는지의 기준은 소유자다.** 도메인이 구현하고 그 데이터를 소유하면 `module/{도메인}-api`,
+`infra/*` 가 구현하거나 소유자가 하나로 정해지지 않으면 `core`.
 
-| 포트 | 역할 | 구현 |
-|---|---|---|
-| `BlockQuery` | 차단 관계 확인 | `relationship`(`BlockQueryImpl`) |
-| `FollowQuery` | 팔로잉 id 목록 | `relationship`(`FollowQueryImpl`) |
-| `PushTokenQuery` | FCM 토큰 조회 | `member`(`PushTokenQueryImpl`) |
-| `MemberStatusQuery` | 계정 상태 조회 (매 요청 상태 검사) | `member`(`MemberStatusQueryImpl`) |
-| `Storage` | presign / key 확정 | `attachment` |
-| `OnlineTracker` | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
-| `CacheProvider` / `Cache` | 캐시 획득·조회·무효화 | `infra/redis`(`ResilientCacheProvider`) |
-| `Notificator` | 알림 발송 | `notification` |
-| `MessageBroadcaster` | 토픽 팬아웃 | `infra/redis`(`RedisMessageBroadcaster`) |
-| `TokenBlacklist` | 액세스 토큰 무효화 | `infra/redis`(`TokenBlacklistImpl`) |
-| `SubscriptionAuthorizer` | STOMP 구독 목적지 인가 판정 | `chat`·`wave`·`notification` 각 모듈 |
+| 계약 | 있는 곳 (패키지) | 역할 | 구현 |
+|---|---|---|---|
+| `MemberQuery` | `member-api` (`com.langlez.member.contract`) | 계정 정보 + 상태 조회 | `member`(`MemberQueryImpl`) |
+| `PushTokenQuery` | 〃 | FCM 토큰 조회 | `member`(`MemberQueryImpl`) |
+| `OnlineTracker` | 〃 | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
+| `Member{Created,HandleChanged,Withdrawn}Event` | 〃 | 회원 도메인 이벤트 | — |
+| `BlockQuery` | `relationship-api` | 차단 관계 확인 | `relationship`(`RelationshipQueryImpl`) |
+| `FollowQuery` | 〃 | 팔로잉 id 목록·카운트 | `relationship`(`RelationshipQueryImpl`) |
+| `MemberFollowedEvent` | 〃 | 팔로우 이벤트 | — |
+| `Storage` | `attachment-api` | presign / key 확정 | `attachment` |
+| `Notificator` | `notification-api` | 알림 발송 | `notification` |
+| `Chat{MessageSent,UserReported}Event` | `chat-api` | 채팅 도메인 이벤트 | — |
+| `Echo{PostLiked,CommentCreated}Event` | `echo-api` | 피드 도메인 이벤트 | — |
+| `CacheProvider` / `Cache` | `core` | 캐시 획득·조회·무효화 | `infra/redis`(`ResilientCacheProvider`) |
+| `MessageBroadcaster` | 〃 | 토픽 팬아웃 | `infra/redis`(`RedisMessageBroadcaster`) |
+| `MessageDeduplicator` | 〃 | 카프카 중복 처리 방지 | `infra/redis`(`RedisMessageDeduplicator`) |
+| `TokenBlacklist` | 〃 | 액세스 토큰 무효화 | `infra/redis`(`TokenBlacklistImpl`) |
+| `SubscriptionAuthorizer` | 〃 | STOMP 구독 목적지 인가 판정 | `chat`·`wave`·`notification` 각 모듈 |
+
+`SubscriptionAuthorizer` 가 `core` 에 남은 이유: 방향이 뒤집혀 있다. `common` 이 소비하고 도메인들이 구현하니 어느 `{도메인}-api` 에도 맞지 않는다.
+
+**`common` 이 `module/member-api` 를 의존한다.** `JwtAuthenticationFilter` 가 매 요청 계정 상태를 본다.
+원래도 있던 의존이 `core` 라는 이름 뒤에 가려져 있었을 뿐이고, 계약 모듈은 의존성이 0 이라 순환이 없다.
 
 아웃박스가 필요한 이유: 저장과 이벤트 발행이 한 트랜잭션에 묶여야 "저장은 됐는데 이벤트는 유실"이 원천 차단된다. 단, **가장 빈번한 쓰기(채팅 메시지)는 별도 아웃박스 행 대신 문서의 `published` 플래그**로 처리해 쓰기 증폭을 없앴다.
 
@@ -155,9 +169,9 @@ Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.s
 `settings.gradle.kts`, `build.gradle.kts`, `app/api/src/main/kotlin/com/langlez/MainApplication.kt`, `app/api/src/main/resources/application.yml`.
 모듈 자동 스캔, Virtual Thread 활성화, JPA/Mongo 리포지토리 자동 설정을 왜 제외했는지를 확인한다.
 
-**2단계 — `core` 의 계약**
-`core/src/main/kotlin/com/langlez/core/`.
-모듈 간 결합이 전부 이 인터페이스들을 통과한다. 이벤트 DTO 는 `core/event/{chat,echo,member}/`.
+**2단계 — 계약**
+`module/*-api/src/main/kotlin/com/langlez/{domain}/contract/` 와 `core/src/main/kotlin/com/langlez/core/`.
+모듈 간 결합이 전부 이 인터페이스들을 통과한다. 도메인이 소유하는 포트·이벤트는 `{도메인}-api`, 인프라가 소유하는 것만 `core` 다.
 
 **3단계 — 공용 웹·보안**
 `common/src/main/kotlin/com/langlez/`: `filter/JwtAuthenticationFilter.kt`, `config/WebSecurityConfiguration.kt`, `utility/JwtTokenProvider.kt`, `annotation/MemberId.kt`(+`MemberIdResolver`), `GlobalRestControllerAdvice.kt`, `exception/LanglezException.kt`.
@@ -251,7 +265,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 - **C. echo** — 트위터형 피드 (글·타임라인·좋아요·댓글·해시태그·이미지)
 - **D. wave** — 음성방 + **사라지는 채팅** (Redis 링버퍼만, 저장 안 함)
 
-**팔로우 그래프 연결:** `core.FollowQuery` 포트 신설로 결정. relationship 이 `FollowQueryImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
+**팔로우 그래프 연결:** `FollowQuery` 포트 신설로 결정(지금은 `relationship-api`). relationship 이 `RelationshipQueryImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
 
 **WebSocket 구독 인가:** 모듈마다 인터셉터를 달던 구조는 폐기했다. 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아 실제로 뚫렸다. 지금은 `common` 의 `WebSocketSubscriptionGate` 가 모든 SUBSCRIBE 를 받아 `core.SubscriptionAuthorizer` 중 `supports` 가 참인 것에게 묻고 **하나도 없으면 거부한다**(기본 거부). 각 모듈은 `{Domain}SubscriptionAuthorizer` 로 자기 토픽 판정만 선언한다. `WaveWebSocketConfiguration` 의 참여자 검사 인터셉터는 삭제됐고 지금은 엔드포인트 등록만 한다.
 
@@ -269,7 +283,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `MemberRepositoryImpl` 핸들 변경 시 구 핸들 캐시 오염 | 읽기 경로에서 재검증 — 캐시로 찾은 회원의 `handle` 이 요청 키와 다르면 버리고 DB 조회 후 evict |
 | `AttachmentRepositoryImpl.deleteAll` N+1 단건 삭제 | `deleteAllInBatch` (연관이 없어 고아 행 위험 없음) |
 | `Attachment.key` 유니크 인덱스가 MySQL 3072 byte 한계 초과 | **해당 없음.** PostgreSQL + Flyway 로 확정돼 지적 전제가 사라졌다 |
-| 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `core.MemberStatusQuery` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
+| 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `MemberQuery.findStatus` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
 | 상태 검사가 보는 캐시를 커밋 전 값이 덮어씀 | read-through 적재를 `Cache.putIfAbsent` 로 바꿔 쓰기 경로만 덮어쓰게 했다. 캐시 히트 시 되쓰기(TTL 무한 갱신)도 제거. 회귀 방지는 `MemberStatusCacheRaceTest` |
 
 ---
@@ -288,7 +302,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 2. **FCM 푸시 제목이 i18n 키 원문으로 OS 배너에 그대로 렌더된다**
    `NotificationService.kt:82,98` 이 `title` 에 메시지 키(`notification.chat-message.title`, `notification.member-followed`)를 넣는다. **인앱 브로드캐스트에는 맞는 설계다** — 클라이언트가 키를 받아 번역한다. 그런데 같은 값이 `:66` `push.send(...)` → `FcmPushSender.kt:44` `.setNotification(...)` 으로 들어가고, 그렇게 만든 FCM 메시지는 **OS 가 앱 코드 개입 없이 배너를 그린다.** 번역할 기회가 없다.
-   → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `core` 포트에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
+   → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `MemberQuery` 에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
 
 3. **MongoDB 가 잠깐만 응답하지 않아도 앱 전체가 부팅하지 못한다**
    `application.yml:41` 의 `spring.data.mongodb.auto-index-creation: true` 가 `MongoTemplate` **빈 생성 시점**에 `ChatMessage` 의 인덱스(`@CompoundIndex` ×3, `@Indexed` ×1)를 실제로 Mongo 에 쏜다. 응답이 없으면 드라이버 기본 `serverSelectionTimeoutMS`(30초)만큼 블로킹한 뒤 빈 생성이 실패하고, `chatMessageMongoRepository` → `chatService` → `chatController` 로 의존 체인이 무너져 **Spring 컨텍스트 refresh 자체가 취소**된다. `chat` 은 `app/api` 가 항상 조립하므로 회피 경로가 없다.
@@ -301,7 +315,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 6. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
 
 7. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
-   `core/event/member` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
+   `member-api` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
 
 ### 5.2 중간
 
@@ -336,7 +350,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 ### 5.4 정리 대상 (기능 영향 없음)
 
 - **`infra/mongo` 가 빈 디렉터리다** — 소스도 `build.gradle.kts` 도 없다. `MainApplication.kt:9` 주석이 존재하지 않는 이 모듈을 가리킨다. Mongo 의존은 `module/chat/build.gradle.kts` 가 직접 든다
-- **echo 아웃박스 스캐폴딩** — `EchoOutBox`·`EchoOutBoxHistory`·`EchoOutBoxRepository` 와 테이블이 있으나 쓰는 코드도 스케줄러도 없다. `core/event/echo/` 의 DTO 2종도 발행하는 코드가 없다
+- **echo 아웃박스 스캐폴딩** — `EchoOutBox`·`EchoOutBoxHistory`·`EchoOutBoxRepository` 와 테이블이 있으나 쓰는 코드도 스케줄러도 없다. `echo-api` 의 DTO 2종도 발행하는 코드가 없다
 - **`member-created` / `member-handle-changed` 컨슈머 부재** — 발행되지만 듣는 사람이 없다
 - **`EchoRepository.aggregateDailyStats` 호출자 없음** — `hashtag_daily_stat` 이 영원히 비어 있다
 - **`Post.reportCount` 증가시키는 코드 없음** — 항상 0

@@ -1,7 +1,7 @@
 package com.langlez.echo.api
 
 import com.langlez.annotation.MemberId
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.echo.api.request.EchoCommentCreateRequest
 import com.langlez.echo.api.request.EchoPostCreateRequest
 import com.langlez.echo.api.response.EchoCommentResponse

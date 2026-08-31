@@ -35,18 +35,36 @@ Kotlin / Spring Boot 3.5.8 멀티모듈 백엔드. 언어교환 모바일 앱(iO
 ## 1. 모듈 구조
 
 ```
-core            프레임워크 없는 순수 계약 (포트 인터페이스 + 이벤트 DTO). 의존성 0
+core            소유자가 인프라인 순수 계약. 의존성 0
 common          웹·보안·예외·필터·i18n 공용
 infra/rdb       JPA + QueryDSL + Outbox 베이스 + Flyway
 infra/redis     Redisson, 캐시 어댑터, 분산 락, pub/sub 브로드캐스터
 infra/kafka     프로듀서·컨슈머 설정, DLT
 module/*        도메인 모듈 (api / application / domain / infrastructure 4계층)
+module/*-api    계약 모듈. 그 도메인이 남에게 내주는 포트·이벤트만. 의존성 0
 app/api         조립 + 실행
 ```
 
 `settings.gradle.kts` 가 `infra/`·`module/` 하위를 자동 스캔한다. `build.gradle.kts` 만 만들면 서브프로젝트로 등록된다.
 
-**등록만으로는 앱이 그 모듈을 로드하지 않는다.** `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다. 빠뜨려도 컴파일과 모듈 단위 테스트는 통과하므로 조용히 넘어간다.
+**등록만으로는 앱이 그 모듈을 로드하지 않는다.** `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다. 빠뜨려도 컴파일과 모듈 단위 테스트는 통과하므로 조용히 넘어간다. **계약 모듈(`module/*-api`)은 예외로 등록하지 않는다** — 빈이 없는 인터페이스·DTO 뿐이라, 소비 모듈이 `implementation` 으로 물면 런타임 클래스패스에 그대로 올라온다.
+
+### `module/` 아래 두 종류
+
+| | 담는 것 | 의존성 | 예 |
+|---|---|---|---|
+| 도메인 모듈 `module/{name}` | 엔티티·서비스·컨트롤러. 4계층 | common·infra·필요한 `*-api` | `module/member` |
+| 계약 모듈 `module/{name}-api` | 그 도메인이 남에게 내주는 포트 인터페이스와 이벤트 DTO | **0** | `module/member-api` |
+
+**어디에 둘지의 판단 기준은 소유자다.** 그 계약을 구현하고 그 데이터를 소유하는 게 도메인 모듈이면 `{도메인}-api`, 인프라면 `core`.
+
+- **`{도메인}-api`** — 도메인이 구현하는 조회 포트(`MemberQuery`), 도메인이 발행하는 이벤트 DTO(`MemberCreatedEvent`).
+- **`core`** — `infra/*` 가 구현하는 포트(`CacheProvider`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`), 그리고 방향이 뒤집힌 것(`SubscriptionAuthorizer` 는 `common` 이 소비하고 도메인들이 구현한다 — 어느 도메인의 것도 아니다).
+- **애매하면 `core`.** 소유자가 하나로 정해지지 않는 계약을 억지로 도메인에 밀어 넣으면 그 도메인을 안 쓰는 모듈까지 끌려온다.
+
+계약 모듈의 패키지는 `com.langlez.{domain}.contract` 다. 디렉터리는 `-api` 인데 패키지가 `contract` 인 건 **도메인 모듈에 이미 `com.langlez.{domain}.api`(컨트롤러·DTO)가 있어서**다. 같은 이름을 쓰면 두 모듈에 걸친 split package 가 된다.
+
+**계약 모듈에 Spring·JPA 를 넣지 않는다.** JDK 타입만 쓴다. 의존성이 0 이어야 어느 모듈이든 순환 없이 물 수 있다.
 
 ### 4계층
 
@@ -80,20 +98,32 @@ api ──▶ application ──▶ domain ◀── infrastructure
 - `domain` 은 다른 계층을 import 하지 않는다. 프레임워크 의존은 영속성/감사 애노테이션(`@Entity`, `@CreatedDate`, `AuditingEntityListener`)까지만. 웹/HTTP 타입(`HttpStatus`, `LanglezException`)은 넣지 않는다 — 불변식은 `require` 로 던지고 변환은 application 이 한다.
 - `application` 은 `domain` 의 포트 인터페이스만 안다. `infrastructure` 구현 클래스를 직접 참조하지 않는다.
 - `infrastructure` 가 `domain` 인터페이스를 구현하며 방향을 뒤집는다.
-- 모듈 간에는 서로를 직접 참조하지 않는다. `core` 의 포트와 이벤트를 거친다.
+- 모듈 간에는 서로를 직접 참조하지 않는다. 상대 모듈의 `{도메인}-api` 계약(포트·이벤트)만 본다.
 
 ### 모듈 간 통신 수단 선택
 
 | 목적 | 수단 |
 |---|---|
-| 모듈 간 상태 변경 전파, 유실되면 안 되는 것 | **Kafka** (아웃박스 경유) |
-| 응답을 기다려야 하는 조회 | **`core` 포트** |
+| 모듈 간 상태 변경 전파, 유실되면 안 되는 것 | **Kafka** (아웃박스 경유). 이벤트 DTO 는 발행 모듈의 `{도메인}-api` 에 |
+| 응답을 기다려야 하는 조회 | **소유 모듈의 `{도메인}-api` 포트** |
 | 접속 중인 사용자에게 실시간 전달 | **`core.MessageBroadcaster`** → Redis pub/sub → WebSocket |
 | 고빈도 하트비트 | **Redis 직결** (Kafka 금지) |
 
 고빈도·저가치 신호를 브로커에 태우면 비용만 든다. 접속 핑(5초 간격)이 그랬다 — 브로커 왕복에 handle→id 조회까지 붙어 있었다. 지금은 `MemberPingController` 가 레디스 버킷에 바로 쓴다.
 
-현재 `core` 포트: `BlockQuery`, `FollowQuery`, `PushTokenQuery`, `MemberStatusQuery`, `Storage`, `OnlineTracker`, `CacheProvider`, `Notificator`, `MessageBroadcaster`, `TokenBlacklist`, `SubscriptionAuthorizer`.
+현재 계약 배치:
+
+| 모듈 | 담긴 것 |
+|---|---|
+| `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`, `SubscriptionAuthorizer` |
+| `module/member-api` | `MemberQuery`(계정 정보 + 상태), `PushTokenQuery`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
+| `module/relationship-api` | `BlockQuery`, `FollowQuery`, `MemberFollowedEvent` |
+| `module/attachment-api` | `Storage` |
+| `module/notification-api` | `Notificator` |
+| `module/chat-api` | `ChatMessageSentEvent`, `ChatUserReportedEvent` |
+| `module/echo-api` | `EchoPostLikedEvent`, `EchoCommentCreatedEvent` |
+
+**`common` 은 `module/member-api` 를 의존한다.** `JwtAuthenticationFilter` 가 매 요청 계정 상태를 보기 때문이다. 이 의존은 원래도 있었고 `core` 라는 이름 뒤에 가려져 있었을 뿐이다. 계약 모듈이 의존성 0 이라 순환은 생기지 않는다.
 
 ### 저장소 분담
 
@@ -127,6 +157,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 요청 DTO | `{Domain}{동사}{대상}Request` | `MemberUpdateHandleRequest` |
 | 응답 DTO | `{Domain}{범위}Response` | `MemberMeResponse`, `MemberPublicResponse` |
 | Outbox 스케줄러 | `{Domain}OutBoxScheduler` | `MemberOutBoxScheduler` |
+| 계약 모듈의 조회 결과 DTO | `{...}Info` | `MemberQuery.ProfileInfo`, `FollowQuery.CountInfo` |
+| 계약 모듈의 조작 결과 DTO | `{...}Result` | `Storage.PresignedResult` |
 
 주입받는 의존성은 **짧은 관용 이름**을 쓴다. 타입명을 그대로 반복하지 않는다.
 

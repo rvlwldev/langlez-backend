@@ -1,7 +1,7 @@
 package com.langlez.rdb
 
-import com.langlez.core.MemberStatusQuery
 import com.langlez.core.TokenBlacklist
+import com.langlez.member.contract.MemberQuery
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.context.annotation.Bean
@@ -21,7 +21,10 @@ class TestRdbApplication {
 
     /** 구현체는 module:member 에 있다. JwtAuthenticationFilter 가 요구하지만 이 컨텍스트엔 회원이 없다. */
     @Bean
-    fun memberStatusQuery(): MemberStatusQuery = object : MemberStatusQuery {
-        override fun findStatus(memberId: Long) = MemberStatusQuery.Status.ACTIVE
+    fun memberQuery(): MemberQuery = object : MemberQuery {
+        override fun findIdByHandle(handle: String): Long? = null
+        override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = null
+        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberQuery.ProfileInfo>()
+        override fun findStatus(memberId: Long) = MemberQuery.Status.ACTIVE
     }
 }

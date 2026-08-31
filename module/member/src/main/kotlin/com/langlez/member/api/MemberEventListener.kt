@@ -1,9 +1,9 @@
 package com.langlez.member.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.core.event.member.MemberCreatedEvent
-import com.langlez.core.event.member.MemberHandleChangedEvent
-import com.langlez.core.event.member.MemberWithdrawnEvent
+import com.langlez.member.contract.MemberCreatedEvent
+import com.langlez.member.contract.MemberHandleChangedEvent
+import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
 import com.langlez.member.infrastructure.outbox.MemberOutBox
 import org.springframework.stereotype.Component

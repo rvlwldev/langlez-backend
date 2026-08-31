@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":infra:kafka"))
 
     implementation(project(":module:member"))
+    implementation(project(":module:member-api"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)

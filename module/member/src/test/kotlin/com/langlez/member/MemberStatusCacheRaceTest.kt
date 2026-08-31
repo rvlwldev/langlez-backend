@@ -1,6 +1,6 @@
 package com.langlez.member
 
-import com.langlez.core.MemberStatusQuery
+import com.langlez.member.contract.MemberQuery
 import com.langlez.core.cache.Cache
 import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
@@ -113,7 +113,7 @@ class MemberStatusCacheRaceTest : BehaviorSpec() {
     lateinit var memberRepository: MemberRepository
 
     @Autowired
-    lateinit var memberStatusQuery: MemberStatusQuery
+    lateinit var memberStatusQuery: MemberQuery
 
     @Autowired
     lateinit var caches: CacheProvider
@@ -168,7 +168,7 @@ class MemberStatusCacheRaceTest : BehaviorSpec() {
                 reader.join(10_000)
 
                 Then("상태 검사는 SUSPENDED 를 본다") {
-                    memberStatusQuery.findStatus(m.id) shouldBe MemberStatusQuery.Status.SUSPENDED
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberQuery.Status.SUSPENDED
                 }
 
                 Then("캐시에 남은 값도 SUSPENDED 다") {

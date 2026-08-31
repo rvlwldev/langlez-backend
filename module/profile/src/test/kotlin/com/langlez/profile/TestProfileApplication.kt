@@ -1,6 +1,8 @@
 package com.langlez.profile
 
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
+import com.langlez.member.contract.MemberQuery
+import com.langlez.relationship.contract.FollowQuery
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -20,43 +22,39 @@ class TestProfileApplication {
 
     /** attach 는 key 를 조회용 URL 로 바꿔주는 계약이다. null 을 돌려주면 확정 흐름이 통째로 깨진다. */
     @Bean
-    fun storage(): com.langlez.core.Storage = object : com.langlez.core.Storage {
+    fun storage(): Storage = object : Storage {
         override fun presign(
             id: Long,
             source: String,
-            type: com.langlez.core.Storage.Type,
+            type: Storage.Type,
             filename: String,
-        ) = com.langlez.core.Storage.PresignedResult("$source/$filename", "https://presigned.test/$filename")
+        ) = Storage.PresignedResult("$source/$filename", "https://presigned.test/$filename")
 
         override fun attach(key: String, sourceId: Long?) = "https://cdn.test/$key"
     }
 
     /** 구현체는 relationship 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
     @Bean
-    fun followQuery(): com.langlez.core.FollowQuery = object : com.langlez.core.FollowQuery {
+    fun followQuery(): FollowQuery = object : FollowQuery {
         override fun followingIds(memberId: Long) = emptyList<Long>()
 
-        override fun counts(memberId: Long) = com.langlez.core.FollowQuery.Counts(0, 0)
+        override fun counts(memberId: Long) = FollowQuery.CountInfo(0, 0)
     }
 
     /**
-     * JwtAuthenticationFilter 가 요구한다. 구현체는 member 모듈에 있다.
-     * relaxed mock 은 enum 반환값을 보장하지 않아 명시 대역을 쓴다.
+     * 구현체는 member 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다.
+     * 상태 조회는 JwtAuthenticationFilter 가 매 요청 부른다 — relaxed mock 은 enum 반환값을
+     * 보장하지 않아 명시 대역을 쓴다.
      */
     @Bean
-    fun memberStatusQuery(): com.langlez.core.MemberStatusQuery = object : com.langlez.core.MemberStatusQuery {
-        override fun findStatus(memberId: Long) = com.langlez.core.MemberStatusQuery.Status.ACTIVE
-    }
-
-    /** 구현체는 member 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
-    @Bean
-    fun memberQuery(): com.langlez.core.MemberQuery = object : com.langlez.core.MemberQuery {
+    fun memberQuery(): MemberQuery = object : MemberQuery {
         override fun findIdByHandle(handle: String): Long? = null
 
-        override fun findProfileInfo(memberId: Long): com.langlez.core.MemberQuery.ProfileInfo? = null
+        override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = null
 
-        override fun findProfileInfos(memberIds: Collection<Long>) =
-            emptyMap<Long, com.langlez.core.MemberQuery.ProfileInfo>()
+        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberQuery.ProfileInfo>()
+
+        override fun findStatus(memberId: Long) = MemberQuery.Status.ACTIVE
     }
 
     /**

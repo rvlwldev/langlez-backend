@@ -1,6 +1,6 @@
 package com.langlez.member.api
 
-import com.langlez.core.OnlineTracker
+import com.langlez.member.contract.OnlineTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.mockk
 import io.mockk.verify

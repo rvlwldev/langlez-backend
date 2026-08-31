@@ -3,7 +3,7 @@ package com.langlez.chat.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.infrastructure.jpa.ChatOutBoxRepository
 import com.langlez.chat.infrastructure.outbox.ChatOutBox
-import com.langlez.core.event.chat.ChatUserReportedEvent
+import com.langlez.chat.contract.ChatUserReportedEvent
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.shouldBe

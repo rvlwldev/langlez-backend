@@ -8,7 +8,7 @@ import com.langlez.chat.api.response.ChatMessageResponse
 import com.langlez.chat.api.response.ChatRoomResponse
 import com.langlez.chat.api.response.ChatRoomSummaryResponse
 import com.langlez.chat.application.ChatService
-import com.langlez.core.Storage
+import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat

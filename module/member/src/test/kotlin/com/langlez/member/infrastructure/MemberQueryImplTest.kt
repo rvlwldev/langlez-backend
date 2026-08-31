@@ -1,5 +1,6 @@
 package com.langlez.member.infrastructure
 
+import com.langlez.member.contract.MemberQuery
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -14,8 +15,8 @@ import java.time.LocalDate
 import java.util.Locale
 
 /**
- * profile 모듈이 계정 정보를 보는 유일한 통로다.
- * 여기가 깨지면 프로필 화면의 성별/국가/생년월일이 통째로 사라진다.
+ * 다른 모듈이 회원 정보를 보는 유일한 통로다. 계정 정보·상태·푸시 토큰을 한 어댑터가 다 낸다.
+ * 여기가 깨지면 프로필 화면의 성별/국가/생년월일이 통째로 사라지고, 인증 필터의 상태 검사도 함께 무너진다.
  */
 class MemberQueryImplTest : BehaviorSpec({
 
@@ -24,12 +25,13 @@ class MemberQueryImplTest : BehaviorSpec({
 
     afterEach { clearMocks(repo, answers = false) }
 
-    fun member(id: Long = 1L, handle: String = "user$id") = Member(
+    fun member(id: Long = 1L, handle: String = "user$id", fcm: String? = null) = Member(
         id = id,
         email = "user$id@test.com",
         handle = handle,
         provider = Member.Provider.GOOGLE,
         providerId = "p$id",
+        fcm = fcm,
     )
 
     Given("handle 로 회원 id 를 물으면") {
@@ -120,6 +122,52 @@ class MemberQueryImplTest : BehaviorSpec({
             Then("빈 IN () 쿼리를 만들지 않고 바로 빈 맵을 돌려준다") {
                 query.findProfileInfos(emptyList()).shouldBeEmpty()
                 verify(exactly = 0) { repo.findAll(any<Collection<Long>>()) }
+            }
+        }
+    }
+
+    Given("계정 상태를 물으면") {
+
+        // 원본 Member.Status 에 값이 늘면 구현체의 when 이 컴파일에서 깨진다. 여기서는 매핑만 고정한다.
+        When("정지된 회원이면") {
+            every { repo.find(1L) } returns member().apply { suspend() }
+
+            Then("SUSPENDED 로 매핑돼 나온다") {
+                query.findStatus(1L) shouldBe MemberQuery.Status.SUSPENDED
+            }
+        }
+
+        When("없는 회원이면") {
+            every { repo.find(99L) } returns null
+
+            Then("null 을 돌려준다") {
+                query.findStatus(99L) shouldBe null
+            }
+        }
+    }
+
+    Given("여러 회원의 푸시 토큰을 한 번에 물으면") {
+
+        When("일부만 토큰을 갖고 있으면") {
+            every { repo.findAll(listOf(1L, 2L, 3L)) } returns listOf(
+                member(1L, fcm = "token-1"),
+                member(2L, fcm = null),
+                member(3L, fcm = ""),
+            )
+
+            Then("토큰이 없거나 빈 문자열인 회원은 맵에서 빠진다") {
+                val tokens = query.findPushTokens(listOf(1L, 2L, 3L))
+
+                tokens shouldBe mapOf(1L to "token-1")
+                verify(exactly = 1) { repo.findAll(listOf(1L, 2L, 3L)) }
+            }
+        }
+
+        When("빈 컬렉션이면") {
+            Then("빈 맵을 돌려준다 (빈 IN () 방지는 MemberRepository.findAll 이 이미 한다)") {
+                every { repo.findAll(emptyList()) } returns emptyList()
+
+                query.findPushTokens(emptyList()).shouldBeEmpty()
             }
         }
     }

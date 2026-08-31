@@ -1,11 +1,11 @@
 package com.langlez.notification
 
-import com.langlez.core.MemberStatusQuery
 import com.langlez.core.MessageBroadcaster
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.OnlineTracker
-import com.langlez.core.PushTokenQuery
 import com.langlez.core.TokenBlacklist
+import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.PushTokenQuery
 import io.mockk.mockk
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -53,7 +53,10 @@ class TestNotificationApplication {
      * relaxed mock 은 enum 반환값이 뭐가 될지 보장하지 않아 명시 대역을 쓴다.
      */
     @Bean
-    fun memberStatusQuery(): MemberStatusQuery = object : MemberStatusQuery {
-        override fun findStatus(memberId: Long) = MemberStatusQuery.Status.ACTIVE
+    fun memberQuery(): MemberQuery = object : MemberQuery {
+        override fun findIdByHandle(handle: String): Long? = null
+        override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = null
+        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberQuery.ProfileInfo>()
+        override fun findStatus(memberId: Long) = MemberQuery.Status.ACTIVE
     }
 }

@@ -14,6 +14,13 @@ dependencies {
     // @KafkaListener 로 chat-message-sent 를 받는다
     implementation(project(":infra:kafka"))
 
+    implementation(project(":module:notification-api"))
+
+    // 알림거리가 되는 사건을 받는 쪽이다. 발행 모듈의 계약만 물고 모듈 자체는 참조하지 않는다.
+    implementation(project(":module:chat-api"))
+    implementation(project(":module:member-api"))
+    implementation(project(":module:relationship-api"))
+
     implementation("com.google.firebase:firebase-admin:9.4.1")
 
     ksp(libs.dependency.querydsl.ksp)

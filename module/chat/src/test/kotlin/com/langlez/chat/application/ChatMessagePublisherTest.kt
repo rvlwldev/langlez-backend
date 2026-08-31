@@ -5,7 +5,7 @@ import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoomMember
-import com.langlez.core.OnlineTracker
+import com.langlez.member.contract.OnlineTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain

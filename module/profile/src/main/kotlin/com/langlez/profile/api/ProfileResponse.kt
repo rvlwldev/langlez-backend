@@ -1,9 +1,9 @@
 package com.langlez.profile.api
 
-import com.langlez.core.FollowQuery
-import com.langlez.core.MemberQuery
+import com.langlez.member.contract.MemberQuery
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
+import com.langlez.relationship.contract.FollowQuery
 import java.time.Instant
 import java.time.LocalDate
 import java.util.*
@@ -59,7 +59,7 @@ class ProfileResponse {
             profile: Profile,
             member: MemberQuery.ProfileInfo,
             visitCount: Long,
-            follows: FollowQuery.Counts,
+            follows: FollowQuery.CountInfo,
             interests: Set<String> = emptySet(),
         ) : this(
             handle = member.handle,

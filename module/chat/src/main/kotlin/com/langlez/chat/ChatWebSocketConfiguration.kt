@@ -1,8 +1,8 @@
 package com.langlez.chat
 
 import com.langlez.config.WebSocketSubscriptionGate
-import com.langlez.core.OnlineTracker
 import com.langlez.core.TokenBlacklist
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.utility.JwtTokenProvider
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean

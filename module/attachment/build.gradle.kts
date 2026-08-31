@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:rdb"))
+    implementation(project(":module:attachment-api"))
 
     ksp(libs.dependency.querydsl.ksp)
     implementation(libs.dependency.aws.s3)

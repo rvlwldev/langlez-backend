@@ -1,10 +1,10 @@
 package com.langlez.relationship.application
 
-import com.langlez.core.BlockQuery
-import com.langlez.core.event.relationship.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.relationship.contract.BlockQuery
+import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository

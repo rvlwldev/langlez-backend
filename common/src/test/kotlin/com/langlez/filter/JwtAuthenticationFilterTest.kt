@@ -1,8 +1,8 @@
 package com.langlez.filter
 
-import com.langlez.core.MemberStatusQuery
 import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberQuery
 import com.langlez.utility.JwtTokenProvider
 import io.jsonwebtoken.Claims
 import io.mockk.every
@@ -31,7 +31,7 @@ class JwtAuthenticationFilterTest {
     private val jwt = mockk<JwtTokenProvider>()
     private val blacklist = mockk<TokenBlacklist>()
     private val resolver = mockk<HandlerExceptionResolver>(relaxed = true)
-    private val members = mockk<MemberStatusQuery>()
+    private val members = mockk<MemberQuery>()
 
     private val filter = JwtAuthenticationFilter(jwt, blacklist, members, resolver)
 
@@ -58,7 +58,7 @@ class JwtAuthenticationFilterTest {
         every { jwt.extractTokenType(claims) } returns "access"
         every { jwt.extractId(claims) } returns 1L
         every { jwt.extractRole(claims) } returns "ROLE_MEMBER"
-        every { members.findStatus(1L) } returns MemberStatusQuery.Status.ACTIVE
+        every { members.findStatus(1L) } returns MemberQuery.Status.ACTIVE
     }
 
     private fun anonymousToken() =

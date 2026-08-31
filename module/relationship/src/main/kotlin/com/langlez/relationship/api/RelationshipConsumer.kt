@@ -1,8 +1,8 @@
 package com.langlez.relationship.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.event.chat.ChatUserReportedEvent
 import com.langlez.relationship.application.RelationshipService
 import com.langlez.relationship.domain.Report
 import org.springframework.kafka.annotation.KafkaListener

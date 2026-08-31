@@ -1,12 +1,12 @@
 package com.langlez.chat.api
 
+import com.langlez.attachment.contract.Storage
 import com.langlez.chat.api.request.ChatMessageSendRequest
 import com.langlez.chat.api.request.ChatReportRequest
 import com.langlez.chat.api.request.ChatRoomCreateRequest
 import com.langlez.chat.api.response.ChatMessageResponse
 import com.langlez.chat.api.response.ChatRoomResponse
 import com.langlez.chat.api.response.ChatRoomSummaryResponse
-import com.langlez.core.Storage
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
