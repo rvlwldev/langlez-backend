@@ -15,7 +15,9 @@ Kafka(모듈 간 상태 전파)와 Redis pub/sub(접속 중인 사용자에게 �
 sequenceDiagram
     autonumber
     participant chat
-    participant rel as relationship
+    participant fol as follow
+    participant blk as block
+    participant rep as report
     participant member
     participant K as Kafka
     participant noti as notification
@@ -28,10 +30,13 @@ sequenceDiagram
     K->>noti: Notification 행 저장 → 인앱 + FCM
 
     chat->>K: chat-user-reported
-    K->>rel: Report 행 저장 (chat 은 아무것도 저장하지 않는다)
+    K->>rep: Report 행 저장 (chat 은 아무것도 저장하지 않는다)
 
-    rel->>K: member-followed
+    fol->>K: member-followed
     K->>noti: Notification 행 저장 → 인앱 + FCM
+
+    blk->>K: member-blocked
+    K->>fol: 팔로우 행 양방향 삭제
 
     member->>K: member-created
     K->>prof: Profile 행 생성 (id = memberId)
@@ -48,9 +53,9 @@ sequenceDiagram
 **읽는 법 두 가지가 갈린다.**
 
 - `member-followed` 와 `chat-message-sent` 는 **이미 저장된 것에 대한 알림**이다. 발행 모듈이 트랜잭션 안에서 원본 데이터를 저장하고, 이벤트는 그 결과다. 수신 모듈은 `Notification` 만 만든다 — 팔로우 관계나 메시지 본문을 다시 저장하지 않는다.
-- `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 relationship 이다 — 신고 데이터는 relationship 소유이기 때문이다.
+- `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 report 다 — 신고 데이터는 report 소유이기 때문이다.
 
-듣는 쪽은 **notification·relationship·auth·profile 넷이다.**
+듣는 쪽은 **notification·report·follow·auth·profile 다섯이다.**
 
 ---
 
@@ -105,7 +110,7 @@ sequenceDiagram
 
 ### `chat-user-reported`
 
-> chat ──▶ **relationship**
+> chat ──▶ **report**
 
 | | |
 |---|---|
@@ -114,17 +119,17 @@ sequenceDiagram
 | **파티션 키** | `roomId` |
 | **멱등 키** | 페이로드 전체 (고유 id 가 없다) |
 
-chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 relationship 이다 — 신고 데이터는 relationship 소유다.
+chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 report 다 — 신고 데이터는 report 소유다.
 
-**relationship 이 받아서 하는 일**
+**report 가 받아서 하는 일**
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant K as Kafka
-    participant C as RelationshipConsumer
+    participant C as ReportConsumer
     participant D as MessageDeduplicator
-    participant S as RelationshipService
+    participant S as ReportService
     participant DB as reports
 
     K->>C: chat-user-reported
@@ -136,7 +141,7 @@ sequenceDiagram
     else 처음 보는 메시지
         D-->>C: false
         C->>S: report(...)
-        S->>DB: existsReport 로 한 번 더 거름
+        S->>DB: exists 로 한 번 더 거름
         S->>DB: Report 저장
         Note over S,DB: sourceType = CHAT_USER · sourceId = event.roomId<br/>reason / triggerMessageId
         Note over DB: 동시 경합은 UNQ_REPORT_IDENTITY 가 막는다
@@ -149,20 +154,20 @@ sequenceDiagram
 
 ### `member-followed`
 
-> relationship ──▶ **notification**
+> follow ──▶ **notification**
 
 | | |
 |---|---|
-| **발행** | `RelationshipEventListener` → `relationship_event_outbox` → `RelationshipOutBoxScheduler`(2초) |
+| **발행** | `FollowEventListener` → `follow_event_outbox` → `FollowOutBoxScheduler`(2초) |
 | **페이로드** | `MemberFollowedEvent(followId, followerId, followedId)` |
 | **파티션 키** | `followedId` — 한 사람에 대한 이벤트 순서 보장 |
 | **멱등 키** | `followId` |
 
-**팔로우 관계는 발행 전에 이미 저장돼 있다.** `RelationshipService.follow()` 가 한 트랜잭션 안에서 순서대로 한다.
+**팔로우 관계는 발행 전에 이미 저장돼 있다.** `FollowService.follow()` 가 한 트랜잭션 안에서 순서대로 한다.
 
 ```mermaid
 flowchart TD
-    A["POST /api/v1/relationships/follows/{targetId}"] --> B{"대상 회원이 있나"}
+    A["POST /api/v1/follows/{targetId}"] --> B{"대상 회원이 있나"}
     B -- 없음 --> B1["404"]
     B -- 있음 --> C{"차단 관계인가"}
     C -- 맞음 --> C1["403 social.follow.blocked"]
@@ -170,7 +175,7 @@ flowchart TD
     D -- 맞음 --> D1["조용히 끝 (멱등)"]
     D -- 아님 --> E["member_follows 행 저장<br/>여기서 데이터가 남는다"]
     E --> F["publishEvent(MemberFollowedEvent(follow.id, ...))"]
-    F --> G["relationship_event_outbox 행<br/>같은 트랜잭션"]
+    F --> G["follow_event_outbox 행<br/>같은 트랜잭션"]
 ```
 
 `followId` 를 실을 수 있는 것도 이 순서 덕이다 — 저장이 끝나야 행 id 가 나온다.
@@ -196,9 +201,62 @@ sequenceDiagram
     Note over S,F: 팔로우 관계는 저장하지 않는다 — 알림만 만든다
 ```
 
-**notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 relationship 소유고, 다른 모듈은 `relationship-api` 의 `FollowReader` 포트로 조회한다.
+**notification 은 팔로우 관계를 저장하지 않는다.** 알림만 만든다. 팔로우 그래프는 follow 소유고, 다른 모듈은 `follow-api` 의 `FollowReader` 포트로 조회한다.
 
 **언팔로우 이벤트는 없다.** `unfollow` 는 `member_follows` 행만 지우고 이벤트를 내지 않는다. 지금 소비할 데가 없다.
+
+---
+
+### `member-blocked`
+
+> block ──▶ **follow**
+
+| | |
+|---|---|
+| **발행** | `BlockEventListener` → `block_event_outbox` → `BlockOutBoxScheduler`(2초) |
+| **페이로드** | `MemberBlockedEvent(blockerId, blockedId, occurredAt)` |
+| **파티션 키** | `blockedId` — 한 사람에 대한 이벤트 순서 보장 |
+| **멱등 키** | 페이로드 전체 (`occurredAt` 이 요청마다 갈린다) |
+
+**모듈 간 유일한 "다른 모듈의 데이터를 지우게 하는" 이벤트다.** 차단하면 서로의 팔로우 관계를
+양방향으로 끊어야 하는데, 차단 행은 block 소유고 팔로우 행은 follow 소유라 한 트랜잭션에 못 묶는다.
+
+```mermaid
+flowchart TD
+    A["POST /api/v1/blocks/{targetId}"] --> B{"대상 회원이 있나"}
+    B -- 없음 --> B1["404"]
+    B -- 있음 --> C{"이미 차단했나"}
+    C -- 맞음 --> D["저장 생략"]
+    C -- 아님 --> E["member_blocks 행 저장"]
+    D --> F["publishEvent(MemberBlockedEvent(...))<br/>이미 차단했어도 반드시 낸다"]
+    E --> F
+    F --> G["block_event_outbox 행<br/>같은 트랜잭션 (BEFORE_COMMIT)"]
+    G --> H["Kafka member-blocked"]
+    H --> I["FollowConsumer<br/>deleteFollow 를 양방향으로"]
+```
+
+**이미 차단한 상대를 다시 차단해도 이벤트를 낸다.** 과거에 반쪽만 끊긴 데이터를 수습하는 경로다.
+`occurredAt`(epoch millis)이 페이로드에 들어 있는 것도 그래서다 — 없으면 그 수습 이벤트가
+첫 차단과 완전히 같은 페이로드가 되어 `MessageDeduplicator` 가 재배달로 보고 걷어낸다.
+
+#### 이 창은 사용자에게 보이지 않는다
+
+이벤트가 소비되기 전까지 팔로우 행이 남는다. **그래도 차단의 효력은 즉시다** — 차단 행이
+커밋되는 순간부터 `BlockReader.isBlockedBetween` 이 true 라, 팔로우 행을 읽는 경로가
+전부 그 앞에서 막힌다.
+
+| 읽는 쪽 | 차단을 먼저 보는 지점 |
+|---|---|
+| `FollowService` | 목록 조회 `requireVisible`, 신규 팔로우 `follow` |
+| `EchoService` | 홈 타임라인·회원 타임라인 |
+| `ChatService` | 메시지 전송·방 조회 |
+
+남아 있는 팔로우 행을 통과해 무언가가 보이는 경로는 없다. **지연되는 것은 팔로우 행 정리뿐이다.**
+이 사실을 모르면 "차단했는데 팔로우가 남아 있다"를 버그로 보고 동기 호출로 되돌리게 되는데,
+그러면 모듈 경계가 다시 무너진다. 같은 설명이 `BlockService.block` KDoc 에도 있다.
+
+**차단 해제 이벤트는 없다.** `unblock` 은 `member_blocks` 행만 지운다. 끊긴 팔로우는 복구하지
+않는다 — 끊은 쪽의 의사를 되돌릴 근거가 없다.
 
 ---
 
@@ -419,8 +477,8 @@ flowchart TD
 |---|---|---|
 | 접속 핑 (30초 간격) | Redis 버킷 직결 | 고빈도·저가치. 브로커 왕복 비용이 가치보다 크다 |
 | 화면 보는 중 상태 | Redis | 휘발성 |
-| 팔로우 그래프 조회 | `relationship-api` 의 `FollowReader` 포트 | 이벤트로 복제하면 두 벌이 어긋난다. 언팔로우 이벤트도 없어 복제본은 늘기만 한다 |
-| 차단 여부 판정 | `relationship-api` 의 `BlockReader` 포트 | 〃 |
+| 팔로우 그래프 조회 | `follow-api` 의 `FollowReader` 포트 | 이벤트로 복제하면 두 벌이 어긋난다. 언팔로우 이벤트도 없어 복제본은 늘기만 한다 |
+| 차단 여부 판정 | `block-api` 의 `BlockReader` 포트 | 〃 |
 | 회원 상태 조회 | `member-api` 의 `MemberReader.findStatus` | 매 요청 필요. 응답을 기다려야 한다 |
 
 **응답을 기다려야 하는 조회는 소유 모듈의 `{도메인}-api` 포트, 상태 변경 전파는 Kafka** 가 기준선이다.
