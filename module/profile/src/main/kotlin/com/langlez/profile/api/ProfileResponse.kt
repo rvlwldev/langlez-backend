@@ -1,9 +1,9 @@
 package com.langlez.profile.api
 
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.FollowReader
 import java.time.Instant
 import java.time.LocalDate
 import java.util.*
@@ -24,7 +24,7 @@ class ProfileResponse {
         // 여기 함께 실어 보내지만, 수정은 members 엔드포인트로만 한다.
         constructor(
             profile: Profile,
-            member: MemberQuery.ProfileInfo,
+            member: MemberReader.ProfileInfo,
             interests: Set<String> = emptySet(),
         ) : this(
             bio = profile.bio,
@@ -57,9 +57,9 @@ class ProfileResponse {
         // 두 숫자를 Long 두 개로 받으면 순서를 바꿔 넘겨도 컴파일된다. 묶어서 받는다.
         constructor(
             profile: Profile,
-            member: MemberQuery.ProfileInfo,
+            member: MemberReader.ProfileInfo,
             visitCount: Long,
-            follows: FollowQuery.CountInfo,
+            follows: FollowReader.CountInfo,
             interests: Set<String> = emptySet(),
         ) : this(
             handle = member.handle,

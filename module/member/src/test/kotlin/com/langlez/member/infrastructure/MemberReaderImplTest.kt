@@ -1,6 +1,6 @@
 package com.langlez.member.infrastructure
 
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -18,10 +18,10 @@ import java.util.Locale
  * 다른 모듈이 회원 정보를 보는 유일한 통로다. 계정 정보·상태·푸시 토큰을 한 어댑터가 다 낸다.
  * 여기가 깨지면 프로필 화면의 성별/국가/생년월일이 통째로 사라지고, 인증 필터의 상태 검사도 함께 무너진다.
  */
-class MemberQueryImplTest : BehaviorSpec({
+class MemberReaderImplTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
-    val query = MemberQueryImpl(repo)
+    val query = MemberReaderImpl(repo)
 
     afterEach { clearMocks(repo, answers = false) }
 
@@ -133,7 +133,7 @@ class MemberQueryImplTest : BehaviorSpec({
             every { repo.find(1L) } returns member().apply { suspend() }
 
             Then("SUSPENDED 로 매핑돼 나온다") {
-                query.findStatus(1L) shouldBe MemberQuery.Status.SUSPENDED
+                query.findStatus(1L) shouldBe MemberReader.Status.SUSPENDED
             }
         }
 

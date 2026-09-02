@@ -1,7 +1,7 @@
 package com.langlez.echo.application
 
-import com.langlez.relationship.contract.BlockQuery
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.BlockReader
+import com.langlez.relationship.contract.FollowReader
 import com.langlez.attachment.contract.Storage
 import com.langlez.echo.contract.EchoCommentCreatedEvent
 import com.langlez.echo.contract.EchoPostLikedEvent
@@ -28,18 +28,18 @@ import java.time.Instant
  * 남의 것을 건드리는 동작(글·댓글 삭제)은 반드시 작성자인지부터 확인한다. id 는 클라이언트가 그대로
  * 보내는 값이라 한 군데라도 빼면 아무나 남의 글을 지운다(IDOR).
  *
- * 조회는 모두 `BlockQuery` 를 거친다. 차단은 "안 보여주기"가 전부라, 거르는 곳을 하나라도 빠뜨리면
+ * 조회는 모두 `BlockReader` 를 거친다. 차단은 "안 보여주기"가 전부라, 거르는 곳을 하나라도 빠뜨리면
  * 차단이 없는 것과 같아진다.
  */
 @Service
 class EchoService(
     private val repo: EchoRepository,
     /**
-     * relationship 모듈이 `FollowQuery` 를 제공하기 전까지는 빈이 없을 수 있어 nullable 이다.
+     * relationship 모듈이 `FollowReader` 를 제공하기 전까지는 빈이 없을 수 있어 nullable 이다.
      * 없을 때 빈 타임라인을 돌려주면 "팔로우가 0명"과 구분이 안 되므로 503 으로 드러낸다.
      */
-    private val follows: FollowQuery?,
-    private val blocks: BlockQuery,
+    private val follows: FollowReader?,
+    private val blocks: BlockReader,
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
     private val tx: TransactionTemplate,
@@ -235,7 +235,7 @@ class EchoService(
      * 클라이언트 입장에선 스크롤이 튀거나 심하면 빈 페이지가 와서 끝으로 오해한다.
      *
      * echo 는 relationship 모듈의 차단 테이블을 알지 못해 쿼리에서 직접 차단을 뺄 수 없다(모듈 간 테이블
-     * 직접 조인 금지). `BlockQuery` 포트도 단건 확인(`isBlockedBetween`)만 제공한다. 그래서 쿼리는 그대로
+     * 직접 조인 금지). `BlockReader` 포트도 단건 확인(`isBlockedBetween`)만 제공한다. 그래서 쿼리는 그대로
      * 두고, 부족하면 마지막으로 가져온 항목의 id 를 커서 삼아 다음 페이지를 이어서 가져오는 방식
      * (over-fetch)을 택했다.
      *

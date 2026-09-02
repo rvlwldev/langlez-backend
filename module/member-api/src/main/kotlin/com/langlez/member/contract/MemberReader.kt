@@ -15,7 +15,7 @@ import java.util.Locale
  * 상태 조회는 원래 `MemberStatusQuery` 로 따로 있었다. 둘 다 member 소유의 단순 조회라
  * 하나로 합쳤다 — 소비자가 포트 두 개를 주입받아야 할 이유가 없었다.
  */
-interface MemberQuery {
+interface MemberReader {
 
     /** 없는 handle 이면 null */
     fun findIdByHandle(handle: String): Long?

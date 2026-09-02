@@ -1,8 +1,8 @@
 package com.langlez.profile
 
 import com.langlez.attachment.contract.Storage
-import com.langlez.member.contract.MemberQuery
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.member.contract.MemberReader
+import com.langlez.relationship.contract.FollowReader
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -35,10 +35,10 @@ class TestProfileApplication {
 
     /** 구현체는 relationship 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
     @Bean
-    fun followQuery(): FollowQuery = object : FollowQuery {
+    fun followReader(): FollowReader = object : FollowReader {
         override fun followingIds(memberId: Long) = emptyList<Long>()
 
-        override fun counts(memberId: Long) = FollowQuery.CountInfo(0, 0)
+        override fun counts(memberId: Long) = FollowReader.CountInfo(0, 0)
     }
 
     /**
@@ -47,14 +47,14 @@ class TestProfileApplication {
      * 보장하지 않아 명시 대역을 쓴다.
      */
     @Bean
-    fun memberQuery(): MemberQuery = object : MemberQuery {
+    fun memberReader(): MemberReader = object : MemberReader {
         override fun findIdByHandle(handle: String): Long? = null
 
-        override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = null
+        override fun findProfileInfo(memberId: Long): MemberReader.ProfileInfo? = null
 
-        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberQuery.ProfileInfo>()
+        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberReader.ProfileInfo>()
 
-        override fun findStatus(memberId: Long) = MemberQuery.Status.ACTIVE
+        override fun findStatus(memberId: Long) = MemberReader.Status.ACTIVE
     }
 
     /**

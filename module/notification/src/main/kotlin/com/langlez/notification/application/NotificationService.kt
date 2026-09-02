@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.MessageBroadcaster
 import com.langlez.notification.contract.Notificator
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.member.contract.PushTokenQuery
+import com.langlez.member.contract.PushTokenReader
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.exception.LanglezException
@@ -28,7 +28,7 @@ class NotificationService(
     private val repo: NotificationRepository,
     private val tracker: OnlineTracker,
     private val broadcaster: MessageBroadcaster,
-    private val tokens: PushTokenQuery,
+    private val tokens: PushTokenReader,
     private val push: PushSender,
     private val mapper: ObjectMapper,
 ) : Notificator {

@@ -2,11 +2,11 @@ package com.langlez.filter
 
 import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
-import com.langlez.member.contract.MemberQuery
-import com.langlez.member.contract.MemberQuery.Status.ACTIVE
-import com.langlez.member.contract.MemberQuery.Status.CREATED
-import com.langlez.member.contract.MemberQuery.Status.SUSPENDED
-import com.langlez.member.contract.MemberQuery.Status.WITHDRAWN
+import com.langlez.member.contract.MemberReader
+import com.langlez.member.contract.MemberReader.Status.ACTIVE
+import com.langlez.member.contract.MemberReader.Status.CREATED
+import com.langlez.member.contract.MemberReader.Status.SUSPENDED
+import com.langlez.member.contract.MemberReader.Status.WITHDRAWN
 import com.langlez.utility.JwtTokenProvider
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -25,7 +25,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 class JwtAuthenticationFilter(
     private val jwt: JwtTokenProvider,
     private val tokenBlacklist: TokenBlacklist,
-    private val members: MemberQuery,
+    private val members: MemberReader,
     @param:Lazy @param:Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
 

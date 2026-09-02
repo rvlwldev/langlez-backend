@@ -1,8 +1,8 @@
 package com.langlez.relationship.application
 
 import com.langlez.exception.LanglezException
-import com.langlez.member.contract.MemberQuery
-import com.langlez.relationship.contract.BlockQuery
+import com.langlez.member.contract.MemberReader
+import com.langlez.relationship.contract.BlockReader
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
@@ -26,8 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate
 class RelationshipServiceTest : BehaviorSpec({
 
     val repo = mockk<RelationshipRepository>(relaxed = true)
-    val members = mockk<MemberQuery>()
-    val blocks = mockk<BlockQuery>()
+    val members = mockk<MemberReader>()
+    val blocks = mockk<BlockReader>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
 
@@ -39,7 +39,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
     afterEach { clearMocks(repo, members, blocks, publisher, answers = false) }
 
-    fun member(id: Long) = MemberQuery.ProfileInfo(
+    fun member(id: Long) = MemberReader.ProfileInfo(
         id = id,
         handle = "user$id",
         gender = "SECRET",

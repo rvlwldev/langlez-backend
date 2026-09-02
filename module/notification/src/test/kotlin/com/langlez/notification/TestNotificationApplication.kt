@@ -3,9 +3,9 @@ package com.langlez.notification
 import com.langlez.core.MessageBroadcaster
 import com.langlez.core.MessageDeduplicator
 import com.langlez.core.TokenBlacklist
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.member.contract.PushTokenQuery
+import com.langlez.member.contract.PushTokenReader
 import io.mockk.mockk
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -46,17 +46,17 @@ class TestNotificationApplication {
     fun messageBroadcaster(): MessageBroadcaster = mockk(relaxed = true)
 
     @Bean
-    fun pushTokenQuery(): PushTokenQuery = mockk(relaxed = true)
+    fun pushTokenReader(): PushTokenReader = mockk(relaxed = true)
 
     /**
      * JwtAuthenticationFilter 가 요구한다. 구현체는 member 모듈에 있다.
      * relaxed mock 은 enum 반환값이 뭐가 될지 보장하지 않아 명시 대역을 쓴다.
      */
     @Bean
-    fun memberQuery(): MemberQuery = object : MemberQuery {
+    fun memberReader(): MemberReader = object : MemberReader {
         override fun findIdByHandle(handle: String): Long? = null
-        override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = null
-        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberQuery.ProfileInfo>()
-        override fun findStatus(memberId: Long) = MemberQuery.Status.ACTIVE
+        override fun findProfileInfo(memberId: Long): MemberReader.ProfileInfo? = null
+        override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberReader.ProfileInfo>()
+        override fun findStatus(memberId: Long) = MemberReader.Status.ACTIVE
     }
 }

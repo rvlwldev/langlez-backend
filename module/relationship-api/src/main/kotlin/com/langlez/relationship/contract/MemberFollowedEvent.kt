@@ -11,6 +11,6 @@ package com.langlez.relationship.contract
  * 중복 배달과 구분되지 않는다. 행 id 는 재팔로우 때 새로 발급되므로 둘을 갈라준다.
  *
  * 언팔로우·차단 이벤트는 두지 않았다. 지금 그걸 소비할 모듈이 없고,
- * 차단 판정은 `BlockQuery` 로 그때그때 조회하는 쪽이 복제본보다 정확하다.
+ * 차단 판정은 `BlockReader` 로 그때그때 조회하는 쪽이 복제본보다 정확하다.
  */
 data class MemberFollowedEvent(val followId: Long, val followerId: Long, val followedId: Long)

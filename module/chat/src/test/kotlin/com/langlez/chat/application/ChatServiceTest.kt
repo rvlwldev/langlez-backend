@@ -6,7 +6,7 @@ import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.domain.ChatRoomSummary
-import com.langlez.relationship.contract.BlockQuery
+import com.langlez.relationship.contract.BlockReader
 import com.langlez.core.MessageBroadcaster
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
@@ -28,7 +28,7 @@ class ChatServiceTest : BehaviorSpec({
 
     val repo = mockk<ChatRepository>()
     val messages = mockk<ChatMessageRepository>()
-    val blocks = mockk<BlockQuery>()
+    val blocks = mockk<BlockReader>()
     val storage = mockk<Storage>()
     val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)

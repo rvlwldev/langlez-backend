@@ -1,6 +1,6 @@
 package com.langlez.relationship.infrastructure
 
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.FollowReader
 import com.langlez.relationship.domain.Follow
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.infrastructure.jpa.BlockJpaRepository
@@ -17,7 +17,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory
  * chat·echo 가 차단·팔로우를 보는 유일한 통로다.
  * 팔로우 조회가 죽으면 echo 홈 타임라인이 통째로 죽는다.
  */
-class RelationshipQueryImplTest : BehaviorSpec({
+class RelationshipReaderImplTest : BehaviorSpec({
 
     val blocks = mockk<BlockJpaRepository>()
     val follows = mockk<FollowJpaRepository>()
@@ -25,7 +25,7 @@ class RelationshipQueryImplTest : BehaviorSpec({
     // blockedAmong 은 QueryDSL 한 방이라 여기선 목이 의미가 없다. 실제 판정은
     // RelationshipRepositoryImplTest 가 진짜 DB 로 본다.
     val dsl = mockk<JPAQueryFactory>()
-    val query = RelationshipQueryImpl(blocks, follows, repo, dsl)
+    val query = RelationshipReaderImpl(blocks, follows, repo, dsl)
 
     afterEach { clearMocks(blocks, follows, repo, answers = false) }
 
@@ -75,7 +75,7 @@ class RelationshipQueryImplTest : BehaviorSpec({
         every { repo.countFollowings(1L) } returns 3L
 
         Then("한 번의 호출로 두 숫자를 함께 돌려준다") {
-            query.counts(1L) shouldBe FollowQuery.CountInfo(followers = 12L, followings = 3L)
+            query.counts(1L) shouldBe FollowReader.CountInfo(followers = 12L, followings = 3L)
         }
     }
 

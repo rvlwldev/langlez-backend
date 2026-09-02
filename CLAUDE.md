@@ -58,7 +58,7 @@ app/api         조립 + 실행
 
 **어디에 둘지의 판단 기준은 소유자다.** 그 계약을 구현하고 그 데이터를 소유하는 게 도메인 모듈이면 `{도메인}-api`, 인프라면 `core`.
 
-- **`{도메인}-api`** — 도메인이 구현하는 조회 포트(`MemberQuery`), 도메인이 발행하는 이벤트 DTO(`MemberCreatedEvent`).
+- **`{도메인}-api`** — 도메인이 구현하는 조회 포트(`MemberReader`), 도메인이 발행하는 이벤트 DTO(`MemberCreatedEvent`).
 - **`core`** — `infra/*` 가 구현하는 포트(`CacheProvider`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`), 그리고 방향이 뒤집힌 것(`SubscriptionAuthorizer` 는 `common` 이 소비하고 도메인들이 구현한다 — 어느 도메인의 것도 아니다).
 - **애매하면 `core`.** 소유자가 하나로 정해지지 않는 계약을 억지로 도메인에 밀어 넣으면 그 도메인을 안 쓰는 모듈까지 끌려온다.
 
@@ -111,15 +111,15 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 고빈도·저가치 신호를 브로커에 태우면 비용만 든다. 접속 핑(5초 간격)이 그랬다 — 브로커 왕복에 handle→id 조회까지 붙어 있었다. 지금은 `MemberPingController` 가 레디스 버킷에 바로 쓴다.
 
-**`*-api` 포트 호출은 원격 호출로 취급한다.** 지금은 같은 프로세스·같은 DB 라 트랜잭션 안에서 불러도 돌지만, 이 포트들은 곧 gRPC/HTTP 로 대체된다. 트랜잭션 안에 두면 그때 셋이 한꺼번에 터진다 — DB 커넥션을 쥔 채 네트워크를 기다려 풀이 마르고, 스냅샷 일관성은 어차피 사라지며, 롤백이 원격 쪽을 되돌리지 못한다. 셋 다 컴파일과 테스트를 통과하고 런타임에만 어긋난다. 그러니 **포트 호출을 먼저 끝내고 결과만 트랜잭션에 넘긴다**(`TransactionTemplate.execute`). 목록에 붙이는 조회는 항목마다 부르지 말고 배치 메서드(`MemberQuery.findProfileInfos`, `BlockQuery.blockedAmong`)로 한 번에 묻는다. 그 대가로 판정과 저장 사이에 TOCTOU 창이 열리는데, **감수하기로 한 창은 KDoc 에 무엇이 어긋날 수 있는지 적는다.**
+**`*-api` 포트 호출은 원격 호출로 취급한다.** 지금은 같은 프로세스·같은 DB 라 트랜잭션 안에서 불러도 돌지만, 이 포트들은 곧 gRPC/HTTP 로 대체된다. 트랜잭션 안에 두면 그때 셋이 한꺼번에 터진다 — DB 커넥션을 쥔 채 네트워크를 기다려 풀이 마르고, 스냅샷 일관성은 어차피 사라지며, 롤백이 원격 쪽을 되돌리지 못한다. 셋 다 컴파일과 테스트를 통과하고 런타임에만 어긋난다. 그러니 **포트 호출을 먼저 끝내고 결과만 트랜잭션에 넘긴다**(`TransactionTemplate.execute`). 목록에 붙이는 조회는 항목마다 부르지 말고 배치 메서드(`MemberReader.findProfileInfos`, `BlockReader.blockedAmong`)로 한 번에 묻는다. 그 대가로 판정과 저장 사이에 TOCTOU 창이 열리는데, **감수하기로 한 창은 KDoc 에 무엇이 어긋날 수 있는지 적는다.**
 
 현재 계약 배치:
 
 | 모듈 | 담긴 것 |
 |---|---|
 | `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`, `SubscriptionAuthorizer` |
-| `module/member-api` | `MemberQuery`(계정 정보 + 상태), `PushTokenQuery`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
-| `module/relationship-api` | `BlockQuery`, `FollowQuery`, `MemberFollowedEvent` |
+| `module/member-api` | `MemberReader`(계정 정보 + 상태), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
+| `module/relationship-api` | `BlockReader`, `FollowReader`, `MemberFollowedEvent` |
 | `module/attachment-api` | `Storage` |
 | `module/notification-api` | `Notificator` |
 | `module/chat-api` | `ChatMessageSentEvent`, `ChatUserReportedEvent` |
@@ -159,7 +159,9 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 요청 DTO | `{Domain}{동사}{대상}Request` | `MemberUpdateHandleRequest` |
 | 응답 DTO | `{Domain}{범위}Response` | `MemberMeResponse`, `MemberPublicResponse` |
 | Outbox 스케줄러 | `{Domain}OutBoxScheduler` | `MemberOutBoxScheduler` |
-| 계약 모듈의 조회 결과 DTO | `{...}Info` | `MemberQuery.ProfileInfo`, `FollowQuery.CountInfo` |
+| 계약 포트 (읽기) | `{도메인}Reader` (`{도메인}-api`) | `MemberReader` |
+| 계약 포트 (쓰기) | `{도메인}Writer` (`{도메인}-api`) | — (아직 없음) |
+| 계약 모듈의 조회 결과 DTO | `{...}Info` | `MemberReader.ProfileInfo`, `FollowReader.CountInfo` |
 | 계약 모듈의 조작 결과 DTO | `{...}Result` | `Storage.PresignedResult` |
 
 주입받는 의존성은 **짧은 관용 이름**을 쓴다. 타입명을 그대로 반복하지 않는다.

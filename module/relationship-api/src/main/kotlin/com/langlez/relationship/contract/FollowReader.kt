@@ -5,9 +5,9 @@ package com.langlez.relationship.contract
  *
  * 홈 타임라인은 "내가 팔로우한 사람의 글"이라 팔로우 관계를 알아야 하는데, 그건 relationship 소유다.
  * echo 가 relationship 저장소를 직접 들여다보면 경계가 무너지고, 이벤트로 그래프를 복제하면
- * 같은 데이터를 두 벌 들고 어긋날 여지를 만든다. `BlockQuery` 와 같은 방식으로 조회만 포트로 뽑는다.
+ * 같은 데이터를 두 벌 들고 어긋날 여지를 만든다. `BlockReader` 와 같은 방식으로 조회만 포트로 뽑는다.
  */
-interface FollowQuery {
+interface FollowReader {
     /** 내가 팔로우하는 회원 id 목록. 팔로우가 없으면 빈 목록. */
     fun followingIds(memberId: Long): List<Long>
 

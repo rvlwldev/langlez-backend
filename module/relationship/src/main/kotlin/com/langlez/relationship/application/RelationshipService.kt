@@ -1,8 +1,8 @@
 package com.langlez.relationship.application
 
 import com.langlez.exception.LanglezException
-import com.langlez.member.contract.MemberQuery
-import com.langlez.relationship.contract.BlockQuery
+import com.langlez.member.contract.MemberReader
+import com.langlez.relationship.contract.BlockReader
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.domain.Block
 import com.langlez.relationship.domain.Follow
@@ -22,18 +22,18 @@ import org.springframework.transaction.support.TransactionTemplate
 /**
  * 팔로우·차단·신고 유스케이스.
  *
- * 차단 여부 판정은 이 모듈이 구현한 `BlockQuery` 를 그대로 쓴다 —
+ * 차단 여부 판정은 이 모듈이 구현한 `BlockReader` 를 그대로 쓴다 —
  * 양방향 판정 규칙이 chat 과 갈라지면 한쪽에서만 막히는 구멍이 생긴다.
  *
- * 회원 정보는 `member-api` 의 `MemberQuery` 로만 본다. member 의 domain 계층(`MemberRepository`)을
+ * 회원 정보는 `member-api` 의 `MemberReader` 로만 본다. member 의 domain 계층(`MemberRepository`)을
  * 직접 참조하면 모듈 경계가 무너지고, 그 포트가 원격이 될 때 여기가 통째로 깨진다.
- * `MemberQuery` 호출은 전부 트랜잭션 밖에서 끝낸다.
+ * `MemberReader` 호출은 전부 트랜잭션 밖에서 끝낸다.
  */
 @Service
 class RelationshipService(
     private val repo: RelationshipRepository,
-    private val members: MemberQuery,
-    private val blocks: BlockQuery,
+    private val members: MemberReader,
+    private val blocks: BlockReader,
     private val publisher: ApplicationEventPublisher,
     private val tx: TransactionTemplate,
 ) {
@@ -69,7 +69,7 @@ class RelationshipService(
     fun unfollow(memberId: Long, targetId: Long) = repo.deleteFollow(memberId, targetId)
 
     /**
-     * 목록 조회에는 트랜잭션을 걸지 않는다. 저장소 읽기 한 번 + `MemberQuery` 배치 조회 한 번인데,
+     * 목록 조회에는 트랜잭션을 걸지 않는다. 저장소 읽기 한 번 + `MemberReader` 배치 조회 한 번인데,
      * 그 포트가 원격이 되면 트랜잭션이 커넥션을 쥔 채 네트워크를 기다린다. 감싸도 한 스냅샷이
      * 되지도 않는다 — 회원 정보는 이미 다른 저장소다.
      */

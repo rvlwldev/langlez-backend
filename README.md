@@ -122,12 +122,12 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 | 계약 | 있는 곳 (패키지) | 역할 | 구현 |
 |---|---|---|---|
-| `MemberQuery` | `member-api` (`com.langlez.member.contract`) | 계정 정보 + 상태 조회 | `member`(`MemberQueryImpl`) |
-| `PushTokenQuery` | 〃 | FCM 토큰 조회 | `member`(`MemberQueryImpl`) |
+| `MemberReader` | `member-api` (`com.langlez.member.contract`) | 계정 정보 + 상태 조회 | `member`(`MemberReaderImpl`) |
+| `PushTokenReader` | 〃 | FCM 토큰 조회 | `member`(`MemberReaderImpl`) |
 | `OnlineTracker` | 〃 | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
 | `Member{Created,HandleChanged,Withdrawn}Event` | 〃 | 회원 도메인 이벤트 | — |
-| `BlockQuery` | `relationship-api` | 차단 관계 확인 | `relationship`(`RelationshipQueryImpl`) |
-| `FollowQuery` | 〃 | 팔로잉 id 목록·카운트 | `relationship`(`RelationshipQueryImpl`) |
+| `BlockReader` | `relationship-api` | 차단 관계 확인 | `relationship`(`RelationshipReaderImpl`) |
+| `FollowReader` | 〃 | 팔로잉 id 목록·카운트 | `relationship`(`RelationshipReaderImpl`) |
 | `MemberFollowedEvent` | 〃 | 팔로우 이벤트 | — |
 | `Storage` | `attachment-api` | presign / key 확정 | `attachment` |
 | `Notificator` | `notification-api` | 알림 발송 | `notification` |
@@ -237,7 +237,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `profile` | 완료. 개인정보(성별·생일·국가)는 `member` 로 이관 |
 | `chat` | 완료. 1:1 채팅 전체 (아래 상세) |
 | `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
-| `relationship` | 완료. 팔로우·차단·신고 + `FollowQuery`/`BlockQuery` 구현 |
+| `relationship` | 완료. 팔로우·차단·신고 + `FollowReader`/`BlockReader` 구현 |
 | `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. `EchoAPI` + `EchoController` 로 `/api/v1/echoes` 아래 12개 엔드포인트 노출. 아웃박스는 여전히 미사용 스캐폴딩이다(§5.4) |
 | `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
 
@@ -265,7 +265,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 - **C. echo** — 트위터형 피드 (글·타임라인·좋아요·댓글·해시태그·이미지)
 - **D. wave** — 음성방 + **사라지는 채팅** (Redis 링버퍼만, 저장 안 함)
 
-**팔로우 그래프 연결:** `FollowQuery` 포트 신설로 결정(지금은 `relationship-api`). relationship 이 `RelationshipQueryImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
+**팔로우 그래프 연결:** `FollowReader` 포트 신설로 결정(지금은 `relationship-api`). relationship 이 `RelationshipReaderImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
 
 **WebSocket 구독 인가:** 모듈마다 인터셉터를 달던 구조는 폐기했다. 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아 실제로 뚫렸다. 지금은 `common` 의 `WebSocketSubscriptionGate` 가 모든 SUBSCRIBE 를 받아 `core.SubscriptionAuthorizer` 중 `supports` 가 참인 것에게 묻고 **하나도 없으면 거부한다**(기본 거부). 각 모듈은 `{Domain}SubscriptionAuthorizer` 로 자기 토픽 판정만 선언한다. `WaveWebSocketConfiguration` 의 참여자 검사 인터셉터는 삭제됐고 지금은 엔드포인트 등록만 한다.
 
@@ -283,7 +283,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `MemberRepositoryImpl` 핸들 변경 시 구 핸들 캐시 오염 | 읽기 경로에서 재검증 — 캐시로 찾은 회원의 `handle` 이 요청 키와 다르면 버리고 DB 조회 후 evict |
 | `AttachmentRepositoryImpl.deleteAll` N+1 단건 삭제 | `deleteAllInBatch` (연관이 없어 고아 행 위험 없음) |
 | `Attachment.key` 유니크 인덱스가 MySQL 3072 byte 한계 초과 | **해당 없음.** PostgreSQL + Flyway 로 확정돼 지적 전제가 사라졌다 |
-| 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `MemberQuery.findStatus` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
+| 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `MemberReader.findStatus` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
 | 상태 검사가 보는 캐시를 커밋 전 값이 덮어씀 | read-through 적재를 `Cache.putIfAbsent` 로 바꿔 쓰기 경로만 덮어쓰게 했다. 캐시 히트 시 되쓰기(TTL 무한 갱신)도 제거. 회귀 방지는 `MemberStatusCacheRaceTest` |
 
 ---
@@ -302,7 +302,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 2. **FCM 푸시 제목이 i18n 키 원문으로 OS 배너에 그대로 렌더된다**
    `NotificationService.kt:82,98` 이 `title` 에 메시지 키(`notification.chat-message.title`, `notification.member-followed`)를 넣는다. **인앱 브로드캐스트에는 맞는 설계다** — 클라이언트가 키를 받아 번역한다. 그런데 같은 값이 `:66` `push.send(...)` → `FcmPushSender.kt:44` `.setNotification(...)` 으로 들어가고, 그렇게 만든 FCM 메시지는 **OS 가 앱 코드 개입 없이 배너를 그린다.** 번역할 기회가 없다.
-   → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `MemberQuery` 에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
+   → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `MemberReader` 에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
 
 3. **MongoDB 가 잠깐만 응답하지 않아도 앱 전체가 부팅하지 못한다**
    `application.yml:41` 의 `spring.data.mongodb.auto-index-creation: true` 가 `MongoTemplate` **빈 생성 시점**에 `ChatMessage` 의 인덱스(`@CompoundIndex` ×3, `@Indexed` ×1)를 실제로 Mongo 에 쏜다. 응답이 없으면 드라이버 기본 `serverSelectionTimeoutMS`(30초)만큼 블로킹한 뒤 빈 생성이 실패하고, `chatMessageMongoRepository` → `chatService` → `chatController` 로 의존 체인이 무너져 **Spring 컨텍스트 refresh 자체가 취소**된다. `chat` 은 `app/api` 가 항상 조립하므로 회피 경로가 없다.

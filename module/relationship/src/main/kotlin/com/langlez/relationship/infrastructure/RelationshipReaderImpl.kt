@@ -1,7 +1,7 @@
 package com.langlez.relationship.infrastructure
 
-import com.langlez.relationship.contract.BlockQuery
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.BlockReader
+import com.langlez.relationship.contract.FollowReader
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.infrastructure.jpa.BlockJpaRepository
 import com.langlez.relationship.infrastructure.jpa.FollowJpaRepository
@@ -18,12 +18,12 @@ import com.langlez.relationship.domain.QBlock.Companion.block as QBlock
  * relationship 모듈이 반드시 이 빈을 올려야 한다.
  */
 @Repository
-class RelationshipQueryImpl(
+class RelationshipReaderImpl(
     private val blocks: BlockJpaRepository,
     private val follows: FollowJpaRepository,
     private val repo: RelationshipRepository,
     private val dsl: JPAQueryFactory,
-) : BlockQuery, FollowQuery {
+) : BlockReader, FollowReader {
 
     /**
      * 차단 행은 단방향(blocker → blocked)으로만 저장된다.
@@ -72,7 +72,7 @@ class RelationshipQueryImpl(
      * 프로필 표시용 숫자라 그 정도 어긋남은 감수한다. 정확한 값이 필요한 요구가 생기면
      * 두 숫자를 한 응답으로 묶어 내는 포트를 이쪽에서 트랜잭션과 함께 만들어야 한다.
      */
-    override fun counts(memberId: Long) = FollowQuery.CountInfo(
+    override fun counts(memberId: Long) = FollowReader.CountInfo(
         followers = repo.countFollowers(memberId),
         followings = repo.countFollowings(memberId),
     )

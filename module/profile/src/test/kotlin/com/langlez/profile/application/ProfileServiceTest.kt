@@ -2,12 +2,12 @@ package com.langlez.profile.application
 
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.FollowReader
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -24,8 +24,8 @@ class ProfileServiceTest : BehaviorSpec({
     val storage = mockk<Storage>()
     val profileImageLocker = mockk<ProfileImageLocker>()
 
-    val follows = mockk<FollowQuery>()
-    val members = mockk<MemberQuery>()
+    val follows = mockk<FollowReader>()
+    val members = mockk<MemberReader>()
 
     // 포트 호출을 트랜잭션 밖에서 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
     val tx = mockk<TransactionTemplate>()
@@ -35,7 +35,7 @@ class ProfileServiceTest : BehaviorSpec({
 
     afterEach { clearMocks(repo, storage, profileImageLocker, follows, members, answers = false) }
 
-    fun memberInfo(id: Long, handle: String = "user$id") = MemberQuery.ProfileInfo(
+    fun memberInfo(id: Long, handle: String = "user$id") = MemberReader.ProfileInfo(
         id = id,
         handle = handle,
         gender = "SECRET",
@@ -58,7 +58,7 @@ class ProfileServiceTest : BehaviorSpec({
                 every { members.findProfileInfo(9L) } returns memberInfo(9L, "target")
                 every { repo.increaseVisitCount(1L, "target") } returns Unit
                 every { repo.getVisitCountDelta("target") } returns 2L
-                every { follows.counts(9L) } returns FollowQuery.CountInfo(followers = 12L, followings = 3L)
+                every { follows.counts(9L) } returns FollowReader.CountInfo(followers = 12L, followings = 3L)
 
                 val detail = service.getProfileDetail(1L, "target", Locale.KOREA)
 

@@ -1,7 +1,7 @@
 package com.langlez.member
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.MemberCreatedEvent
 import com.langlez.member.contract.MemberHandleChangedEvent
 import com.langlez.member.contract.MemberWithdrawnEvent
@@ -75,7 +75,7 @@ class MemberIntegrationTest : BehaviorSpec() {
     lateinit var objectMapper: ObjectMapper
 
     @Autowired
-    lateinit var memberStatusQuery: MemberQuery
+    lateinit var memberStatusQuery: MemberReader
 
     companion object {
         @JvmField
@@ -502,7 +502,7 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = newMember("created")
 
                 Then("CREATED 로 보인다") {
-                    memberStatusQuery.findStatus(m.id) shouldBe MemberQuery.Status.CREATED
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.CREATED
                 }
             }
 
@@ -511,7 +511,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("곧바로 SUSPENDED 로 보인다") {
                     memberService.suspendMember(m.id, reason = "test")
-                    memberStatusQuery.findStatus(m.id) shouldBe MemberQuery.Status.SUSPENDED
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.SUSPENDED
                 }
             }
 
@@ -521,7 +521,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("곧바로 ACTIVE 로 보인다") {
                     memberService.unsuspendMember(m.id)
-                    memberStatusQuery.findStatus(m.id) shouldBe MemberQuery.Status.ACTIVE
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.ACTIVE
                 }
             }
 
@@ -530,7 +530,7 @@ class MemberIntegrationTest : BehaviorSpec() {
 
                 Then("곧바로 WITHDRAWN 으로 보인다") {
                     memberService.withdrawMember(m.id)
-                    memberStatusQuery.findStatus(m.id) shouldBe MemberQuery.Status.WITHDRAWN
+                    memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.WITHDRAWN
                 }
             }
 
