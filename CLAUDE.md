@@ -111,6 +111,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 고빈도·저가치 신호를 브로커에 태우면 비용만 든다. 접속 핑(5초 간격)이 그랬다 — 브로커 왕복에 handle→id 조회까지 붙어 있었다. 지금은 `MemberPingController` 가 레디스 버킷에 바로 쓴다.
 
+**`*-api` 포트 호출은 원격 호출로 취급한다.** 지금은 같은 프로세스·같은 DB 라 트랜잭션 안에서 불러도 돌지만, 이 포트들은 곧 gRPC/HTTP 로 대체된다. 트랜잭션 안에 두면 그때 셋이 한꺼번에 터진다 — DB 커넥션을 쥔 채 네트워크를 기다려 풀이 마르고, 스냅샷 일관성은 어차피 사라지며, 롤백이 원격 쪽을 되돌리지 못한다. 셋 다 컴파일과 테스트를 통과하고 런타임에만 어긋난다. 그러니 **포트 호출을 먼저 끝내고 결과만 트랜잭션에 넘긴다**(`TransactionTemplate.execute`). 목록에 붙이는 조회는 항목마다 부르지 말고 배치 메서드(`MemberQuery.findProfileInfos`, `BlockQuery.blockedAmong`)로 한 번에 묻는다. 그 대가로 판정과 저장 사이에 TOCTOU 창이 열리는데, **감수하기로 한 창은 KDoc 에 무엇이 어긋날 수 있는지 적는다.**
+
 현재 계약 배치:
 
 | 모듈 | 담긴 것 |
@@ -394,7 +396,7 @@ orca terminal close --terminal <agy_handle> --json
 | 도메인 예외를 그대로 밖으로 전파 | `LanglezException` 으로 변환 |
 | 예외 메시지에 한국어 문장 | i18n 메시지 키 |
 | 회원 id 를 요청 본문으로 받기 | `@MemberId` |
-| DB 트랜잭션 안에서 S3/외부 API 호출 | 트랜잭션 밖에서 먼저 처리 |
+| DB 트랜잭션 안에서 `*-api` 포트 / S3 / 외부 API 호출 | 트랜잭션 밖에서 먼저 끝내고 결과만 넘긴다 |
 | `@Scheduled` 만 단독 사용 | `@DistributedLock` 병행 |
 | `@TransactionalEventListener(AFTER_COMMIT)` 로 Outbox 기록 | `BEFORE_COMMIT` |
 | 어노테이션 타깃 생략 (`@Schema`) | `@field:Schema` |
