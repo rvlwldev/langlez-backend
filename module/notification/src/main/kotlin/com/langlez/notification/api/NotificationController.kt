@@ -2,12 +2,16 @@ package com.langlez.notification.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.annotation.MemberId
+import com.langlez.notification.api.request.NotificationSettingUpdateRequest
 import com.langlez.notification.api.response.NotificationResponse
+import com.langlez.notification.api.response.NotificationSettingResponse
 import com.langlez.notification.application.NotificationService
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus.NO_CONTENT
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -33,6 +37,18 @@ class NotificationController(
     override fun markRead(@MemberId memberId: Long, @PathVariable id: Long) {
         service.markRead(memberId, id)
     }
+
+    @GetMapping("/settings")
+    override fun getSettings(@MemberId memberId: Long): NotificationSettingResponse =
+        NotificationSettingResponse(service.settingsOf(memberId))
+
+    @PatchMapping("/settings")
+    override fun updateSettings(
+        @MemberId memberId: Long,
+        @RequestBody @Valid request: NotificationSettingUpdateRequest,
+    ): NotificationSettingResponse = NotificationSettingResponse(
+        service.updateSettings(memberId, request.mutedTypes, request.quietFrom, request.quietTo, request.timeZone)
+    )
 
     companion object {
         private const val DEFAULT_SIZE = 20
