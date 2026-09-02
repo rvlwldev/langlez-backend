@@ -130,7 +130,6 @@ class ChatService(
         return ChatMessageView.of(message).also { broadcaster.broadcast(topic(roomId), it) }
     }
 
-    @Transactional
     /**
      * 첨부 업로드 URL 발급.
      *
