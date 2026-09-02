@@ -15,8 +15,9 @@ dependencies {
     implementation(project(":module:echo-api"))
     implementation(project(":module:attachment-api"))
 
-    // module:relationship 을 직접 참조하지 않는다. 팔로우·차단은 계약 모듈의 포트로만 본다.
-    implementation(project(":module:relationship-api"))
+    // module:follow / module:block 을 직접 참조하지 않는다. 팔로우·차단은 계약 모듈의 포트로만 본다.
+    implementation(project(":module:follow-api"))
+    implementation(project(":module:block-api"))
 
     ksp(libs.dependency.querydsl.ksp)
 

@@ -1,8 +1,8 @@
 package com.langlez.profile
 
 import com.langlez.attachment.contract.Storage
+import com.langlez.follow.contract.FollowReader
 import com.langlez.member.contract.MemberReader
-import com.langlez.relationship.contract.FollowReader
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -33,7 +33,7 @@ class TestProfileApplication {
         override fun attach(key: String, sourceId: Long?) = "https://cdn.test/$key"
     }
 
-    /** 구현체는 relationship 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
+    /** 구현체는 follow 모듈에 있다. profile 단독 컨텍스트엔 없어서 대역을 쓴다. */
     @Bean
     fun followReader(): FollowReader = object : FollowReader {
         override fun followingIds(memberId: Long) = emptyList<Long>()

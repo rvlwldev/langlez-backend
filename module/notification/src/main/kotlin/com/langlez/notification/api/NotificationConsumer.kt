@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageDeduplicator
 import com.langlez.notification.application.NotificationService
-import com.langlez.relationship.contract.MemberFollowedEvent
+import com.langlez.follow.contract.MemberFollowedEvent
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
 

@@ -1,8 +1,7 @@
 package com.langlez.echo.application
 
-import com.langlez.relationship.contract.BlockReader
-import com.langlez.relationship.contract.FollowReader
 import com.langlez.attachment.contract.Storage
+import com.langlez.block.contract.BlockReader
 import com.langlez.echo.contract.EchoCommentCreatedEvent
 import com.langlez.echo.contract.EchoPostLikedEvent
 import com.langlez.echo.domain.Comment
@@ -11,13 +10,14 @@ import com.langlez.echo.domain.Hashtag
 import com.langlez.echo.domain.Post
 import com.langlez.echo.domain.PostMedia
 import com.langlez.exception.LanglezException
+import com.langlez.follow.contract.FollowReader
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk

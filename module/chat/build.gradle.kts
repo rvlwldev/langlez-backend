@@ -14,7 +14,7 @@ dependencies {
 
     implementation(project(":module:chat-api"))
     implementation(project(":module:member-api"))
-    implementation(project(":module:relationship-api"))
+    implementation(project(":module:block-api"))
     implementation(project(":module:attachment-api"))
 
     implementation(libs.dependency.springboot.websocket)

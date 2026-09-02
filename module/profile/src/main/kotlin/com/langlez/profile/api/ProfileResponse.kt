@@ -1,9 +1,9 @@
 package com.langlez.profile.api
 
+import com.langlez.follow.contract.FollowReader
 import com.langlez.member.contract.MemberReader
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
-import com.langlez.relationship.contract.FollowReader
 import java.time.Instant
 import java.time.LocalDate
 import java.util.*

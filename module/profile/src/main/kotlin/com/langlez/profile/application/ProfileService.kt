@@ -1,21 +1,21 @@
 package com.langlez.profile.application
 
-import com.langlez.relationship.contract.FollowReader
-import com.langlez.member.contract.MemberReader
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
+import com.langlez.follow.contract.FollowReader
+import com.langlez.member.contract.MemberReader
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
+import java.time.Instant
+import java.util.Locale
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
-import java.util.Locale
 
 @Service
 class ProfileService(
@@ -74,8 +74,8 @@ class ProfileService(
             ?: throw LanglezException(404, "profile.not-found")
         increaseVisitCount(visitorId, username)
         val visitDelta = getVisitCount(username)
-        // 팔로워/팔로잉 수는 relationship 소유라 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
-        // 여기 실어 보낸다 — 클라이언트가 relationship 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
+        // 팔로워/팔로잉 수는 follow 소유라 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
+        // 여기 실어 보낸다 — 클라이언트가 follow 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
         val counts = follows.counts(member.id)
         return ProfileResponse.Detail(
             profile,

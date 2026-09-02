@@ -4,7 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageDeduplicator
 import com.langlez.notification.application.NotificationService
-import com.langlez.relationship.contract.MemberFollowedEvent
+import com.langlez.follow.contract.MemberFollowedEvent
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.Runs

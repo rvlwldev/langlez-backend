@@ -10,7 +10,7 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation(project(":module:member-api"))
-    implementation(project(":module:relationship-api"))
+    implementation(project(":module:follow-api"))
     implementation(project(":module:attachment-api"))
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))

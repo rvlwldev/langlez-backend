@@ -1,7 +1,7 @@
 package com.langlez.chat
 
 import com.langlez.attachment.contract.Storage
-import com.langlez.relationship.contract.BlockReader
+import com.langlez.block.contract.BlockReader
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -25,7 +25,7 @@ class TestChatApplication {
         override fun attach(key: String, sourceId: Long?) = "https://cdn.test/$key"
     }
 
-    /** BlockReader 구현체는 relationship 모듈에 있다. chat 단독 컨텍스트에선 차단이 없는 것으로 둔다. */
+    /** BlockReader 구현체는 block 모듈에 있다. chat 단독 컨텍스트에선 차단이 없는 것으로 둔다. */
     @Bean
     fun blockReader(): BlockReader = object : BlockReader {
         override fun isBlockedBetween(memberId: Long, otherId: Long) = false
