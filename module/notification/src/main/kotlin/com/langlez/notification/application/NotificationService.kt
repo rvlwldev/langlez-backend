@@ -180,20 +180,24 @@ class NotificationService(
     }
 
     /**
-     * `mutedTypes` 는 전체 교체다. 개별 추가/삭제를 두지 않아 검사가 한 곳에 모인다.
-     * `quietFrom`/`quietTo` 는 둘 다 있거나 둘 다 없어야 한다(`NotificationSetting.updateQuietHours`).
+     * `types` 는 전체 교체다. 개별 추가/삭제 엔드포인트를 두지 않아 검사가 한 곳에 모인다.
+     *
+     * 방해금지(`updateQuietHours`)와 엔드포인트·메서드를 분리했다 — 한 리소스로 묶어 PATCH 로
+     * 받으면, 클라이언트가 mute 목록만 보낼 때 방해금지 필드가 DTO 기본값(`null`/빈 값)으로
+     * 조용히 덮어써진다. PUT 두 개로 쪼개면 각각이 자기 리소스의 전체 교체라 그 모호함이 없다.
      */
     @Transactional
-    fun updateSettings(
-        memberId: Long,
-        mutedTypes: Set<String>,
-        quietFrom: LocalTime?,
-        quietTo: LocalTime?,
-        timeZone: String?,
-    ): NotificationSettingSnapshot {
-        val unknown = mutedTypes - VALID_TYPES
+    fun updateMutes(memberId: Long, types: Set<String>): Set<String> {
+        val unknown = types - VALID_TYPES
         if (unknown.isNotEmpty()) throw LanglezException(BAD_REQUEST, "notification.type.unknown")
 
+        mutes.replaceAll(memberId, types)
+        return types
+    }
+
+    /** `from`/`to` 는 둘 다 있거나 둘 다 없어야 한다(`NotificationSetting.updateQuietHours`). */
+    @Transactional
+    fun updateQuietHours(memberId: Long, from: LocalTime?, to: LocalTime?, timeZone: String?): NotificationSetting {
         if (timeZone != null) {
             runCatching { ZoneId.of(timeZone) }
                 .getOrElse { throw LanglezException(BAD_REQUEST, "notification.time-zone.invalid", it) }
@@ -201,14 +205,11 @@ class NotificationService(
 
         val setting = settingsRepo.find(memberId) ?: NotificationSetting(memberId = memberId)
         try {
-            setting.updateQuietHours(quietFrom, quietTo, timeZone)
+            setting.updateQuietHours(from, to, timeZone)
         } catch (e: IllegalArgumentException) {
             throw LanglezException(BAD_REQUEST, e.message, e)
         }
-        settingsRepo.save(setting)
-        mutes.replaceAll(memberId, mutedTypes)
-
-        return NotificationSettingSnapshot(mutedTypes, setting.quietFrom, setting.quietTo, setting.timeZone)
+        return settingsRepo.save(setting)
     }
 
     companion object {

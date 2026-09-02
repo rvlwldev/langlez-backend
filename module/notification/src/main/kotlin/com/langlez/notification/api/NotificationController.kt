@@ -2,7 +2,10 @@ package com.langlez.notification.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.annotation.MemberId
-import com.langlez.notification.api.request.NotificationSettingUpdateRequest
+import com.langlez.notification.api.request.NotificationMuteUpdateRequest
+import com.langlez.notification.api.request.NotificationQuietHoursUpdateRequest
+import com.langlez.notification.api.response.NotificationMuteResponse
+import com.langlez.notification.api.response.NotificationQuietHoursResponse
 import com.langlez.notification.api.response.NotificationResponse
 import com.langlez.notification.api.response.NotificationSettingResponse
 import com.langlez.notification.application.NotificationService
@@ -11,6 +14,7 @@ import org.springframework.http.HttpStatus.NO_CONTENT
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -42,12 +46,18 @@ class NotificationController(
     override fun getSettings(@MemberId memberId: Long): NotificationSettingResponse =
         NotificationSettingResponse(service.settingsOf(memberId))
 
-    @PatchMapping("/settings")
-    override fun updateSettings(
+    @PutMapping("/mutes")
+    override fun updateMutes(
         @MemberId memberId: Long,
-        @RequestBody @Valid request: NotificationSettingUpdateRequest,
-    ): NotificationSettingResponse = NotificationSettingResponse(
-        service.updateSettings(memberId, request.mutedTypes, request.quietFrom, request.quietTo, request.timeZone)
+        @RequestBody @Valid request: NotificationMuteUpdateRequest,
+    ): NotificationMuteResponse = NotificationMuteResponse(service.updateMutes(memberId, request.types))
+
+    @PutMapping("/quiet-hours")
+    override fun updateQuietHours(
+        @MemberId memberId: Long,
+        @RequestBody @Valid request: NotificationQuietHoursUpdateRequest,
+    ): NotificationQuietHoursResponse = NotificationQuietHoursResponse(
+        service.updateQuietHours(memberId, request.from, request.to, request.timeZone)
     )
 
     companion object {
