@@ -9,13 +9,20 @@ import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.notification.domain.Notification
+import com.langlez.notification.domain.NotificationMuteRepository
 import com.langlez.notification.domain.NotificationRepository
+import com.langlez.notification.domain.NotificationSetting
+import com.langlez.notification.domain.NotificationSettingRepository
 import com.langlez.notification.domain.PushSender
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * 알림 발송과 이력.
@@ -31,6 +38,8 @@ class NotificationService(
     private val tokens: PushTokenReader,
     private val push: PushSender,
     private val mapper: ObjectMapper,
+    private val mutes: NotificationMuteRepository,
+    private val settingsRepo: NotificationSettingRepository,
 ) : Notificator {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -44,6 +53,16 @@ class NotificationService(
      *
      * 트랜잭션을 걸지 않았다 — `repo.saveAll` 이 자기 트랜잭션을 갖고, 뒤따르는 브로드캐스트와
      * FCM 은 네트워크 I/O 라 DB 커넥션을 쥔 채 외부를 기다리면 풀이 마른다.
+     *
+     * 인앱과 푸시를 다르게 취급한다 — 이 구분이 핵심이다.
+     * - 유형 mute 는 그 알림 자체를 없던 일로 한다: 이력도 안 남고 푸시도 안 간다.
+     * - 방해금지 시간대는 푸시만 막는다: 이력·인앱 브로드캐스트는 그대로 남긴다.
+     *   방해금지가 이력까지 지우면 아침에 열었을 때 밤새 온 알림이 통째로 사라진다 —
+     *   그건 "설정"이 아니라 "유실"이다.
+     *
+     * 설정(mute·quiet) 조회가 실패해도 발송 자체를 죽이지 않는다. 바로 아래 FCM 호출이
+     * 이미 같은 판단(runCatching + warn)을 하고 있다 — 설정을 못 읽으면 전부 보내는 쪽(기존 동작)으로
+     * 흐르게 하고 warn 만 남긴다.
      */
     override fun notifyAll(
         memberIds: Collection<Long>,
@@ -55,9 +74,15 @@ class NotificationService(
         val recipients = memberIds.toSet()
         if (recipients.isEmpty()) return
 
+        val mutedBy = runCatching { mutes.findAll(recipients) }
+            .onFailure { logger.warn("알림 mute 설정 조회 실패, 전부 발송한다: recipients={}", recipients.size, it) }
+            .getOrDefault(emptyMap())
+        val active = recipients.filterNot { type in mutedBy[it].orEmpty() }.toSet()
+        if (active.isEmpty()) return
+
         val payload = data.takeIf { it.isNotEmpty() }?.let(mapper::writeValueAsString)
         val saved = repo.saveAll(
-            recipients.map { memberId ->
+            active.map { memberId ->
                 Notification(recipientId = memberId, type = type, title = title, body = body, data = payload)
             }
         )
@@ -68,14 +93,22 @@ class NotificationService(
             broadcaster.broadcast("$NOTIFICATION_TOPIC_PREFIX${it.recipientId}", NotificationView(it, data))
         }
 
+        val quietBy = runCatching { settingsRepo.findAll(active) }
+            .onFailure { logger.warn("방해금지 설정 조회 실패, 푸시는 전부 보낸다: recipients={}", active.size, it) }
+            .getOrDefault(emptyList())
+            .associateBy(NotificationSetting::memberId)
+        val now = Instant.now()
+        val pushTargets = active.filterNot { quietBy[it]?.isQuietAt(now) == true }.toSet()
+        if (pushTargets.isEmpty()) return
+
         // 토큰이 없으면(로그아웃·푸시 거부) 보낼 곳이 없다. 이력은 이미 남았으니 조용히 끝낸다.
-        val tokensByMember = tokens.findPushTokens(recipients)
+        val tokensByMember = tokens.findPushTokens(pushTargets)
         if (tokensByMember.isEmpty()) return
 
         // 전송 실패로 컨슈머를 실패시키지 않는다. 죽은 토큰은 재시도해도 같은 결과인데,
         // 그동안 파티션이 막혀 뒤에 쌓인 다른 사람 알림까지 늦어진다.
         val failed = runCatching { push.sendAll(tokensByMember.values, title, body, data) }
-            .onFailure { logger.warn("FCM 다건 푸시 실패, 알림 이력만 남는다: recipients={}", recipients.size, it) }
+            .onFailure { logger.warn("FCM 다건 푸시 실패, 알림 이력만 남는다: recipients={}", pushTargets.size, it) }
             .getOrDefault(emptyList())
 
         if (failed.isNotEmpty()) {
@@ -135,6 +168,50 @@ class NotificationService(
         repo.save(notification.apply { read = true })
     }
 
+    @Transactional(readOnly = true)
+    fun settingsOf(memberId: Long): NotificationSettingSnapshot {
+        val setting = settingsRepo.find(memberId)
+        return NotificationSettingSnapshot(
+            mutedTypes = mutes.find(memberId),
+            quietFrom = setting?.quietFrom,
+            quietTo = setting?.quietTo,
+            timeZone = setting?.timeZone,
+        )
+    }
+
+    /**
+     * `types` 는 전체 교체다. 개별 추가/삭제 엔드포인트를 두지 않아 검사가 한 곳에 모인다.
+     *
+     * 방해금지(`updateQuietHours`)와 엔드포인트·메서드를 분리했다 — 한 리소스로 묶어 PATCH 로
+     * 받으면, 클라이언트가 mute 목록만 보낼 때 방해금지 필드가 DTO 기본값(`null`/빈 값)으로
+     * 조용히 덮어써진다. PUT 두 개로 쪼개면 각각이 자기 리소스의 전체 교체라 그 모호함이 없다.
+     */
+    @Transactional
+    fun updateMutes(memberId: Long, types: Set<String>): Set<String> {
+        val unknown = types - VALID_TYPES
+        if (unknown.isNotEmpty()) throw LanglezException(BAD_REQUEST, "notification.type.unknown")
+
+        mutes.replaceAll(memberId, types)
+        return types
+    }
+
+    /** `from`/`to` 는 둘 다 있거나 둘 다 없어야 한다(`NotificationSetting.updateQuietHours`). */
+    @Transactional
+    fun updateQuietHours(memberId: Long, from: LocalTime?, to: LocalTime?, timeZone: String?): NotificationSetting {
+        if (timeZone != null) {
+            runCatching { ZoneId.of(timeZone) }
+                .getOrElse { throw LanglezException(BAD_REQUEST, "notification.time-zone.invalid", it) }
+        }
+
+        val setting = settingsRepo.find(memberId) ?: NotificationSetting(memberId = memberId)
+        try {
+            setting.updateQuietHours(from, to, timeZone)
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(BAD_REQUEST, e.message, e)
+        }
+        return settingsRepo.save(setting)
+    }
+
     companion object {
         const val TYPE_CHAT_MESSAGE = "CHAT_MESSAGE"
         const val TITLE_CHAT_MESSAGE = "notification.chat-message.title"
@@ -142,10 +219,21 @@ class NotificationService(
         const val TYPE_MEMBER_FOLLOWED = "MEMBER_FOLLOWED"
         const val TITLE_MEMBER_FOLLOWED = "notification.member-followed"
 
+        /** [com.langlez.notification.domain.NotificationMute.type] 로 저장 가능한 값 전체. */
+        private val VALID_TYPES = setOf(TYPE_CHAT_MESSAGE, TYPE_MEMBER_FOLLOWED)
+
         private const val NOTIFICATION_TOPIC_PREFIX = "/topic/notification/"
         private const val CHAT_ROOM_TOPIC_PREFIX = "/topic/chat/room/"
     }
 }
+
+/** 알림 수신 설정 조회/수정 결과. `NotificationSetting`+`NotificationMute` 두 테이블을 묶은 값이라 별도 엔티티가 아니다. */
+data class NotificationSettingSnapshot(
+    val mutedTypes: Set<String>,
+    val quietFrom: LocalTime?,
+    val quietTo: LocalTime?,
+    val timeZone: String?,
+)
 
 /** 인앱 알림으로 밀어주는 실시간 페이로드. */
 data class NotificationView(
