@@ -18,13 +18,16 @@ dependencies {
     // 신고 이벤트(ChatUserReportedEvent)를 @KafkaListener 로 받는다
     implementation(project(":module:chat-api"))
 
-    // 팔로워/차단 목록에 회원 handle·프로필 이미지를 붙인다
-    implementation(project(":module:member"))
+    // 팔로워/차단 목록에 회원 handle·프로필 이미지를 붙인다. 계약(MemberQuery)만 본다
+    implementation(project(":module:member-api"))
 
     ksp(libs.dependency.querydsl.ksp)
 
     // TestRelationshipApplication 이 Storage 대역을 올린다
     testImplementation(project(":module:attachment-api"))
+
+    // 통합테스트가 members 행을 직접 넣는다(팔로우·차단 행의 FK 대상). 프로덕션 코드는 member 를 모른다
+    testImplementation(project(":module:member"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)

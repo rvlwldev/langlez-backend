@@ -11,9 +11,6 @@ dependencies {
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
 
-    implementation(project(":module:member"))
-    implementation(project(":module:relationship"))
-
     implementation(libs.dependency.springboot.websocket)
 
     testImplementation(libs.test.kotest.spring)

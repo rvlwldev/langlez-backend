@@ -1,8 +1,7 @@
 package com.langlez.relationship.application
 
 import com.langlez.exception.LanglezException
-import com.langlez.member.domain.Member
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.contract.MemberQuery
 import com.langlez.relationship.contract.BlockQuery
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.domain.Block
@@ -21,24 +20,31 @@ import io.mockk.slot
 import io.mockk.verify
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 class RelationshipServiceTest : BehaviorSpec({
 
     val repo = mockk<RelationshipRepository>(relaxed = true)
-    val members = mockk<MemberRepository>()
+    val members = mockk<MemberQuery>()
     val blocks = mockk<BlockQuery>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
-    val service = RelationshipService(repo, members, blocks, publisher)
+
+    // 포트 판정을 트랜잭션 밖에서 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = RelationshipService(repo, members, blocks, publisher, tx)
 
     afterEach { clearMocks(repo, members, blocks, publisher, answers = false) }
 
-    fun member(id: Long) = Member(
+    fun member(id: Long) = MemberQuery.ProfileInfo(
         id = id,
-        email = "user$id@test.com",
         handle = "user$id",
-        provider = Member.Provider.GOOGLE,
-        providerId = "p$id",
+        gender = "SECRET",
+        locale = null,
+        birthDay = null,
     )
 
     Given("남의 프로필에서 팔로워/팔로잉 목록을 열 때") {
@@ -63,7 +69,7 @@ class RelationshipServiceTest : BehaviorSpec({
             Then("요청자가 아니라 조회 대상의 목록을 읽는다") {
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollowers(2L, 20, null) } returns listOf(Edge(10L, 3L))
-                every { members.findAll(listOf(3L)) } returns listOf(member(3L))
+                every { members.findProfileInfos(listOf(3L)) } returns mapOf(3L to member(3L))
 
                 service.listFollowersOf(1L, 2L, 20, null).map { it.memberId } shouldBe listOf(3L)
 
@@ -76,7 +82,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("자기 자신을 팔로우하면") {
             Then("400 이 난다") {
-                every { members.find(1L) } returns member(1L)
+                every { members.findProfileInfo(1L) } returns member(1L)
                 every { blocks.isBlockedBetween(any(), any()) } returns false
                 every { repo.findFollow(any(), any()) } returns null
 
@@ -88,7 +94,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("차단 관계인 상대를 팔로우하면") {
             Then("403 이 나고 저장하지 않는다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { blocks.isBlockedBetween(1L, 2L) } returns true
 
                 val ex = shouldThrow<LanglezException> { service.follow(1L, 2L) }
@@ -100,7 +106,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("없는 회원을 팔로우하면") {
             Then("404 가 난다") {
-                every { members.find(99L) } returns null
+                every { members.findProfileInfo(99L) } returns null
 
                 shouldThrow<LanglezException> { service.follow(1L, 99L) }.status.value() shouldBe 404
             }
@@ -108,7 +114,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("이미 팔로우 중인 상대를 다시 팔로우하면") {
             Then("중복 저장도 중복 이벤트도 없다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollow(1L, 2L) } returns Follow(1L, 2L)
 
@@ -121,7 +127,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("정상 팔로우하면") {
             Then("저장하고 팔로우 이벤트를 발행한다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollow(1L, 2L) } returns null
                 // relaxed 목이 돌려주는 Follow 는 id 가 0이라 이벤트 검증이 통과해버린다. 명시 스텁을 둔다.
@@ -137,7 +143,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("언팔로우 후 같은 상대를 다시 팔로우하면") {
             Then("행 id 가 달라 이벤트도 다른 값이 된다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollow(1L, 2L) } returns null
                 every { repo.save(any<Follow>()) } returnsMany listOf(
@@ -159,7 +165,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("자기 자신을 차단하면") {
             Then("400 이 난다") {
-                every { members.find(1L) } returns member(1L)
+                every { members.findProfileInfo(1L) } returns member(1L)
                 every { repo.findBlock(1L, 1L) } returns null
 
                 val ex = shouldThrow<LanglezException> { service.block(1L, 1L) }
@@ -170,7 +176,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("남을 차단하면") {
             Then("차단을 저장하고 팔로우 관계를 양방향으로 끊는다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { repo.findBlock(1L, 2L) } returns null
 
                 service.block(1L, 2L)
@@ -183,7 +189,7 @@ class RelationshipServiceTest : BehaviorSpec({
 
         When("이미 차단한 상대를 다시 차단하면") {
             Then("중복 저장 없이 팔로우 해제만 다시 보장한다") {
-                every { members.find(2L) } returns member(2L)
+                every { members.findProfileInfo(2L) } returns member(2L)
                 every { repo.findBlock(1L, 2L) } returns Block(1L, 2L)
 
                 service.block(1L, 2L)
@@ -257,7 +263,7 @@ class RelationshipServiceTest : BehaviorSpec({
                     RelationshipRepository.Edge(id = 30L, memberId = 2L),
                     RelationshipRepository.Edge(id = 29L, memberId = 3L),
                 )
-                every { members.findAll(listOf(2L, 3L)) } returns listOf(member(2L))
+                every { members.findProfileInfos(listOf(2L, 3L)) } returns mapOf(2L to member(2L))
 
                 val views = service.listFollowers(1L, 20, null)
 

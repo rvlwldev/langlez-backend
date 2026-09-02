@@ -43,6 +43,9 @@ interface MemberQuery {
         val gender: String,
         val locale: Locale?,
         val birthDay: LocalDate?,
+        // 팔로워/차단 목록이 handle 옆에 프로필 사진을 그린다. 필드 하나 때문에 포트를 또 만들면
+        // 이 계약이 네트워크가 될 때 화면 하나에 왕복이 두 번이 된다.
+        val imageUrl: String? = null,
     )
 
     /**

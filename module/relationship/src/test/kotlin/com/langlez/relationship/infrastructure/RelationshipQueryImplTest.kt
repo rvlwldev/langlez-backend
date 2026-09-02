@@ -11,6 +11,7 @@ import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
+import com.querydsl.jpa.impl.JPAQueryFactory
 
 /**
  * chat·echo 가 차단·팔로우를 보는 유일한 통로다.
@@ -21,7 +22,10 @@ class RelationshipQueryImplTest : BehaviorSpec({
     val blocks = mockk<BlockJpaRepository>()
     val follows = mockk<FollowJpaRepository>()
     val repo = mockk<RelationshipRepository>()
-    val query = RelationshipQueryImpl(blocks, follows, repo)
+    // blockedAmong 은 QueryDSL 한 방이라 여기선 목이 의미가 없다. 실제 판정은
+    // RelationshipRepositoryImplTest 가 진짜 DB 로 본다.
+    val dsl = mockk<JPAQueryFactory>()
+    val query = RelationshipQueryImpl(blocks, follows, repo, dsl)
 
     afterEach { clearMocks(blocks, follows, repo, answers = false) }
 

@@ -3,7 +3,7 @@ package com.langlez.relationship.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.core.MessageDeduplicator
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.contract.MemberQuery
 import com.langlez.relationship.application.RelationshipService
 import com.langlez.relationship.contract.BlockQuery
 import com.langlez.relationship.domain.RelationshipRepository
@@ -15,11 +15,13 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 class RelationshipConsumerTest : BehaviorSpec({
 
     val repo = mockk<RelationshipRepository>(relaxed = true)
-    val members = mockk<MemberRepository>(relaxed = true)
+    val members = mockk<MemberQuery>(relaxed = true)
     val blocks = mockk<BlockQuery>(relaxed = true)
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
@@ -33,7 +35,12 @@ class RelationshipConsumerTest : BehaviorSpec({
         }
     }
 
-    val service = RelationshipService(repo, members, blocks, publisher)
+
+    // 포트 판정을 트랜잭션 밖에서 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = RelationshipService(repo, members, blocks, publisher, tx)
     val consumer = RelationshipConsumer(service, dedup, ObjectMapper().registerKotlinModule())
 
     afterEach {

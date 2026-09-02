@@ -145,6 +145,38 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
             }
         }
 
+        /**
+         * 목록 화면은 항목마다 묻지 않고 이 배치 판정을 쓴다.
+         * 판정 규칙이 `isBlockedBetween` 과 갈라지면 한쪽 경로에서만 차단이 먹는 구멍이 생긴다.
+         */
+        Given("내가 건 차단과 나에게 걸린 차단이 섞여 있으면") {
+            val viewer = 5061L
+            val iBlocked = 5062L
+            val blockedMe = 5063L
+            val unrelated = 5064L
+
+            repo.save(Block(viewer, iBlocked))
+            repo.save(Block(blockedMe, viewer))
+
+            Then("양방향 모두 한 번에 걸러진다") {
+                blocks.blockedAmong(viewer, listOf(iBlocked, blockedMe, unrelated)) shouldBe
+                    setOf(iBlocked, blockedMe)
+            }
+
+            Then("단건 판정과 결과가 같다") {
+                listOf(iBlocked, blockedMe, unrelated).filter { blocks.isBlockedBetween(viewer, it) } shouldBe
+                    listOf(iBlocked, blockedMe)
+            }
+
+            Then("자기 자신은 후보에 넣어도 차단으로 잡히지 않는다") {
+                blocks.blockedAmong(viewer, listOf(viewer, unrelated)) shouldBe emptySet()
+            }
+
+            Then("후보가 비면 조회하지 않고 빈 집합이다") {
+                blocks.blockedAmong(viewer, emptyList()) shouldBe emptySet()
+            }
+        }
+
         Given("팔로우가 하나도 없는 회원은") {
             val loner = 5041L
 

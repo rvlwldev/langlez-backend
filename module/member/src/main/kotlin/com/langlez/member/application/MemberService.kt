@@ -68,9 +68,15 @@ class MemberService(
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
 
-    @Transactional(readOnly = true)
-    fun isOnline(handle: String): Boolean = findOrThrow(handle)
-        .let { member -> tracker.checkOnline(member.id)[member.id] == true }
+    /**
+     * `tracker.checkOnline` 은 `member-api` 포트라 트랜잭션 안에서 부르지 않는다.
+     * handle 조회는 읽기 하나뿐이라 저장소 자체 트랜잭션으로 충분하다.
+     */
+    fun isOnline(handle: String): Boolean {
+        val id = findOrThrow(handle).id
+
+        return tracker.checkOnline(id)[id] == true
+    }
 
     @Transactional
     fun verify(id: Long) = findOrThrow(id).apply { verify() }
@@ -82,12 +88,21 @@ class MemberService(
             .also(repo::save)
     }
 
-    @Transactional
+    /**
+     * 마지막 접속 시각 갱신.
+     *
+     * 현재 호출자 없음 — 접속 핑(5초 간격)은 `MemberPingController` 가 레디스 직결로 처리한다.
+     *
+     * `tracker.toOnline` 은 포트 호출이라 트랜잭션이 커밋된 뒤로 뺐다.
+     */
     fun updateLastAccess(id: Long) {
-        (repo.find(id) ?: return)
-            .apply { updateAccessedAt() }
-            .apply { runCatching { tracker.toOnline(this.id) } }
-            .also(repo::save)
+        val member = tx.execute {
+            (repo.find(id) ?: return@execute null)
+                .apply { updateAccessedAt() }
+                .let(repo::save)
+        } ?: return
+
+        runCatching { tracker.toOnline(member.id) }
     }
 
     fun presignProfileUrl(id: Long, filename: String) =

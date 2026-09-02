@@ -1,7 +1,7 @@
 package com.langlez.relationship.application
 
 import com.langlez.exception.LanglezException
-import com.langlez.member.domain.MemberRepository
+import com.langlez.member.contract.MemberQuery
 import com.langlez.relationship.contract.BlockQuery
 import com.langlez.relationship.contract.MemberFollowedEvent
 import com.langlez.relationship.domain.Block
@@ -17,19 +17,25 @@ import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * 팔로우·차단·신고 유스케이스.
  *
- * 차단 여부 판정은 이 모듈이 구현한 `core.BlockQuery` 를 그대로 쓴다 —
+ * 차단 여부 판정은 이 모듈이 구현한 `BlockQuery` 를 그대로 쓴다 —
  * 양방향 판정 규칙이 chat 과 갈라지면 한쪽에서만 막히는 구멍이 생긴다.
+ *
+ * 회원 정보는 `member-api` 의 `MemberQuery` 로만 본다. member 의 domain 계층(`MemberRepository`)을
+ * 직접 참조하면 모듈 경계가 무너지고, 그 포트가 원격이 될 때 여기가 통째로 깨진다.
+ * `MemberQuery` 호출은 전부 트랜잭션 밖에서 끝낸다.
  */
 @Service
 class RelationshipService(
     private val repo: RelationshipRepository,
-    private val members: MemberRepository,
+    private val members: MemberQuery,
     private val blocks: BlockQuery,
     private val publisher: ApplicationEventPublisher,
+    private val tx: TransactionTemplate,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -39,33 +45,41 @@ class RelationshipService(
      *
      * 이미 팔로우 중이면 조용히 끝낸다(멱등). 더블 탭이나 재시도로 409 를 돌려줄 이유가 없다.
      * 남은 경합은 UNQ_MEMBER_FOLLOW 가 막는다.
+     *
+     * 존재·차단 판정은 다른 모듈의 포트라 트랜잭션 밖에서 먼저 끝낸다. 판정과 저장 사이에
+     * 상대가 탈퇴하거나 차단을 걸면 팔로우 행 하나가 남는데, 이후 조회가 전부 다시 차단을 보고
+     * 사라진 회원은 `toViews` 에서 빠지므로 노출로 이어지지 않는다.
      */
-    @Transactional
     fun follow(memberId: Long, targetId: Long) {
         requireMemberExists(targetId)
         if (blocks.isBlockedBetween(memberId, targetId)) throw LanglezException(FORBIDDEN, "social.follow.blocked")
-        if (repo.findFollow(memberId, targetId) != null) return
 
-        // 저장 결과의 행 id 를 이벤트에 싣는다. 컨슈머 중복 판정이 이 값으로 갈린다
-        // (언팔로우 후 재팔로우와 카프카 재배달을 구분하는 유일한 값이다).
-        val follow = repo.save(newFollow(memberId, targetId))
-        publisher.publishEvent(MemberFollowedEvent(follow.id, memberId, targetId))
+        tx.execute {
+            if (repo.findFollow(memberId, targetId) != null) return@execute
+
+            // 저장 결과의 행 id 를 이벤트에 싣는다. 컨슈머 중복 판정이 이 값으로 갈린다
+            // (언팔로우 후 재팔로우와 카프카 재배달을 구분하는 유일한 값이다).
+            val follow = repo.save(newFollow(memberId, targetId))
+            publisher.publishEvent(MemberFollowedEvent(follow.id, memberId, targetId))
+        }
     }
 
     /** 언팔로우는 없는 관계를 지워도 성공이다. 클라이언트가 상태를 몰라도 되게 한다. */
     @Transactional
     fun unfollow(memberId: Long, targetId: Long) = repo.deleteFollow(memberId, targetId)
 
-    @Transactional(readOnly = true)
+    /**
+     * 목록 조회에는 트랜잭션을 걸지 않는다. 저장소 읽기 한 번 + `MemberQuery` 배치 조회 한 번인데,
+     * 그 포트가 원격이 되면 트랜잭션이 커넥션을 쥔 채 네트워크를 기다린다. 감싸도 한 스냅샷이
+     * 되지도 않는다 — 회원 정보는 이미 다른 저장소다.
+     */
     fun listFollowers(memberId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> =
         toViews(repo.findFollowers(memberId, size, cursor))
 
-    @Transactional(readOnly = true)
     fun listFollowings(memberId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> =
         toViews(repo.findFollowings(memberId, size, cursor))
 
     /** 남의 프로필에서 보는 팔로워 목록. */
-    @Transactional(readOnly = true)
     fun listFollowersOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> {
         requireVisible(viewerId, targetId)
 
@@ -73,7 +87,6 @@ class RelationshipService(
     }
 
     /** 남의 프로필에서 보는 팔로잉 목록. */
-    @Transactional(readOnly = true)
     fun listFollowingsOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> {
         requireVisible(viewerId, targetId)
 
@@ -86,21 +99,24 @@ class RelationshipService(
      * 팔로우 관계를 양방향으로 끊는다 — 차단해 놓고 서로 팔로우 목록에 남아 있으면
      * 타임라인·알림이 계속 흘러 차단이 무의미해진다.
      * 이미 차단된 상대여도 해제는 다시 보장한다(과거에 반쪽만 끊긴 데이터를 수습한다).
+     *
+     * `follow` 와 같은 이유로 존재 확인은 트랜잭션 밖이다. 확인과 저장 사이에 상대가 탈퇴해도
+     * 차단 행이 남을 뿐이고, 그건 원래 탈퇴 회원에게도 남겨두는 데이터다.
      */
-    @Transactional
     fun block(memberId: Long, targetId: Long) {
         requireMemberExists(targetId)
 
-        if (repo.findBlock(memberId, targetId) == null) repo.save(newBlock(memberId, targetId))
+        tx.execute {
+            if (repo.findBlock(memberId, targetId) == null) repo.save(newBlock(memberId, targetId))
 
-        repo.deleteFollow(memberId, targetId)
-        repo.deleteFollow(targetId, memberId)
+            repo.deleteFollow(memberId, targetId)
+            repo.deleteFollow(targetId, memberId)
+        }
     }
 
     @Transactional
     fun unblock(memberId: Long, targetId: Long) = repo.deleteBlock(memberId, targetId)
 
-    @Transactional(readOnly = true)
     fun listBlocks(memberId: Long, size: Int, cursor: Long?): List<RelationshipMemberView> =
         toViews(repo.findBlocks(memberId, size, cursor))
 
@@ -150,23 +166,32 @@ class RelationshipService(
     private fun toViews(edges: List<Edge>): List<RelationshipMemberView> {
         if (edges.isEmpty()) return emptyList()
 
-        val members = members.findAll(edges.map { it.memberId }).associateBy { it.id }
+        val infos = members.findProfileInfos(edges.map { it.memberId })
 
         return edges.mapNotNull { edge ->
-            members[edge.memberId]?.let { RelationshipMemberView(edge.id, it.id, it.handle, it.imageUrl) }
+            infos[edge.memberId]?.let { RelationshipMemberView(edge.id, it.id, it.handle, it.imageUrl) }
         }
     }
 
     /**
      * 차단 관계면 목록 자체를 막는다. 걸러 봐야 전부 빠진다 —
      * `EchoService.memberTimeline` 이 같은 판단을 한다.
+     *
+     * 포트 호출이라 호출부가 트랜잭션을 열기 전에 부른다.
      */
     private fun requireVisible(viewerId: Long, targetId: Long) {
         if (blocks.isBlockedBetween(viewerId, targetId)) throw LanglezException(FORBIDDEN, "social.blocked")
     }
 
+    /**
+     * 행이 있으면 통과다. 탈퇴 회원도 행은 남으므로(지우지 않는 정책이다) 여기서 404 가 되지 않는데,
+     * `MemberRepository.find` 를 쓰던 이전 동작 그대로다 — 포트 교체로 판정을 바꾸지 않았다.
+     *
+     * `findStatus` 도 같은 조회를 타서 결과는 같지만 쓰지 않는다. 상태값이 필요 없는 자리에
+     * 상태 포트를 쓰면 다음 사람이 "정지 회원은 여기서 걸러진다"고 오해한다.
+     */
     private fun requireMemberExists(id: Long) {
-        members.find(id) ?: throw LanglezException(NOT_FOUND, "member.not-found")
+        members.findProfileInfo(id) ?: throw LanglezException(NOT_FOUND, "member.not-found")
     }
 
     /** 자기 자신 여부는 엔티티가 막는다. 여기선 상태코드만 붙인다. */

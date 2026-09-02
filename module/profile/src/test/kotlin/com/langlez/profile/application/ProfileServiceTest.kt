@@ -15,6 +15,8 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.*
 import java.util.Locale
 import org.springframework.http.HttpStatus
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 class ProfileServiceTest : BehaviorSpec({
 
@@ -25,7 +27,11 @@ class ProfileServiceTest : BehaviorSpec({
     val follows = mockk<FollowQuery>()
     val members = mockk<MemberQuery>()
 
-    val service = ProfileService(repo, storage, profileImageLocker, follows, members)
+    // 포트 호출을 트랜잭션 밖에서 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = ProfileService(repo, storage, profileImageLocker, follows, members, tx)
 
     afterEach { clearMocks(repo, storage, profileImageLocker, follows, members, answers = false) }
 
@@ -47,7 +53,8 @@ class ProfileServiceTest : BehaviorSpec({
         // 프로필 화면이 팔로워/팔로잉 숫자를 함께 그린다. 여기 안 실으면 클라이언트가 요청을 한 번 더 쏜다.
         When("팔로워와 팔로잉이 있는 회원이면") {
             Then("두 숫자가 응답에 실려 나간다") {
-                every { repo.findProfileByUsername("target") } returns profile(9L)
+                every { members.findIdByHandle("target") } returns 9L
+                every { repo.findProfile(9L) } returns profile(9L)
                 every { members.findProfileInfo(9L) } returns memberInfo(9L, "target")
                 every { repo.increaseVisitCount(1L, "target") } returns Unit
                 every { repo.getVisitCountDelta("target") } returns 2L
@@ -188,7 +195,8 @@ class ProfileServiceTest : BehaviorSpec({
 
         When("존재하는 username으로 조회하면") {
             val p = profile(1L)
-            every { repo.findProfileByUsername("user1") } returns p
+            every { members.findIdByHandle("user1") } returns 1L
+            every { repo.findProfile(1L) } returns p
 
             val result = service.getProfile("user1")
 
@@ -198,7 +206,7 @@ class ProfileServiceTest : BehaviorSpec({
         }
 
         When("존재하지 않는 username으로 조회하면") {
-            every { repo.findProfileByUsername("ghost") } returns null
+            every { members.findIdByHandle("ghost") } returns null
 
             Then("NOT_FOUND 예외가 발생한다") {
                 shouldThrow<LanglezException> {
@@ -236,7 +244,9 @@ class ProfileServiceTest : BehaviorSpec({
             }
         }
 
+        // 계정 조회가 프로필 조회보다 앞선다 — 포트 호출을 트랜잭션 밖에서 먼저 끝내기 때문이다.
         When("프로필 행이 없으면") {
+            every { members.findProfileInfo(2L) } returns memberInfo(2L)
             every { repo.findProfile(2L) } returns null
 
             Then("NOT_FOUND 예외가 발생한다") {

@@ -56,5 +56,6 @@ class MemberQueryImpl(private val repo: MemberRepository) : MemberQuery, PushTok
         gender = gender.name,
         locale = locale,
         birthDay = birthDay,
+        imageUrl = imageUrl,
     )
 }
