@@ -7,7 +7,10 @@ import com.langlez.exception.LanglezException
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import com.langlez.notification.domain.Notification
+import com.langlez.notification.domain.NotificationMuteRepository
 import com.langlez.notification.domain.NotificationRepository
+import com.langlez.notification.domain.NotificationSetting
+import com.langlez.notification.domain.NotificationSettingRepository
 import com.langlez.notification.domain.PushSender
 import com.langlez.relationship.contract.MemberFollowedEvent
 import io.kotest.assertions.throwables.shouldThrow
@@ -20,6 +23,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import java.time.LocalTime
 
 class NotificationServiceTest : BehaviorSpec({
 
@@ -28,14 +32,19 @@ class NotificationServiceTest : BehaviorSpec({
     val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
     val tokens = mockk<PushTokenReader>()
     val push = mockk<PushSender>(relaxed = true)
+    val mutes = mockk<NotificationMuteRepository>()
+    val settingsRepo = mockk<NotificationSettingRepository>()
 
-    val service = NotificationService(repo, tracker, broadcaster, tokens, push, ObjectMapper())
+    val service = NotificationService(repo, tracker, broadcaster, tokens, push, ObjectMapper(), mutes, settingsRepo)
 
     // answers = false 라 여기 둔 스텁은 유지된다. 호출 기록만 매 테스트마다 지워진다.
     every { repo.save(any()) } answers { firstArg() }
     every { repo.saveAll(any()) } answers { firstArg<Collection<Notification>>().toList() }
+    // 기본은 "설정 없음" — mute 도 quiet 도 없어 기존 테스트들의 발송 동작이 그대로 유지된다.
+    every { mutes.findAll(any()) } returns emptyMap()
+    every { settingsRepo.findAll(any()) } returns emptyList()
 
-    afterEach { clearMocks(repo, tracker, broadcaster, tokens, push, answers = false) }
+    afterEach { clearMocks(repo, tracker, broadcaster, tokens, push, mutes, settingsRepo, answers = false) }
 
     fun event(recipientId: Long = 2L, roomId: Long = 7L) =
         ChatMessageSentEvent(roomId = roomId, messageId = "m1", senderId = 1L, recipientId = recipientId, preview = "안녕")
@@ -261,6 +270,150 @@ class NotificationServiceTest : BehaviorSpec({
                 service.markRead(memberId = 2L, id = 1L)
 
                 saved.captured.read shouldBe true
+            }
+        }
+    }
+
+    Given("수신자가 그 유형을 mute 했을 때") {
+        // 다른 Given 블록과 같은 mock 인스턴스를 공유하고 afterEach 가 스텁을 지우지 않으므로
+        // (호출 기록만 초기화), 다른 블록과 겹치는 회원 id 를 쓰면 스텁이 새어 들어간다.
+        When("notifyAll 을 호출하면") {
+            Then("이력도 안 남고 브로드캐스트도 푸시도 안 간다") {
+                every { mutes.findAll(setOf(101L, 102L)) } returns mapOf(101L to setOf("CHAT_MESSAGE"))
+                every { tokens.findPushTokens(setOf(102L)) } returns mapOf(102L to "token-102")
+
+                service.notifyAll(listOf(101L, 102L), "CHAT_MESSAGE", "title", "body", emptyMap())
+
+                verify(exactly = 1) { repo.saveAll(match { it.size == 1 && it.first().recipientId == 102L }) }
+                verify(exactly = 1) { broadcaster.broadcast(any(), any()) }
+                verify { tokens.findPushTokens(setOf(102L)) }
+            }
+        }
+
+        When("전원이 그 유형을 mute 했으면") {
+            Then("아무 협력자도 호출하지 않는다") {
+                every { mutes.findAll(setOf(103L)) } returns mapOf(103L to setOf("CHAT_MESSAGE"))
+
+                service.notifyAll(listOf(103L), "CHAT_MESSAGE", "title", "body", emptyMap())
+
+                verify(exactly = 0) { repo.saveAll(any()) }
+                verify(exactly = 0) { broadcaster.broadcast(any(), any()) }
+                verify(exactly = 0) { tokens.findPushTokens(any()) }
+            }
+        }
+
+        When("mute 설정 조회가 실패하면") {
+            Then("전부 발송한다 (fail-open)") {
+                every { mutes.findAll(setOf(104L)) } throws IllegalStateException("boom")
+                every { tokens.findPushTokens(setOf(104L)) } returns mapOf(104L to "token-104")
+
+                service.notifyAll(listOf(104L), "CHAT_MESSAGE", "title", "body", emptyMap())
+
+                verify(exactly = 1) { repo.saveAll(match { it.size == 1 }) }
+                verify { broadcaster.broadcast("/topic/notification/104", any()) }
+            }
+        }
+    }
+
+    Given("수신자가 방해금지 시간대일 때") {
+        fun quiet(memberId: Long, quiet: Boolean): NotificationSetting {
+            val setting = mockk<NotificationSetting>()
+            every { setting.memberId } returns memberId
+            every { setting.isQuietAt(any()) } returns quiet
+            return setting
+        }
+
+        When("notifyAll 을 호출하면") {
+            Then("이력·브로드캐스트는 남지만 그 사람에게만 푸시가 안 간다") {
+                every { settingsRepo.findAll(setOf(201L, 202L)) } returns listOf(quiet(201L, true), quiet(202L, false))
+                every { tokens.findPushTokens(setOf(202L)) } returns mapOf(202L to "token-202")
+
+                val saved = slot<Collection<Notification>>()
+                every { repo.saveAll(capture(saved)) } answers { firstArg<Collection<Notification>>().toList() }
+
+                service.notifyAll(listOf(201L, 202L), "CHAT_MESSAGE", "title", "body", emptyMap())
+
+                saved.captured.size shouldBe 2
+                verify(exactly = 2) { broadcaster.broadcast(any(), any()) }
+                verify { tokens.findPushTokens(setOf(202L)) }
+            }
+        }
+
+        When("방해금지 설정 조회가 실패하면") {
+            Then("푸시는 전부 보낸다 (fail-open)") {
+                every { settingsRepo.findAll(setOf(203L)) } throws IllegalStateException("boom")
+                every { tokens.findPushTokens(setOf(203L)) } returns mapOf(203L to "token-203")
+
+                service.notifyAll(listOf(203L), "CHAT_MESSAGE", "title", "body", emptyMap())
+
+                verify { tokens.findPushTokens(setOf(203L)) }
+            }
+        }
+    }
+
+    Given("알림 수신 설정 조회 시") {
+        When("설정한 적 없으면") {
+            Then("전부 켠 상태(빈 mute)와 방해금지 없음으로 나온다") {
+                every { mutes.find(5L) } returns emptySet()
+                every { settingsRepo.find(5L) } returns null
+
+                val snapshot = service.settingsOf(5L)
+
+                snapshot.mutedTypes shouldBe emptySet()
+                snapshot.quietFrom shouldBe null
+                snapshot.timeZone shouldBe null
+            }
+        }
+    }
+
+    Given("알림 수신 설정 변경 시") {
+        When("알 수 없는 유형을 mute 하려 하면") {
+            Then("400 이 난다") {
+                val ex = shouldThrow<LanglezException> {
+                    service.updateSettings(5L, setOf("UNKNOWN_TYPE"), null, null, null)
+                }
+
+                ex.status.value() shouldBe 400
+                verify(exactly = 0) { mutes.replaceAll(any(), any()) }
+            }
+        }
+
+        When("알 수 없는 타임존을 주면") {
+            Then("400 이 난다") {
+                shouldThrow<LanglezException> {
+                    service.updateSettings(5L, emptySet(), LocalTime.of(22, 0), LocalTime.of(7, 0), "Not/AZone")
+                }.status.value() shouldBe 400
+            }
+        }
+
+        When("quietFrom 만 주고 quietTo 를 안 주면") {
+            Then("400 이 난다") {
+                every { settingsRepo.find(5L) } returns null
+
+                shouldThrow<LanglezException> {
+                    service.updateSettings(5L, emptySet(), LocalTime.of(22, 0), null, "Asia/Seoul")
+                }.status.value() shouldBe 400
+            }
+        }
+
+        When("유효한 요청이면") {
+            Then("mute 는 전체 교체되고 방해금지는 저장된다") {
+                every { settingsRepo.find(5L) } returns null
+                every { settingsRepo.save(any()) } answers { firstArg() }
+                every { mutes.replaceAll(5L, setOf("CHAT_MESSAGE")) } returns Unit
+
+                val snapshot = service.updateSettings(
+                    memberId = 5L,
+                    mutedTypes = setOf("CHAT_MESSAGE"),
+                    quietFrom = LocalTime.of(22, 0),
+                    quietTo = LocalTime.of(7, 0),
+                    timeZone = "Asia/Seoul",
+                )
+
+                snapshot.mutedTypes shouldBe setOf("CHAT_MESSAGE")
+                snapshot.quietFrom shouldBe LocalTime.of(22, 0)
+                snapshot.timeZone shouldBe "Asia/Seoul"
+                verify { mutes.replaceAll(5L, setOf("CHAT_MESSAGE")) }
             }
         }
     }
