@@ -1,6 +1,5 @@
 package com.langlez.profile.infrastructure
 
-import com.langlez.member.contract.MemberQuery
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
@@ -18,8 +17,6 @@ class ProfileRepositoryImpl(
     private val imageJpa: ProfileImageJpaRepository,
     private val redisson: RedissonClient,
     private val dsl: JPAQueryFactory,
-    // handle → 회원 id 는 member 소유다. QueryDSL 이 members 를 조인하면 모듈 경계가 다시 무너진다.
-    private val members: MemberQuery,
 ) : ProfileRepository {
 
     override fun saveImage(image: ProfileImage): ProfileImage = imageJpa.save(image)
@@ -40,9 +37,6 @@ class ProfileRepositoryImpl(
         if (ids.isEmpty()) return emptyList()
         return profileJpa.findAllById(ids)
     }
-
-    override fun findProfileByUsername(username: String): Profile? =
-        members.findIdByHandle(username)?.let(profileJpa::findByIdOrNull)
 
     override fun findAllProfiles(): List<Profile> = profileJpa.findAll()
 
@@ -98,14 +92,10 @@ class ProfileRepositoryImpl(
         }
     }
 
-    override fun incrementVisitCountInDb(username: String, delta: Long) {
-        // 이미 지워진 handle 이면 조용히 넘어간다. 스케줄러가 플러시 대상을 통째로 들고 오므로
-        // 여기서 던지면 나머지 회원의 방문수까지 같이 롤백된다.
-        val targetId = members.findIdByHandle(username) ?: return
-
+    override fun incrementVisitCountInDb(memberId: Long, delta: Long) {
         dsl.update(profile)
             .set(profile.visitCount, profile.visitCount.add(delta))
-            .where(profile.id.eq(targetId))
+            .where(profile.id.eq(memberId))
             .execute()
     }
 

@@ -9,7 +9,6 @@ interface ProfileRepository {
 
     fun findProfile(id: Long): Profile?
     fun findProfiles(ids: List<Long>): List<Profile>
-    fun findProfileByUsername(username: String): Profile?
     fun findAllProfiles(): List<Profile>
     fun saveProfile(profile: Profile): Profile
 
@@ -17,6 +16,7 @@ interface ProfileRepository {
     fun getVisitCountDelta(username: String): Long
     fun beginVisitCountFlush(): Map<String, Long>
     fun commitVisitCountFlush(usernames: Collection<String>)
-    fun incrementVisitCountInDb(username: String, delta: Long)
+    /** handle → 회원 id 변환은 application 이 미리 해서 넘긴다. 저장소가 member 포트를 부르면 안 된다. */
+    fun incrementVisitCountInDb(memberId: Long, delta: Long)
 
 }

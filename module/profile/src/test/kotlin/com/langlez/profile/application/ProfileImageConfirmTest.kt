@@ -8,6 +8,8 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * 이미지 확정은 클라이언트가 준 URL 을 믿으면 안 된다.
@@ -20,7 +22,12 @@ class ProfileImageConfirmTest : BehaviorSpec({
     val locker = mockk<ProfileImageLocker>()
     val follows = mockk<com.langlez.relationship.contract.FollowQuery>(relaxed = true)
     val members = mockk<com.langlez.member.contract.MemberQuery>(relaxed = true)
-    val service = ProfileService(repo, storage, locker, follows, members)
+
+    // confirmRepresentImage 가 attach 를 먼저 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
+    val tx = mockk<TransactionTemplate>()
+    every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
+
+    val service = ProfileService(repo, storage, locker, follows, members, tx)
 
     Given("업로드 URL 을 발급하면") {
         every {

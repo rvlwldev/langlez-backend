@@ -7,9 +7,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.maps.shouldBeEmpty
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.redisson.Redisson
 import org.redisson.api.RedissonClient
 import org.redisson.config.Config
@@ -30,14 +28,12 @@ class ProfileRepositoryImplTest : BehaviorSpec({
     val profileJpa = mockk<ProfileJpaRepository>()
     val imageJpa = mockk<ProfileImageJpaRepository>()
     val dsl = mockk<JPAQueryFactory>()
-    val members = mockk<com.langlez.member.contract.MemberQuery>()
 
     val repository: ProfileRepository = ProfileRepositoryImpl(
         profileJpa = profileJpa,
         imageJpa = imageJpa,
         redisson = redissonClient,
         dsl = dsl,
-        members = members,
     )
 
     afterSpec {
@@ -49,32 +45,8 @@ class ProfileRepositoryImplTest : BehaviorSpec({
         redissonClient.keys.flushall()
     }
 
-    // handle → 회원 id 는 core 포트가 답한다. QueryDSL 이 members 를 조인하지 않는다.
-    Given("handle 로 프로필을 찾을 때") {
-
-        When("없는 handle 이면") {
-            Then("member_profiles 를 조회하지 않고 null 을 돌려준다") {
-                every { members.findIdByHandle("ghost") } returns null
-
-                repository.findProfileByUsername("ghost") shouldBe null
-
-                verify(exactly = 0) { profileJpa.findById(any()) }
-            }
-        }
-    }
-
-    Given("없는 handle 의 방문수를 DB 에 반영할 때") {
-
-        When("incrementVisitCountInDb 를 호출하면") {
-            Then("조용히 넘어간다 (한 건 때문에 나머지 회원 방문수까지 롤백되면 안 된다)") {
-                every { members.findIdByHandle("ghost") } returns null
-
-                repository.incrementVisitCountInDb("ghost", 3L)
-
-                verify(exactly = 0) { dsl.update(any()) }
-            }
-        }
-    }
+    // handle → 회원 id 변환은 application(ProfileService·VisitCountSyncScheduler)으로 올라갔다.
+    // 저장소는 이제 id 만 받는다. 없는 handle 을 건너뛰는 동작은 VisitCountSyncSchedulerTest 가 본다.
 
     Given("ProfileRepository의 방문자 수 Flush 기능 검증") {
 
