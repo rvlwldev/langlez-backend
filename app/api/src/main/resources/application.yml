@@ -88,7 +88,7 @@ spring:
   messages:
     basename: messages
     encoding: UTF-8
-    fallback-to-system-locale: true
+    fallback-to-system-locale: false
 
   # Security & OAuth2
   security:
