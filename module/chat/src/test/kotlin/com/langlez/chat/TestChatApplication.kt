@@ -29,5 +29,7 @@ class TestChatApplication {
     @Bean
     fun blockQuery(): BlockQuery = object : BlockQuery {
         override fun isBlockedBetween(memberId: Long, otherId: Long) = false
+
+        override fun blockedAmong(viewerId: Long, candidateIds: Collection<Long>) = emptySet<Long>()
     }
 }

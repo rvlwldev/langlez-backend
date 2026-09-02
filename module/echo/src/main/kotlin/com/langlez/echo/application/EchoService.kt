@@ -82,8 +82,13 @@ class EchoService(
         repo.save(post.apply { delete() })
     }
 
-    /** 홈 타임라인 — 내가 팔로우한 사람의 글. */
-    @Transactional(readOnly = true)
+    /**
+     * 홈 타임라인 — 내가 팔로우한 사람의 글.
+     *
+     * 조회 경로에는 트랜잭션을 걸지 않는다. `follows`·`blocks` 는 `relationship-api` 포트라
+     * 곧 원격이 되는데, 트랜잭션 안이면 DB 커넥션을 쥔 채 그 왕복을 기다린다.
+     * 감싸도 한 스냅샷이 되지 않는다 — 팔로우·차단은 이미 다른 모듈의 데이터다.
+     */
     fun homeTimeline(memberId: Long, size: Int, cursor: Long?): List<PostView> {
         val following = follows?.followingIds(memberId)
             ?: throw LanglezException(SERVICE_UNAVAILABLE, "echo.timeline.unavailable")
@@ -95,7 +100,6 @@ class EchoService(
     }
 
     /** 특정 회원의 글. 차단 관계면 목록 자체를 막는다 — 걸러 봐야 전부 빠진다. */
-    @Transactional(readOnly = true)
     fun memberTimeline(viewerId: Long, authorId: Long, size: Int, cursor: Long?): List<PostView> {
         if (isBlocked(viewerId, authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
@@ -103,14 +107,12 @@ class EchoService(
         return enrich(viewerId, posts)
     }
 
-    @Transactional(readOnly = true)
     fun hashtagTimeline(viewerId: Long, tag: String, size: Int, cursor: Long?): List<PostView> {
         val name = tag.removePrefix("#").lowercase()
         val posts = fillPosts(viewerId, size, cursor) { chunk, c -> repo.findPostsByHashtag(name, chunk, c) }
         return enrich(viewerId, posts)
     }
 
-    @Transactional(readOnly = true)
     fun getPost(viewerId: Long, postId: Long): PostView {
         val post = findPostOrThrow(postId)
         if (isBlocked(viewerId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
@@ -119,18 +121,23 @@ class EchoService(
             ?: throw LanglezException(NOT_FOUND, "echo.post.not-found")
     }
 
-    @Transactional
+    /**
+     * 차단 판정은 포트라 트랜잭션 밖에서 먼저 끝낸다. 판정과 저장 사이에 차단이 걸리면
+     * 좋아요 한 건이 남는데, 그 뒤 조회는 전부 다시 차단을 보므로 상대 화면에 뜨지 않는다.
+     */
     fun like(memberId: Long, postId: Long) {
         val post = findPostOrThrow(postId)
         if (isBlocked(memberId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        // 유니크 제약이 최종 방어선이지만, 제약 위반은 트랜잭션을 통째로 망가뜨린다. 먼저 확인해서 409 로 돌려준다.
-        if (repo.isLiked(postId, memberId)) throw LanglezException(CONFLICT, "echo.like.duplicated")
+        tx.execute {
+            // 유니크 제약이 최종 방어선이지만, 제약 위반은 트랜잭션을 통째로 망가뜨린다. 먼저 확인해서 409 로 돌려준다.
+            if (repo.isLiked(postId, memberId)) throw LanglezException(CONFLICT, "echo.like.duplicated")
 
-        repo.addLike(postId, memberId)
+            repo.addLike(postId, memberId)
 
-        // 자기 글에 자기가 누른 건 알릴 이유가 없다.
-        if (post.authorId != memberId) publisher.publishEvent(EchoPostLikedEvent(postId, post.authorId, memberId))
+            // 자기 글에 자기가 누른 건 알릴 이유가 없다.
+            if (post.authorId != memberId) publisher.publishEvent(EchoPostLikedEvent(postId, post.authorId, memberId))
+        }
     }
 
     /**
@@ -147,7 +154,7 @@ class EchoService(
         if (repo.isLiked(post.id, memberId)) repo.removeLike(post.id, memberId)
     }
 
-    @Transactional
+    /** `like` 와 같은 이유로 차단 판정이 트랜잭션 밖이다. */
     fun comment(memberId: Long, postId: Long, content: String): Comment {
         if (content.isBlank()) throw LanglezException(BAD_REQUEST, "echo.comment.empty")
         if (content.length > Comment.MAX_CONTENT_LENGTH) throw LanglezException(BAD_REQUEST, "echo.comment.too-long")
@@ -155,16 +162,17 @@ class EchoService(
         val post = findPostOrThrow(postId)
         if (isBlocked(memberId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        val saved = repo.save(Comment(postId = postId, authorId = memberId, content = content))
+        return tx.execute {
+            val saved = repo.save(Comment(postId = postId, authorId = memberId, content = content))
 
-        if (post.authorId != memberId) publisher.publishEvent(
-            EchoCommentCreatedEvent(postId, post.authorId, saved.id, memberId, content.take(PREVIEW_LENGTH))
-        )
+            if (post.authorId != memberId) publisher.publishEvent(
+                EchoCommentCreatedEvent(postId, post.authorId, saved.id, memberId, content.take(PREVIEW_LENGTH))
+            )
 
-        return saved
+            saved
+        }!!
     }
 
-    @Transactional(readOnly = true)
     fun listComments(viewerId: Long, postId: Long, size: Int, cursor: Long?): List<Comment> {
         val post = findPostOrThrow(postId)
         if (isBlocked(viewerId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
@@ -237,8 +245,8 @@ class EchoService(
      * 않는다 — 상한을 넘기면 요청한 size 보다 짧은 목록을 돌려준다(원래 버그보다는 낫지만 완전한
      * 보장은 아니다).
      *
-     * ponytail: 라운드마다 항목 수만큼 `isBlockedBetween` 이 개별로 나간다. `BlockQuery` 에 id 목록을
-     * 한 번에 묻는 메서드가 생기면 그쪽으로 올린다.
+     * 차단 판정은 라운드마다 `blockedAmong` 한 번이다. 항목마다 `isBlockedBetween` 을 부르면
+     * 이 포트가 원격이 될 때 페이지 크기만큼 왕복이 생긴다.
      */
     private fun <T> fill(
         viewerId: Long,
@@ -257,7 +265,8 @@ class EchoService(
             val page = fetch(chunk, nextCursor)
             if (page.isEmpty()) break
 
-            result += page.filterNot { isBlocked(viewerId, authorIdOf(it)) }
+            val blocked = blocks.blockedAmong(viewerId, page.map(authorIdOf).toSet())
+            result += page.filterNot { authorIdOf(it) in blocked }
             nextCursor = idOf(page.last())
             round++
 

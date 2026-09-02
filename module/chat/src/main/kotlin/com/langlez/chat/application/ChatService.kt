@@ -39,13 +39,19 @@ class ChatService(
     private val tx: TransactionTemplate,
 ) {
 
-    @Transactional
+    /**
+     * 1:1 방 조회 또는 생성.
+     *
+     * 차단 판정은 `relationship-api` 포트라 트랜잭션 밖에서 먼저 끝낸다 — `send` 와 같은 모양이다.
+     * 판정과 생성 사이에 상대가 나를 차단하면 빈 방이 하나 생기지만, 그 방으로 보내는 메시지는
+     * `send` 가 다시 차단을 보고 막는다. 남는 건 대화가 없는 방 한 개다.
+     */
     fun getOrCreateRoom(memberId: Long, partnerId: Long): ChatRoom {
         if (memberId == partnerId) throw LanglezException(BAD_REQUEST, "chat.self-room")
         if (blocks.isBlockedBetween(memberId, partnerId)) throw LanglezException(FORBIDDEN, "chat.blocked")
 
         // 있으면 재사용한다. 매번 만들면 같은 상대와 방이 계속 늘어나고 대화가 갈라진다.
-        return repo.findRoomBetween(memberId, partnerId) ?: repo.createRoom(memberId, partnerId)
+        return tx.execute { repo.findRoomBetween(memberId, partnerId) ?: repo.createRoom(memberId, partnerId) }!!
     }
 
     /**

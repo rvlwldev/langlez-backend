@@ -48,6 +48,12 @@ class EchoServiceTest : BehaviorSpec({
     val me = 1L
     val other = 2L
 
+    // 목록은 라운드마다 blockedAmong 으로 한 번에 묻는다. 각 테스트는 단건 스텁만 두고,
+    // 배치 판정은 그 단건 스텁에 그대로 위임한다 — 두 판정이 갈리면 그게 곧 차단 구멍이다.
+    every { blocks.blockedAmong(me, any()) } answers {
+        secondArg<Collection<Long>>().filterTo(mutableSetOf()) { blocks.isBlockedBetween(me, it) }
+    }
+
     fun post(id: Long = 10L, authorId: Long = me, content: String = "hello") =
         Post(id = id, authorId = authorId, content = content)
 
