@@ -2,8 +2,12 @@ package com.langlez.notification.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.exception.LanglezException
+import com.langlez.notification.api.request.NotificationMuteUpdateRequest
+import com.langlez.notification.api.request.NotificationQuietHoursUpdateRequest
 import com.langlez.notification.application.NotificationService
+import com.langlez.notification.application.NotificationSettingSnapshot
 import com.langlez.notification.domain.Notification
+import com.langlez.notification.domain.NotificationSetting
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -11,6 +15,8 @@ import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.LocalTime
+import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 
 class NotificationControllerTest : BehaviorSpec({
@@ -105,6 +111,93 @@ class NotificationControllerTest : BehaviorSpec({
                 val ex = shouldThrow<LanglezException> { controller.markRead(memberId = 7L, id = 42L) }
 
                 ex.status.value() shouldBe 403
+            }
+        }
+    }
+
+    Given("알림 수신 설정을 조회할 때") {
+        When("인증된 회원 id 로 물으면") {
+            Then("그 회원의 설정이 응답 DTO 로 조립된다") {
+                every { service.settingsOf(7L) } returns NotificationSettingSnapshot(
+                    mutedTypes = setOf("CHAT_MESSAGE"),
+                    quietFrom = LocalTime.of(22, 0),
+                    quietTo = LocalTime.of(7, 0),
+                    timeZone = "Asia/Seoul",
+                )
+
+                val result = controller.getSettings(memberId = 7L)
+
+                result.mutedTypes shouldBe setOf("CHAT_MESSAGE")
+                result.quietFrom shouldBe LocalTime.of(22, 0)
+                result.timeZone shouldBe "Asia/Seoul"
+                verify { service.settingsOf(7L) }
+            }
+        }
+    }
+
+    Given("끌 알림 유형을 바꿀 때") {
+        When("인증된 회원 id 와 요청 본문이 그대로 서비스로 간다") {
+            Then("응답은 서비스가 돌려준 전체 교체 결과를 그대로 담는다") {
+                every { service.updateMutes(7L, setOf("CHAT_MESSAGE")) } returns setOf("CHAT_MESSAGE")
+
+                val result = controller.updateMutes(
+                    memberId = 7L,
+                    request = NotificationMuteUpdateRequest(types = setOf("CHAT_MESSAGE")),
+                )
+
+                result.mutedTypes shouldBe setOf("CHAT_MESSAGE")
+                verify { service.updateMutes(memberId = 7L, types = setOf("CHAT_MESSAGE")) }
+            }
+        }
+
+        When("알 수 없는 유형이면") {
+            Then("서비스의 400 을 그대로 올린다") {
+                every { service.updateMutes(7L, setOf("UNKNOWN")) } throws
+                    LanglezException(BAD_REQUEST, "notification.type.unknown")
+
+                val ex = shouldThrow<LanglezException> {
+                    controller.updateMutes(memberId = 7L, request = NotificationMuteUpdateRequest(types = setOf("UNKNOWN")))
+                }
+
+                ex.status.value() shouldBe 400
+            }
+        }
+    }
+
+    Given("방해금지 시간대를 바꿀 때") {
+        When("인증된 회원 id 와 요청 본문이 그대로 서비스로 간다") {
+            Then("응답은 저장된 방해금지 시간대를 담는다") {
+                every { service.updateQuietHours(7L, LocalTime.of(22, 0), LocalTime.of(7, 0), "Asia/Seoul") } returns
+                    NotificationSetting(memberId = 7L, quietFrom = LocalTime.of(22, 0), quietTo = LocalTime.of(7, 0), timeZone = "Asia/Seoul")
+
+                val result = controller.updateQuietHours(
+                    memberId = 7L,
+                    request = NotificationQuietHoursUpdateRequest(
+                        from = LocalTime.of(22, 0),
+                        to = LocalTime.of(7, 0),
+                        timeZone = "Asia/Seoul",
+                    ),
+                )
+
+                result.from shouldBe LocalTime.of(22, 0)
+                result.to shouldBe LocalTime.of(7, 0)
+                result.timeZone shouldBe "Asia/Seoul"
+            }
+        }
+
+        When("from 만 주고 to 를 안 주면") {
+            Then("서비스의 400 을 그대로 올린다") {
+                every { service.updateQuietHours(7L, LocalTime.of(22, 0), null, null) } throws
+                    LanglezException(BAD_REQUEST, "notification.quiet-hours.incomplete")
+
+                val ex = shouldThrow<LanglezException> {
+                    controller.updateQuietHours(
+                        memberId = 7L,
+                        request = NotificationQuietHoursUpdateRequest(from = LocalTime.of(22, 0), to = null, timeZone = null),
+                    )
+                }
+
+                ex.status.value() shouldBe 400
             }
         }
     }
