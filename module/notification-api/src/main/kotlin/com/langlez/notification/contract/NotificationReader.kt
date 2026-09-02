@@ -8,7 +8,7 @@ package com.langlez.notification.contract
  * "이 회원이 지금 방해금지 중인지" 같은 걸 알아야 하는 순간(예: 채팅방 배지 표시 정책)이 오면
  * `notification` 모듈을 직접 참조하지 않고 이 계약만으로 물을 수 있어야 하기 때문이다.
  */
-interface NotificationSettingQuery {
+interface NotificationReader {
     /** 끈 유형이 없으면 빈 집합(전부 켠 상태). */
     fun mutedTypesOf(memberId: Long): Set<String>
 
