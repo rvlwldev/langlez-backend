@@ -30,8 +30,15 @@ class NotificationSetting(
     @Column(name = "time_zone", length = 64)
     var timeZone: String? = null,
 ) {
+    /**
+     * `from`/`to` 는 둘 다 있거나 둘 다 없어야 한다. 같은 시각(`from == to`)은 "24시간 내내"가
+     * 아니라 400 으로 거절한다 — 반열린 구간 `[from, to)` 규칙에서 `from == to` 는 `from <= to`
+     * 분기를 타 [isQuietAt] 이 항상 false(미적용)로 조용히 뒤집힌다. 하루 종일 막고 싶으면
+     * 방해금지가 아니라 유형 mute 를 쓰는 게 맞다.
+     */
     fun updateQuietHours(from: LocalTime?, to: LocalTime?, zone: String?) {
         require((from == null) == (to == null)) { "notification.quiet-hours.incomplete" }
+        require(from == null || from != to) { "notification.quiet-hours.invalid-range" }
 
         quietFrom = from
         quietTo = to
