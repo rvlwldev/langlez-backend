@@ -12,7 +12,6 @@ dependencies {
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
 
-    implementation(project(":module:member"))
     implementation(project(":module:chat-api"))
     implementation(project(":module:member-api"))
     implementation(project(":module:relationship-api"))
@@ -24,6 +23,10 @@ dependencies {
     implementation(libs.dependency.springboot.mongodb)
 
     ksp(libs.dependency.querydsl.ksp)
+
+    // 통합테스트 컨텍스트가 OnlineTracker 구현(MemberOnlineTracker)을 필요로 한다.
+    // 프로덕션 코드는 member-api 계약만 본다 — app/api 가 member 모듈을 함께 올린다.
+    testImplementation(project(":module:member"))
 
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
