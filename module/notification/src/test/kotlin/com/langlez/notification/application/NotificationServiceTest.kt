@@ -5,7 +5,7 @@ import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.member.contract.PushTokenQuery
+import com.langlez.member.contract.PushTokenReader
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationRepository
 import com.langlez.notification.domain.PushSender
@@ -26,7 +26,7 @@ class NotificationServiceTest : BehaviorSpec({
     val repo = mockk<NotificationRepository>()
     val tracker = mockk<OnlineTracker>()
     val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
-    val tokens = mockk<PushTokenQuery>()
+    val tokens = mockk<PushTokenReader>()
     val push = mockk<PushSender>(relaxed = true)
 
     val service = NotificationService(repo, tracker, broadcaster, tokens, push, ObjectMapper())

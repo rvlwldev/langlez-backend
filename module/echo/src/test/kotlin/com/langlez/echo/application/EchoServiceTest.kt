@@ -1,7 +1,7 @@
 package com.langlez.echo.application
 
-import com.langlez.relationship.contract.BlockQuery
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.BlockReader
+import com.langlez.relationship.contract.FollowReader
 import com.langlez.attachment.contract.Storage
 import com.langlez.echo.contract.EchoCommentCreatedEvent
 import com.langlez.echo.contract.EchoPostLikedEvent
@@ -30,8 +30,8 @@ import org.springframework.transaction.support.TransactionTemplate
 class EchoServiceTest : BehaviorSpec({
 
     val repo = mockk<EchoRepository>()
-    val follows = mockk<FollowQuery>()
-    val blocks = mockk<BlockQuery>()
+    val follows = mockk<FollowReader>()
+    val blocks = mockk<BlockReader>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 

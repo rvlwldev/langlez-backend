@@ -3,9 +3,9 @@ package com.langlez.relationship.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.langlez.core.MessageDeduplicator
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.relationship.application.RelationshipService
-import com.langlez.relationship.contract.BlockQuery
+import com.langlez.relationship.contract.BlockReader
 import com.langlez.relationship.domain.RelationshipRepository
 import com.langlez.relationship.domain.Report
 import io.kotest.assertions.throwables.shouldThrow
@@ -21,8 +21,8 @@ import org.springframework.transaction.support.TransactionTemplate
 class RelationshipConsumerTest : BehaviorSpec({
 
     val repo = mockk<RelationshipRepository>(relaxed = true)
-    val members = mockk<MemberQuery>(relaxed = true)
-    val blocks = mockk<BlockQuery>(relaxed = true)
+    val members = mockk<MemberReader>(relaxed = true)
+    val blocks = mockk<BlockReader>(relaxed = true)
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
     // SETNX 를 흉내 내는 로컬 대역. relaxed 목을 쓰면 isDuplicate 가 늘 false 라

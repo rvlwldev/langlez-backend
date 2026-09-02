@@ -3,7 +3,7 @@ package com.langlez.profile.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.GlobalRestControllerAdvice
 import com.langlez.annotation.MemberIdResolver
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.exception.LanglezException
 import com.langlez.profile.application.ProfileService
 import com.langlez.profile.domain.Profile
@@ -32,7 +32,7 @@ class ProfileControllerTest : BehaviorSpec({
 
     afterEach { clearMocks(service, answers = false) }
 
-    fun memberInfo(id: Long = 1L, handle: String = "testuser", gender: String = "SECRET") = MemberQuery.ProfileInfo(
+    fun memberInfo(id: Long = 1L, handle: String = "testuser", gender: String = "SECRET") = MemberReader.ProfileInfo(
         id = id,
         handle = handle,
         gender = gender,

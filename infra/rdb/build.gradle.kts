@@ -28,7 +28,7 @@ dependencies {
 
     runtimeOnly(libs.runtimeonly.postgresql)
 
-    // TestRdbApplication 이 JwtAuthenticationFilter 용 MemberQuery 대역을 올린다
+    // TestRdbApplication 이 JwtAuthenticationFilter 용 MemberReader 대역을 올린다
     testImplementation(project(":module:member-api"))
 
     testImplementation(libs.test.kotest.spring)

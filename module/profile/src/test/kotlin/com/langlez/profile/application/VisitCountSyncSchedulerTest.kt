@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.profile.domain.ProfileRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.every
@@ -11,12 +11,12 @@ import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * handle → 회원 id 변환이 저장소에서 스케줄러로 올라왔다.
- * 그 변환은 `MemberQuery` 포트라 트랜잭션 밖에서 끝나야 하고, 없는 handle 은 조용히 빠져야 한다.
+ * 그 변환은 `MemberReader` 포트라 트랜잭션 밖에서 끝나야 하고, 없는 handle 은 조용히 빠져야 한다.
  */
 class VisitCountSyncSchedulerTest : BehaviorSpec({
 
     val repo = mockk<ProfileRepository>(relaxed = true)
-    val members = mockk<MemberQuery>()
+    val members = mockk<MemberReader>()
 
     val tx = mockk<TransactionTemplate>()
     every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }

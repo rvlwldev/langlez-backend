@@ -1,6 +1,6 @@
 package com.langlez.profile.application
 
-import com.langlez.member.contract.MemberQuery
+import com.langlez.member.contract.MemberReader
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.springframework.scheduling.annotation.Scheduled
@@ -10,7 +10,7 @@ import org.springframework.transaction.support.TransactionTemplate
 @Component
 class VisitCountSyncScheduler(
     private val repo: ProfileRepository,
-    private val members: MemberQuery,
+    private val members: MemberReader,
     private val transaction: TransactionTemplate,
 ) {
 

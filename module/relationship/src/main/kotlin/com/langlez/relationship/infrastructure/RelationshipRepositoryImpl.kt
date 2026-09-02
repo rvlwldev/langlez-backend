@@ -17,7 +17,7 @@ import com.langlez.relationship.domain.QReport.Companion.report as QReport
 
 /**
  * 캐시를 두지 않는다. 팔로우·차단은 쓰기가 드물지만 읽기도 목록 조회뿐이고,
- * 판정에 쓰이는 차단 여부는 `RelationshipQueryImpl` 이 단건 exists 로 따로 본다.
+ * 판정에 쓰이는 차단 여부는 `RelationshipReaderImpl` 이 단건 exists 로 따로 본다.
  */
 @Repository
 class RelationshipRepositoryImpl(

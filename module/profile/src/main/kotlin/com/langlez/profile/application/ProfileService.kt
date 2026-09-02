@@ -1,7 +1,7 @@
 package com.langlez.profile.application
 
-import com.langlez.relationship.contract.FollowQuery
-import com.langlez.member.contract.MemberQuery
+import com.langlez.relationship.contract.FollowReader
+import com.langlez.member.contract.MemberReader
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.profile.api.ProfileRequest
@@ -22,8 +22,8 @@ class ProfileService(
     private val repo: ProfileRepository,
     private val storage: Storage,
     private val profileImageLocker: ProfileImageLocker,
-    private val follows: FollowQuery,
-    private val members: MemberQuery,
+    private val follows: FollowReader,
+    private val members: MemberReader,
     private val tx: TransactionTemplate,
 ) {
 

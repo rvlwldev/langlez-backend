@@ -18,7 +18,7 @@ dependencies {
     // 신고 이벤트(ChatUserReportedEvent)를 @KafkaListener 로 받는다
     implementation(project(":module:chat-api"))
 
-    // 팔로워/차단 목록에 회원 handle·프로필 이미지를 붙인다. 계약(MemberQuery)만 본다
+    // 팔로워/차단 목록에 회원 handle·프로필 이미지를 붙인다. 계약(MemberReader)만 본다
     implementation(project(":module:member-api"))
 
     ksp(libs.dependency.querydsl.ksp)

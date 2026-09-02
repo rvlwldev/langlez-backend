@@ -1,7 +1,7 @@
 package com.langlez.relationship.infrastructure
 
-import com.langlez.relationship.contract.BlockQuery
-import com.langlez.relationship.contract.FollowQuery
+import com.langlez.relationship.contract.BlockReader
+import com.langlez.relationship.contract.FollowReader
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.relationship.application.RelationshipService
@@ -41,10 +41,10 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
     lateinit var repo: RelationshipRepository
 
     @Autowired
-    lateinit var blocks: BlockQuery
+    lateinit var blocks: BlockReader
 
     @Autowired
-    lateinit var follows: FollowQuery
+    lateinit var follows: FollowReader
 
     @Autowired
     lateinit var service: RelationshipService
@@ -204,8 +204,8 @@ class RelationshipRepositoryImplTest : BehaviorSpec() {
                 repo.findFollowings(me, 50, null).map { it.memberId } shouldNotContain me
             }
 
-            Then("FollowQuery 포트도 같은 숫자를 한 번에 돌려준다") {
-                follows.counts(me) shouldBe FollowQuery.CountInfo(followers = 3L, followings = 2L)
+            Then("FollowReader 포트도 같은 숫자를 한 번에 돌려준다") {
+                follows.counts(me) shouldBe FollowReader.CountInfo(followers = 3L, followings = 2L)
             }
 
             Then("언팔로우하면 카운트가 바로 줄어든다") {

@@ -1,7 +1,7 @@
 package com.langlez.member.infrastructure
 
-import com.langlez.member.contract.MemberQuery
-import com.langlez.member.contract.PushTokenQuery
+import com.langlez.member.contract.MemberReader
+import com.langlez.member.contract.PushTokenReader
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import org.springframework.stereotype.Repository
@@ -22,22 +22,22 @@ import org.springframework.stereotype.Repository
  * 보낼 직전에 조회하는 게 맞다.
  */
 @Repository
-class MemberQueryImpl(private val repo: MemberRepository) : MemberQuery, PushTokenQuery {
+class MemberReaderImpl(private val repo: MemberRepository) : MemberReader, PushTokenReader {
 
     override fun findIdByHandle(handle: String): Long? = repo.find(handle)?.id
 
-    override fun findProfileInfo(memberId: Long): MemberQuery.ProfileInfo? = repo.find(memberId)?.toProfileInfo()
+    override fun findProfileInfo(memberId: Long): MemberReader.ProfileInfo? = repo.find(memberId)?.toProfileInfo()
 
-    override fun findProfileInfos(memberIds: Collection<Long>): Map<Long, MemberQuery.ProfileInfo> {
+    override fun findProfileInfos(memberIds: Collection<Long>): Map<Long, MemberReader.ProfileInfo> {
         if (memberIds.isEmpty()) return emptyMap()
         return repo.findAll(memberIds.toSet()).associate { it.id to it.toProfileInfo() }
     }
 
-    override fun findStatus(memberId: Long): MemberQuery.Status? = when (repo.find(memberId)?.status) {
-        Member.Status.CREATED -> MemberQuery.Status.CREATED
-        Member.Status.ACTIVE -> MemberQuery.Status.ACTIVE
-        Member.Status.SUSPENDED -> MemberQuery.Status.SUSPENDED
-        Member.Status.WITHDRAWN -> MemberQuery.Status.WITHDRAWN
+    override fun findStatus(memberId: Long): MemberReader.Status? = when (repo.find(memberId)?.status) {
+        Member.Status.CREATED -> MemberReader.Status.CREATED
+        Member.Status.ACTIVE -> MemberReader.Status.ACTIVE
+        Member.Status.SUSPENDED -> MemberReader.Status.SUSPENDED
+        Member.Status.WITHDRAWN -> MemberReader.Status.WITHDRAWN
         null -> null
     }
 
@@ -49,7 +49,7 @@ class MemberQueryImpl(private val repo: MemberRepository) : MemberQuery, PushTok
             .mapNotNull { member -> member.fcm?.takeIf(String::isNotBlank)?.let { member.id to it } }
             .toMap()
 
-    private fun Member.toProfileInfo() = MemberQuery.ProfileInfo(
+    private fun Member.toProfileInfo() = MemberReader.ProfileInfo(
         id = id,
         handle = handle,
         nickname = nickname,
