@@ -1,10 +1,8 @@
 package com.langlez.filter
 
-import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberReader
-import com.langlez.utility.JwtTokenProvider
-import io.jsonwebtoken.Claims
+import com.langlez.security.TokenManager
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -17,8 +15,11 @@ import jakarta.servlet.DispatcherType
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.redisson.api.RBucket
+import org.redisson.api.RedissonClient
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.HandlerExceptionResolver
+import java.util.Base64
 
 /**
  * 정지·탈퇴 회원의 액세스 토큰 즉시 차단.
@@ -28,23 +29,30 @@ import org.springframework.web.servlet.HandlerExceptionResolver
  */
 class JwtAuthenticationFilterStatusTest : BehaviorSpec({
 
-    val jwt = mockk<JwtTokenProvider>()
-    val blacklist = mockk<TokenBlacklist>()
+    val secret = Base64.getEncoder().encodeToString("super-secret-key-12345678901234567890".toByteArray())
+
+    // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 필터에 태운다.
+    val bucket = mockk<RBucket<String>>(relaxed = true).also { every { it.isExists } returns false }
+    val redisson = mockk<RedissonClient>().also { every { it.getBucket<String>(any<String>()) } returns bucket }
+    val tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 86400, redisson = redisson)
+
     val members = mockk<MemberReader>()
     val resolver = mockk<HandlerExceptionResolver>(relaxed = true)
 
-    val filter = JwtAuthenticationFilter(jwt, blacklist, members, resolver)
+    val filter = JwtAuthenticationFilter(tokens, members, resolver)
 
     val res = mockk<HttpServletResponse>(relaxed = true)
     val chain = mockk<FilterChain>(relaxed = true)
 
     // 호출 기록만 지운다. 스텁까지 지우면 Then 블록 사이에 돌아 뒤 블록이 빈 스텁을 본다.
     afterEach {
-        clearMocks(jwt, blacklist, members, resolver, chain, answers = false)
+        clearMocks(bucket, redisson, members, resolver, chain, answers = false)
         SecurityContextHolder.clearContext()
     }
 
-    fun request(uri: String = "/api/v1/members/me", token: String? = "valid-token"): HttpServletRequest {
+    fun accessToken() = tokens.issueAccessToken(1L, "tester", "ROLE_MEMBER")
+
+    fun request(uri: String = "/api/v1/members/me", token: String? = accessToken()): HttpServletRequest {
         val req = mockk<HttpServletRequest>(relaxed = true)
         // OncePerRequestFilter 는 이 속성이 non-null 이면 doFilterInternal 을 통째로 건너뛴다.
         // relaxed mock 의 기본 반환값은 non-null 이라 명시적으로 null 을 돌려줘야 필터 본문이 돈다.
@@ -52,15 +60,6 @@ class JwtAuthenticationFilterStatusTest : BehaviorSpec({
         every { req.dispatcherType } returns DispatcherType.REQUEST
         every { req.requestURI } returns uri
         every { req.getHeader("Authorization") } returns token?.let { "Bearer $it" }
-
-        token?.let {
-            val claims = mockk<Claims>()
-            every { blacklist.isBlacklisted(it) } returns false
-            every { jwt.parseToClaims(it) } returns claims
-            every { jwt.extractTokenType(claims) } returns "access"
-            every { jwt.extractId(claims) } returns 1L
-            every { jwt.extractRole(claims) } returns "ROLE_MEMBER"
-        }
 
         return req
     }

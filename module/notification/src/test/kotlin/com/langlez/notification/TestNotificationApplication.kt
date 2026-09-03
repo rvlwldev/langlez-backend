@@ -2,12 +2,12 @@ package com.langlez.notification
 
 import com.langlez.core.MessageBroadcaster
 import com.langlez.core.MessageDeduplicator
-import com.langlez.core.TokenBlacklist
 import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import io.mockk.mockk
 import org.mockito.Mockito
+import org.redisson.api.RedissonClient
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.context.annotation.Bean
@@ -17,7 +17,7 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 /**
  * notification 단독 컨텍스트.
  *
- * 온라인 판정·계정 상태 조회(member)·실시간 전달(infra:redis)·토큰 블랙리스트(infra:redis)의 구현체는
+ * 온라인 판정·계정 상태 조회(member)·실시간 전달(infra:redis)·토큰 차단 저장(Redisson)의 구현체는
  * 이 모듈 의존에 없다. 저장소 테스트가 목적이라 전부 대역으로 채운다.
  */
 @SpringBootApplication(scanBasePackages = ["com.langlez"])
@@ -29,8 +29,9 @@ class TestNotificationApplication {
     fun clientRegistrationRepository(): ClientRegistrationRepository =
         Mockito.mock(ClientRegistrationRepository::class.java)
 
+    /** TokenManager 의 토큰 차단 저장이 Redisson 직결이다. 이 컨텍스트엔 레디스가 없다. */
     @Bean
-    fun tokenBlacklist(): TokenBlacklist = mockk(relaxed = true)
+    fun redissonClient(): RedissonClient = mockk(relaxed = true)
 
     /**
      * 구현체는 infra:redis 에 있다. relaxed 대역은 `isDuplicate` 로 false 를 돌려줘

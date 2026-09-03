@@ -9,7 +9,7 @@ import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileRepository
 import com.langlez.profile.infrastructure.jpa.ProfileImageJpaRepository
 import com.langlez.profile.infrastructure.jpa.ProfileJpaRepository
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
@@ -71,7 +71,7 @@ class ProfileE2ETest : BehaviorSpec() {
     @Autowired lateinit var memberJpa: MemberJpaRepository
     @Autowired lateinit var profileJpa: ProfileJpaRepository
     @Autowired lateinit var imageJpa: ProfileImageJpaRepository
-    @Autowired lateinit var jwt: JwtTokenProvider
+    @Autowired lateinit var tokens: TokenManager
     @Autowired lateinit var transactionTemplate: TransactionTemplate
 
     // 클래스 레벨 상태 — beforeSpec에서 초기화, 각 When은 이미지만 정리
@@ -154,8 +154,8 @@ class ProfileE2ETest : BehaviorSpec() {
             transactionTemplate.execute {
                 profileJpa.save(Profile(id = alice.id))
             }
-            aliceToken = jwt.createAccessToken(alice.id, "alice", "ROLE_MEMBER")
-            bobToken = jwt.createAccessToken(bob.id, "bob", "ROLE_MEMBER")
+            aliceToken = tokens.issueAccessToken(alice.id, "alice", "ROLE_MEMBER")
+            bobToken = tokens.issueAccessToken(bob.id, "bob", "ROLE_MEMBER")
         }
 
         // 각 테스트 후 이미지만 정리 (멤버/프로필은 공유)
@@ -365,7 +365,7 @@ class ProfileE2ETest : BehaviorSpec() {
                         providerDisplayName = handle,
                     )
                 )
-                return jwt.createAccessToken(member.id, handle, "ROLE_MEMBER")
+                return tokens.issueAccessToken(member.id, handle, "ROLE_MEMBER")
             }
 
             When("정지된 회원이 일반 API 를 호출하면") {

@@ -1,9 +1,8 @@
 package com.langlez.chat
 
 import com.langlez.config.WebSocketSubscriptionGate
-import com.langlez.core.TokenBlacklist
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -43,8 +42,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
 @Configuration
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
-    private val jwt: JwtTokenProvider,
-    private val tokenBlacklist: TokenBlacklist,
+    private val tokens: TokenManager,
     private val tracker: OnlineTracker,
     private val gate: WebSocketSubscriptionGate,
 ) : WebSocketMessageBrokerConfigurer {
@@ -98,16 +96,15 @@ class ChatWebSocketConfiguration(
                 ?.substring(7)
                 ?: throw IllegalArgumentException("auth.unauthorized")
 
-            if (tokenBlacklist.isBlacklisted(token)) throw IllegalArgumentException("auth.invalid-token")
+            if (tokens.isRevoked(token)) throw IllegalArgumentException("auth.invalid-token")
 
-            val claims = jwt.parseToClaims(token)
-            if (jwt.extractTokenType(claims) != "access") throw IllegalArgumentException("auth.invalid-token")
-
-            val id = jwt.extractId(claims)
-            val role = jwt.extractRole(claims)
+            val info = tokens.parse(token)
+            if (info.type != TokenManager.Type.ACCESS) throw IllegalArgumentException("auth.invalid-token")
 
             // 이후 프레임에서 보낸 사람을 알아야 한다(전송 권한 검사 등).
-            accessor.user = UsernamePasswordAuthenticationToken(id, null, listOf(SimpleGrantedAuthority(role)))
+            accessor.user = UsernamePasswordAuthenticationToken(
+                info.memberId, null, listOf(SimpleGrantedAuthority(info.role))
+            )
 
             return message
         }

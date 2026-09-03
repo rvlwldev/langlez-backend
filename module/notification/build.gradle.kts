@@ -25,6 +25,9 @@ dependencies {
 
     ksp(libs.dependency.querydsl.ksp)
 
+    // TestNotificationApplication 이 TokenManager 용 RedissonClient 대역을 올린다
+    testImplementation(libs.dependency.redisson)
+
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.bundles.testcontainers)

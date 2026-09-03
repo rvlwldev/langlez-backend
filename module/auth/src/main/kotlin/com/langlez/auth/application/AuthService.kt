@@ -2,12 +2,11 @@ package com.langlez.auth.application
 
 import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.auth.oauth2.OAuth2LanglezUser
-import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -20,10 +19,9 @@ import java.time.Duration
 
 @Service
 class AuthService(
-    private val jwt: JwtTokenProvider,
+    private val tokens: TokenManager,
     private val service: MemberService,
     private val redisson: RedissonClient,
-    private val tokenBlacklist: TokenBlacklist,
     private val onlineTracker: MemberOnlineTracker,
     @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTtlSecs: Long,
     @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTtlSecs: Long,
@@ -77,8 +75,8 @@ class AuthService(
      * (이전 기기의 access token 은 남은 TTL 동안만 유효하다.)
      */
     fun issueTokens(id: Long, handle: String, role: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
-        val refreshToken = jwt.createRefreshToken(id, handle, role)
-        val accessToken = jwt.createAccessToken(id, handle, role)
+        val refreshToken = tokens.issueRefreshToken(id, handle, role)
+        val accessToken = tokens.issueAccessToken(id, handle, role)
 
         redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, refreshTokenTtl)
         ctx.deviceId?.let { redisson.getBucket<String>(deviceKey(id)).set(it, refreshTokenTtl) }
@@ -89,10 +87,10 @@ class AuthService(
     }
 
     fun refresh(refreshToken: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
-        val tokenType = jwt.extractTokenType(refreshToken)
-        if (tokenType != "refresh") throw LanglezException(401, "auth.invalid-token")
+        val info = tokens.parse(refreshToken)
+        if (info.type != TokenManager.Type.REFRESH) throw LanglezException(401, "auth.invalid-token")
 
-        val id = jwt.extractId(refreshToken)
+        val id = info.memberId
         val member = service.findById(id) ?: throw LanglezException(401, "auth.invalid-token")
 
         try {
@@ -122,7 +120,7 @@ class AuthService(
 
     fun logout(memberId: Long, accessToken: String) {
         invalidateSession(memberId)
-        tokenBlacklist.blacklist(accessToken, jwt.extractRemainingValiditySeconds(accessToken))
+        tokens.revoke(accessToken)
     }
 
     /**

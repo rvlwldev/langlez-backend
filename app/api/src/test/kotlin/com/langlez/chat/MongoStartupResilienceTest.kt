@@ -3,7 +3,7 @@ package com.langlez.chat
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.api.response.MemberMeResponse
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
@@ -48,7 +48,7 @@ class MongoStartupResilienceTest : BehaviorSpec() {
     @Autowired lateinit var context: ConfigurableApplicationContext
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var memberRepo: MemberRepository
-    @Autowired lateinit var jwt: JwtTokenProvider
+    @Autowired lateinit var tokens: TokenManager
 
     companion object {
         @JvmField
@@ -96,7 +96,7 @@ class MongoStartupResilienceTest : BehaviorSpec() {
                     providerDisplayName = "Mongoless",
                 )
             )
-            val token = jwt.createAccessToken(member.id, member.handle, "ROLE_MEMBER")
+            val token = tokens.issueAccessToken(member.id, member.handle, "ROLE_MEMBER")
 
             Then("Mongo 와 무관한 회원 조회는 정상 동작한다") {
                 val headers = HttpHeaders().apply { setBearerAuth(token) }
