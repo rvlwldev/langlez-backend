@@ -28,8 +28,12 @@ dependencies {
     // security + jwt
     api(libs.dependency.springboot.security)
     api(libs.dependency.springboot.oauth2.client)
-    // JwtTokenProvider 가 io.jsonwebtoken.Claims 를 공개 시그니처로 노출한다
-    api(libs.bundles.jjwt)
+    // TokenManager 가 jjwt 타입을 전부 내부에 가둔다(TokenInfo 로 감싼다). 소비 모듈은 볼 필요가 없다.
+    implementation(libs.bundles.jjwt)
+
+    // TokenManager 의 차단 저장이 Redisson 직결이다. 우리 모듈이 아니라 서드파티라
+    // infra:redis → common 의존과 순환하지 않는다.
+    implementation(libs.dependency.redisson)
 
     // observability
     api(libs.dependency.springboot.actuator)
