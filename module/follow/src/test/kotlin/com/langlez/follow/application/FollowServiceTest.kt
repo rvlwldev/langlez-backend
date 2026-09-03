@@ -40,6 +40,7 @@ class FollowServiceTest : BehaviorSpec({
         gender = "SECRET",
         locale = null,
         birthDay = null,
+        status = MemberReader.Status.ACTIVE,
     )
 
     Given("남의 프로필에서 팔로워/팔로잉 목록을 열 때") {

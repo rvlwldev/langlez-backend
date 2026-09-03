@@ -40,6 +40,7 @@ class BlockServiceTest : BehaviorSpec({
         gender = "SECRET",
         locale = null,
         birthDay = null,
+        status = MemberReader.Status.ACTIVE,
     )
 
     Given("차단 요청 시") {

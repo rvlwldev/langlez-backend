@@ -17,8 +17,6 @@ class Profile(
 
     var visitCount: Long = 0,
 
-    @Enumerated(STRING) var languageLevel: LanguageLevel? = null,
-
     @Version var version: Long? = null
 ) {
     enum class MBTI {
@@ -27,5 +25,4 @@ class Profile(
         INFJ, INFP, INTJ, INTP,
         ISFJ, ISFP, ISTJ, ISTP,
     }
-    enum class LanguageLevel { BEGINNER, INTERMEDIATE, ADVANCED }
 }

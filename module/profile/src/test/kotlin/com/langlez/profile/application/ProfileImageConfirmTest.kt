@@ -27,7 +27,7 @@ class ProfileImageConfirmTest : BehaviorSpec({
     val tx = mockk<TransactionTemplate>()
     every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
 
-    val service = ProfileService(repo, storage, locker, follows, members, tx)
+    val service = ProfileService(repo, storage, locker, follows, members, mockk<com.langlez.lang.contract.LanguageReader>(relaxed = true), tx)
 
     Given("업로드 URL 을 발급하면") {
         every {

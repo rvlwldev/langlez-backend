@@ -38,6 +38,7 @@ class ProfileControllerTest : BehaviorSpec({
         gender = gender,
         locale = null,
         birthDay = null,
+        status = MemberReader.Status.ACTIVE,
     )
 
     Given("프로필 상세 조회 시") {
