@@ -16,7 +16,7 @@ import java.time.Instant
 import java.util.Base64
 
 /**
- * 발급·확인은 `JwtTokenProviderTest`, 차단은 `TokenBlacklistImplTest` 가 나눠 보던 것을 합쳤다.
+ * 발급·확인과 차단을 나눠 보던 두 스펙을 합쳤다.
  *
  * 차단 저장은 레디스를 띄우지 않고 Redisson 호출을 검증한다. 배포 시점에 이미 차단된 토큰이
  * 풀리지 않으려면 **키 문자열이 그대로여야** 하는데, 실제 레디스에 넣었다 빼는 왕복은
