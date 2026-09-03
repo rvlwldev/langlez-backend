@@ -1,8 +1,7 @@
 package com.langlez.echo.application
 
-import com.langlez.relationship.contract.BlockReader
-import com.langlez.relationship.contract.FollowReader
 import com.langlez.attachment.contract.Storage
+import com.langlez.block.contract.BlockReader
 import com.langlez.echo.contract.EchoCommentCreatedEvent
 import com.langlez.echo.contract.EchoPostLikedEvent
 import com.langlez.echo.domain.Comment
@@ -11,6 +10,8 @@ import com.langlez.echo.domain.Hashtag
 import com.langlez.echo.domain.Post
 import com.langlez.echo.domain.PostMedia
 import com.langlez.exception.LanglezException
+import com.langlez.follow.contract.FollowReader
+import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.CONFLICT
@@ -20,7 +21,6 @@ import org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
 
 /**
  * 피드 유스케이스.
@@ -35,7 +35,7 @@ import java.time.Instant
 class EchoService(
     private val repo: EchoRepository,
     /**
-     * relationship 모듈이 `FollowReader` 를 제공하기 전까지는 빈이 없을 수 있어 nullable 이다.
+     * follow 모듈이 `FollowReader` 를 제공하기 전까지는 빈이 없을 수 있어 nullable 이다.
      * 없을 때 빈 타임라인을 돌려주면 "팔로우가 0명"과 구분이 안 되므로 503 으로 드러낸다.
      */
     private val follows: FollowReader?,
@@ -85,7 +85,7 @@ class EchoService(
     /**
      * 홈 타임라인 — 내가 팔로우한 사람의 글.
      *
-     * 조회 경로에는 트랜잭션을 걸지 않는다. `follows`·`blocks` 는 `relationship-api` 포트라
+     * 조회 경로에는 트랜잭션을 걸지 않는다. `follows`·`blocks` 는 `follow-api`·`block-api` 포트라
      * 곧 원격이 되는데, 트랜잭션 안이면 DB 커넥션을 쥔 채 그 왕복을 기다린다.
      * 감싸도 한 스냅샷이 되지 않는다 — 팔로우·차단은 이미 다른 모듈의 데이터다.
      */
@@ -234,7 +234,7 @@ class EchoService(
      * 저장소가 먼저 size 만큼 가져오고 그 다음에 차단을 거르면, 걸러진 만큼 페이지가 짧아진다 —
      * 클라이언트 입장에선 스크롤이 튀거나 심하면 빈 페이지가 와서 끝으로 오해한다.
      *
-     * echo 는 relationship 모듈의 차단 테이블을 알지 못해 쿼리에서 직접 차단을 뺄 수 없다(모듈 간 테이블
+     * echo 는 block 모듈의 차단 테이블을 알지 못해 쿼리에서 직접 차단을 뺄 수 없다(모듈 간 테이블
      * 직접 조인 금지). `BlockReader` 포트도 단건 확인(`isBlockedBetween`)만 제공한다. 그래서 쿼리는 그대로
      * 두고, 부족하면 마지막으로 가져온 항목의 id 를 커서 삼아 다음 페이지를 이어서 가져오는 방식
      * (over-fetch)을 택했다.

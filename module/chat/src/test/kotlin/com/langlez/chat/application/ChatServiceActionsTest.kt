@@ -1,13 +1,13 @@
 package com.langlez.chat.application
 
+import com.langlez.attachment.contract.Storage
+import com.langlez.block.contract.BlockReader
+import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoomMember
-import com.langlez.relationship.contract.BlockReader
 import com.langlez.core.MessageBroadcaster
-import com.langlez.attachment.contract.Storage
-import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -17,10 +17,10 @@ import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
 
 class ChatServiceActionsTest : BehaviorSpec({
 
@@ -139,7 +139,7 @@ class ChatServiceActionsTest : BehaviorSpec({
     Given("상대를 신고하면") {
 
         When("참여자가 신고하면") {
-            Then("relationship 을 직접 부르지 않고 이벤트만 발행한다") {
+            Then("report 를 직접 부르지 않고 이벤트만 발행한다") {
                 every { repo.findParticipants(roomId) } returns
                     listOf(ChatRoomMember(roomId, me), ChatRoomMember(roomId, partner))
 

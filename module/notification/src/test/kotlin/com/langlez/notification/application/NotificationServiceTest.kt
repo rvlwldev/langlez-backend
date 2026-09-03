@@ -12,7 +12,7 @@ import com.langlez.notification.domain.NotificationRepository
 import com.langlez.notification.domain.NotificationSetting
 import com.langlez.notification.domain.NotificationSettingRepository
 import com.langlez.notification.domain.PushSender
-import com.langlez.relationship.contract.MemberFollowedEvent
+import com.langlez.follow.contract.MemberFollowedEvent
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder

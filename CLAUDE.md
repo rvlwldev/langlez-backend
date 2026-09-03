@@ -119,7 +119,9 @@ api ──▶ application ──▶ domain ◀── infrastructure
 |---|---|
 | `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `SubscriptionAuthorizer` |
 | `module/member-api` | `MemberReader`(계정 정보 + 상태), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
-| `module/relationship-api` | `BlockReader`, `FollowReader`, `MemberFollowedEvent` |
+| `module/follow-api` | `FollowReader`, `MemberFollowedEvent` |
+| `module/block-api` | `BlockReader`, `MemberBlockedEvent` |
+| `module/report-api` | `ReportWriter` (아직 소비자 없음 — 신고 소유가 report 라는 사실을 계약으로 못 박아 둔 것) |
 | `module/attachment-api` | `Storage` |
 | `module/notification-api` | `Notificator` |
 | `module/chat-api` | `ChatMessageSentEvent`, `ChatUserReportedEvent` |

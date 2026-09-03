@@ -20,7 +20,7 @@ class ProfileImageConfirmTest : BehaviorSpec({
     val repo = mockk<ProfileRepository>()
     val storage = mockk<Storage>()
     val locker = mockk<ProfileImageLocker>()
-    val follows = mockk<com.langlez.relationship.contract.FollowReader>(relaxed = true)
+    val follows = mockk<com.langlez.follow.contract.FollowReader>(relaxed = true)
     val members = mockk<com.langlez.member.contract.MemberReader>(relaxed = true)
 
     // confirmRepresentImage 가 attach 를 먼저 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.

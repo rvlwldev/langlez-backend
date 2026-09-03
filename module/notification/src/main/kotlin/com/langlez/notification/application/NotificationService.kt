@@ -6,7 +6,7 @@ import com.langlez.notification.contract.Notificator
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import com.langlez.chat.contract.ChatMessageSentEvent
-import com.langlez.relationship.contract.MemberFollowedEvent
+import com.langlez.follow.contract.MemberFollowedEvent
 import com.langlez.exception.LanglezException
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationMuteRepository

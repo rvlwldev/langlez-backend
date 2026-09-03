@@ -22,7 +22,7 @@ class ChatEventListenerTest : BehaviorSpec({
     Given("신고 이벤트가 발행되면") {
 
         When("리스너가 받으면") {
-            Then("chat-user-reported 아웃박스 행이 남는다 (relationship 이 카프카로 받아 저장한다)") {
+            Then("chat-user-reported 아웃박스 행이 남는다 (report 가 카프카로 받아 저장한다)") {
                 val saved = slot<ChatOutBox>()
                 every { repo.save(capture(saved)) } answers { firstArg() }
 

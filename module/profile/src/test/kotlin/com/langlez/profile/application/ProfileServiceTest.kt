@@ -2,12 +2,12 @@ package com.langlez.profile.application
 
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
+import com.langlez.follow.contract.FollowReader
 import com.langlez.member.contract.MemberReader
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
 import com.langlez.profile.domain.ProfileRepository
-import com.langlez.relationship.contract.FollowReader
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe

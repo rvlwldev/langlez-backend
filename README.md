@@ -82,8 +82,8 @@ app/api         조립 + 실행
 다만 **등록만으로는 앱이 그 모듈을 로드하지 않는다** — `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다.
 **계약 모듈(`module/*-api`)만 예외다** — 빈이 없어 소비 모듈이 물면 런타임 클래스패스에 그대로 올라온다.
 
-현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `chat`, `notification`, `relationship`, `echo`, `wave`.
-현재 계약 모듈: `member-api`, `relationship-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
+현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `chat`, `notification`, `follow`, `block`, `report`, `echo`, `wave`.
+현재 계약 모듈: `member-api`, `follow-api`, `block-api`, `report-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
 
 ### 4계층
 
@@ -126,9 +126,11 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `PushTokenReader` | 〃 | FCM 토큰 조회 | `member`(`MemberReaderImpl`) |
 | `OnlineTracker` | 〃 | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
 | `Member{Created,HandleChanged,Withdrawn}Event` | 〃 | 회원 도메인 이벤트 | — |
-| `BlockReader` | `relationship-api` | 차단 관계 확인 | `relationship`(`RelationshipReaderImpl`) |
-| `FollowReader` | 〃 | 팔로잉 id 목록·카운트 | `relationship`(`RelationshipReaderImpl`) |
+| `FollowReader` | `follow-api` (`com.langlez.follow.contract`) | 팔로잉 id 목록·카운트 | `follow`(`FollowReaderImpl`) |
 | `MemberFollowedEvent` | 〃 | 팔로우 이벤트 | — |
+| `BlockReader` | `block-api` (`com.langlez.block.contract`) | 차단 관계 확인 | `block`(`BlockReaderImpl`) |
+| `MemberBlockedEvent` | 〃 | 차단 이벤트 (follow 가 컨슘해 팔로우를 끊는다) | — |
+| `ReportWriter` | `report-api` (`com.langlez.report.contract`) | 신고 접수. **아직 소비자 없음** | `report`(`ReportService`) |
 | `Storage` | `attachment-api` | presign / key 확정 | `attachment` |
 | `Notificator` | `notification-api` | 알림 발송 | `notification` |
 | `Chat{MessageSent,UserReported}Event` | `chat-api` | 채팅 도메인 이벤트 | — |
@@ -192,7 +194,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 **8단계 — 이벤트 소비와 알림**
 `module/notification/api/NotificationConsumer.kt`(`chat-message-sent`) → `application/NotificationService.kt`(3상태 판정) → `infrastructure/FcmPushSender.kt`.
-`module/relationship/api/RelationshipConsumer.kt`(`chat-user-reported`)도 같이 본다.
+`module/report/api/ReportConsumer.kt`(`chat-user-reported`)와 `module/follow/api/FollowConsumer.kt`(`member-blocked`)도 같이 본다.
 
 **9단계 — Redis 인프라**
 `infra/redis/src/main/kotlin/com/langlez/redis/`: `cache/ResilientCache.kt`·`cache/ResilientCacheProvider.kt`(Redis + Caffeine 폴백), `distributedLock/DistributedLock.kt`·`DistributedLockAspect.kt`, `broadcast/RedisMessageBroadcaster.kt`, `config/RedissonConfiguration.kt`.
@@ -236,7 +238,9 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `profile` | 완료. 개인정보(성별·생일·국가)는 `member` 로 이관 |
 | `chat` | 완료. 1:1 채팅 전체 (아래 상세) |
 | `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
-| `relationship` | 완료. 팔로우·차단·신고 + `FollowReader`/`BlockReader` 구현 |
+| `follow` | 완료. 팔로우 API + `FollowReader` 구현 + `member-blocked` 소비 → 팔로우 양방향 해제 |
+| `block` | 완료. 차단 API + `BlockReader` 구현 + `member-blocked` 발행 |
+| `report` | 완료. 신고 API + `chat-user-reported` 소비 → `Report` 저장 |
 | `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. `EchoAPI` + `EchoController` 로 `/api/v1/echoes` 아래 12개 엔드포인트 노출. 아웃박스는 여전히 미사용 스캐폴딩이다(§5.4) |
 | `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
 
@@ -260,11 +264,11 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `docs/superpowers/plans/2026-08-14-remaining-modules.md` 기준. 전부 병렬 구현 후 점검 완료.
 
 - **A. notification** — `chat-message-sent` 수신 → 세 상태 판정(그 방 보는 중 / 앱만 켜짐 / 미접속) → 인앱 또는 FCM. `FcmPushSender` 는 Firebase Admin SDK 실사용, `fcm.credentials` 미설정 시 경고 로그만 남기고 무시
-- **B. relationship** — 팔로우·차단·신고 API + `chat-user-reported` 수신 → `Report` 저장
+- **B. relationship** — 팔로우·차단·신고 API + `chat-user-reported` 수신 → `Report` 저장 (그 뒤 `follow`/`block`/`report` 셋으로 분리됐다)
 - **C. echo** — 트위터형 피드 (글·타임라인·좋아요·댓글·해시태그·이미지)
 - **D. wave** — 음성방 + **사라지는 채팅** (Redis 링버퍼만, 저장 안 함)
 
-**팔로우 그래프 연결:** `FollowReader` 포트 신설로 결정(지금은 `relationship-api`). relationship 이 `RelationshipReaderImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
+**팔로우 그래프 연결:** `FollowReader` 포트 신설로 결정(지금은 `follow-api`). follow 가 `FollowReaderImpl` 로 구현하고 echo 가 주입받는다. 이벤트 복제는 팔로우 그래프 사본을 echo 가 들고 있어야 해서 기각. 구현 주입이 없으면 `homeTimeline` 이 503 을 던지도록 명시적으로 실패시킨다.
 
 **WebSocket 구독 인가:** 모듈마다 인터셉터를 달던 구조는 폐기했다. 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아 실제로 뚫렸다. 지금은 `common` 의 `WebSocketSubscriptionGate` 가 모든 SUBSCRIBE 를 받아 `core.SubscriptionAuthorizer` 중 `supports` 가 참인 것에게 묻고 **하나도 없으면 거부한다**(기본 거부). 각 모듈은 `{Domain}SubscriptionAuthorizer` 로 자기 토픽 판정만 선언한다. `WaveWebSocketConfiguration` 의 참여자 검사 인터셉터는 삭제됐고 지금은 엔드포인트 등록만 한다.
 
@@ -371,7 +375,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | member | 97% | 12 | | attachment | 88% | 5 |
 | chat | 92% | 14 | | common | 92% | 6 |
 | auth | 92% | 10 | | app/api | 78% | 6 |
-| relationship | 92% | 9 | | infra/rdb | 95% | 4 |
+| follow/block/report | 92% | 9 | | infra/rdb | 95% | 4 |
 | echo | 70% | 9 | | core | 96% | 3 |
 | profile | 84% | 8 | | infra/redis | 96% | 3 |
 | notification | 85% | 7 | | infra/kafka | 80% | 2 |
@@ -401,7 +405,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | Redis Stream DLQ (`autoClaim` 재시도 추적) | Redis Stream 을 안 쓴다. 메시징은 Kafka 로 통일했고 DLT 가 그 역할을 한다 |
 | `Member.status` 라이프사이클 도입 | 완료 (`CREATED`/`ACTIVE`/`SUSPENDED`/`WITHDRAWN` + `suspend`/`unsuspend`/`withdraw`/`requireActive`) |
 | `Member.profileImageUrl`, 약관 동의 이력, `getMe` 통합 조회 | 완료 (`Member.imageUrl`, `MemberAudit.agreedTermsAt`, `MemberMeResponse`) |
-| Kafka 컨슈머 짝 맞추기 | 완료. `chat-message-sent` → notification, `chat-user-reported` → relationship |
+| Kafka 컨슈머 짝 맞추기 | 완료. `chat-message-sent` → notification, `chat-user-reported` → report, `member-blocked` → follow |
 
 ---
 

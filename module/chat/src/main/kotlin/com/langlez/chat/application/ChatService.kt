@@ -1,16 +1,17 @@
 package com.langlez.chat.application
 
+import com.langlez.attachment.contract.Storage
+import com.langlez.block.contract.BlockReader
+import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.domain.ChatRoomSummary
-import com.langlez.relationship.contract.BlockReader
 import com.langlez.core.MessageBroadcaster
-import com.langlez.attachment.contract.Storage
-import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.exception.LanglezException
+import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
@@ -18,7 +19,6 @@ import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
 
 /**
  * 1:1 채팅 유스케이스.
@@ -42,7 +42,7 @@ class ChatService(
     /**
      * 1:1 방 조회 또는 생성.
      *
-     * 차단 판정은 `relationship-api` 포트라 트랜잭션 밖에서 먼저 끝낸다 — `send` 와 같은 모양이다.
+     * 차단 판정은 `block-api` 포트라 트랜잭션 밖에서 먼저 끝낸다 — `send` 와 같은 모양이다.
      * 판정과 생성 사이에 상대가 나를 차단하면 빈 방이 하나 생기지만, 그 방으로 보내는 메시지는
      * `send` 가 다시 차단을 보고 막는다. 남는 건 대화가 없는 방 한 개다.
      */
@@ -179,7 +179,7 @@ class ChatService(
         broadcaster.broadcast(topic(message.roomId), ChatMessageView.of(message))
     }
 
-    /** 신고 접수 사실만 알린다. Report 저장은 relationship 모듈이 카프카로 받아서 한다. */
+    /** 신고 접수 사실만 알린다. Report 저장은 report 모듈이 카프카로 받아서 한다. */
     @Transactional
     fun report(memberId: Long, roomId: Long, reason: String, triggerMessageId: String?) {
         val partner = partnerOrThrow(roomId, memberId)

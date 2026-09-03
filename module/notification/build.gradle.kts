@@ -19,7 +19,7 @@ dependencies {
     // 알림거리가 되는 사건을 받는 쪽이다. 발행 모듈의 계약만 물고 모듈 자체는 참조하지 않는다.
     implementation(project(":module:chat-api"))
     implementation(project(":module:member-api"))
-    implementation(project(":module:relationship-api"))
+    implementation(project(":module:follow-api"))
 
     implementation("com.google.firebase:firebase-admin:9.4.1")
 

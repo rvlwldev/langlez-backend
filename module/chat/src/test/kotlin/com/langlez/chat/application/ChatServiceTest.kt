@@ -1,14 +1,14 @@
 package com.langlez.chat.application
 
+import com.langlez.attachment.contract.Storage
+import com.langlez.block.contract.BlockReader
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.domain.ChatRoomSummary
-import com.langlez.relationship.contract.BlockReader
 import com.langlez.core.MessageBroadcaster
-import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -19,10 +19,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Instant
 
 class ChatServiceTest : BehaviorSpec({
 
