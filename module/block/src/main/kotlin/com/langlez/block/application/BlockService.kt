@@ -39,9 +39,15 @@ class BlockService(
      * ## 이벤트가 소비되기 전까지 팔로우 행이 남는 창은 사용자에게 보이지 않는다
      *
      * **차단의 효력은 즉시고, 팔로우 행 정리만 지연된다.** 차단 행이 커밋되는 순간부터
-     * `BlockReader.isBlockedBetween` 이 true 라, 팔로우 행을 읽는 경로가 전부 그 앞에서 막힌다 —
-     * `FollowService`(목록·신규 팔로우), `EchoService`(타임라인), `ChatService`(메시지)가
-     * 모두 차단을 먼저 본다. 남아 있는 팔로우 행을 통과해 무언가가 보이는 경로는 없다.
+     * `BlockReader` 가 true 를 돌려주고, 팔로우 행을 읽는 경로가 전부 그 앞에서 막힌다:
+     *
+     * - `FollowService.follow` — `isBlockedBetween` 으로 새 팔로우를 막는다.
+     * - `FollowService.listFollowersOf`/`listFollowingsOf` — `isBlockedBetween` 으로 목록 자체를 막는다.
+     * - `FollowService.toViews` (내 목록 포함 전 목록) — `blockedAmong` 으로 차단된 회원을 항목에서 뺀다.
+     * - `EchoService.fill`/`isBlocked` (타임라인), `ChatService`(메시지) — 같은 포트를 먼저 본다.
+     *
+     * 남아 있는 팔로우 행을 통과해 무언가가 보이는 경로는 없다. **목록 필터를 지우면 그 창이
+     * 그대로 열린다** — 차단 직후 목록에 상대가 그대로 뜬다.
      *
      * **이 문단을 지우지 마라.** 없으면 다음 사람이 "차단했는데 팔로우가 남아 있다"를 버그로 보고
      * 동기 호출로 되돌린다. 그렇게 되돌리면 모듈 경계가 다시 무너진다.

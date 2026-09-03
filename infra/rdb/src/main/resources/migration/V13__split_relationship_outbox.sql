@@ -91,12 +91,24 @@ select id, domain, topic, payload, "key", tries, status, created_at, completed_a
   from relationship_event_outbox_history;
 
 -- 위 insert 가 id 를 명시로 넣었으므로 identity 시퀀스는 아직 1이다. 그대로 두면 다음 insert 가
--- 기존 id 와 충돌한다. 옮긴 행이 없으면(빈 테이블) 1로 둔다.
+-- 기존 id 와 충돌한다. 양쪽이 다 비었으면 1로 둔다.
+--
+-- **history 의 max 도 같이 본다.** history 는 원본 아웃박스 행의 id 를 PK 로 재사용하고
+-- (OutBoxHistory(o: OutBox) 가 id = o.id 다), 아카이빙이 원본 행을 deleteAllInBatch 로 지운다.
+-- 그래서 이 마이그레이션 시점에 원본은 비어 있고 history 에만 id 1..N 이 쌓여 있는 게 정상이다.
+-- 원본만 보고 시퀀스를 1로 되돌리면 신규 팔로우가 id 1,2,3 으로 채번되고, 다음 아카이빙에서
+-- history PK 와 충돌해 배치가 매일 롤백된다 — 아웃박스가 영영 안 비워진다.
 select setval(
     pg_get_serial_sequence('follow_event_outbox', 'id'),
-    coalesce((select max(id) from follow_event_outbox), 0) + 1,
+    greatest(
+        coalesce((select max(id) from follow_event_outbox), 0),
+        coalesce((select max(id) from follow_event_outbox_history), 0)
+    ) + 1,
     false
 );
+
+-- block 쪽은 setval 이 필요 없다. 두 테이블 다 위에서 방금 만든 빈 테이블이고 옮겨 오는 행이
+-- 없어서(member-blocked 는 이 PR 에서 처음 생긴 이벤트다) 시퀀스 1 이 곧 정답이다.
 
 drop table relationship_event_outbox;
 drop table relationship_event_outbox_history;

@@ -8,7 +8,14 @@ package com.langlez.follow.contract
  * 같은 데이터를 두 벌 들고 어긋날 여지를 만든다. `BlockReader` 와 같은 방식으로 조회만 포트로 뽑는다.
  */
 interface FollowReader {
-    /** 내가 팔로우하는 회원 id 목록. 팔로우가 없으면 빈 목록. */
+    /**
+     * 내가 팔로우하는 회원 id 목록. 팔로우가 없으면 빈 목록.
+     *
+     * **차단 필터를 거치지 않은 날 그래프다.** 차단은 즉시 효력이 나지만 팔로우 행 정리는
+     * `member-blocked` 컨슈머가 할 때까지 지연돼서, 방금 차단한 상대의 id 가 여기 남아 있을 수 있다.
+     * 이 결과로 무언가를 사용자에게 보여줄 거면 호출자가 `BlockReader.blockedAmong` 으로 걸러라 —
+     * `EchoService` 는 글 작성자 기준으로 사후 필터링한다.
+     */
     fun followingIds(memberId: Long): List<Long>
 
     /**

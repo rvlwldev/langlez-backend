@@ -65,6 +65,7 @@ class FollowServiceTest : BehaviorSpec({
                 every { blocks.isBlockedBetween(1L, 2L) } returns false
                 every { repo.findFollowers(2L, 20, null) } returns listOf(Edge(10L, 3L))
                 every { members.findProfileInfos(listOf(3L)) } returns mapOf(3L to member(3L))
+                every { blocks.blockedAmong(1L, listOf(3L)) } returns emptySet()
 
                 service.listFollowersOf(1L, 2L, 20, null).map { it.memberId } shouldBe listOf(3L)
 
@@ -191,12 +192,75 @@ class FollowServiceTest : BehaviorSpec({
                     Edge(id = 29L, memberId = 3L),
                 )
                 every { members.findProfileInfos(listOf(2L, 3L)) } returns mapOf(2L to member(2L))
+                every { blocks.blockedAmong(1L, listOf(2L, 3L)) } returns emptySet()
 
                 val views = service.listFollowers(1L, 20, null)
 
                 views shouldHaveSize 1
                 views[0].memberId shouldBe 2L
                 views[0].cursor shouldBe 30L
+            }
+        }
+    }
+
+    /**
+     * 차단은 커밋 즉시 효력이 나야 하는데 팔로우 행 정리는 `member-blocked` 컨슈머가 할 때까지
+     * 지연된다. 그 창 동안 목록 API 가 차단한 상대를 그대로 내보내면 안 된다.
+     */
+    Given("차단한 상대가 아직 팔로우 행에 남아 있을 때") {
+
+        val edges = listOf(Edge(id = 30L, memberId = 2L), Edge(id = 29L, memberId = 3L))
+        val infos = mapOf(2L to member(2L), 3L to member(3L))
+
+        When("내 팔로워 목록을 열면") {
+            Then("차단한 회원이 빠진다") {
+                every { repo.findFollowers(1L, 20, null) } returns edges
+                every { members.findProfileInfos(listOf(2L, 3L)) } returns infos
+                every { blocks.blockedAmong(1L, listOf(2L, 3L)) } returns setOf(2L)
+
+                service.listFollowers(1L, 20, null).map { it.memberId } shouldBe listOf(3L)
+            }
+        }
+
+        When("내 팔로잉 목록을 열면") {
+            Then("차단한 회원이 빠진다") {
+                every { repo.findFollowings(1L, 20, null) } returns edges
+                every { members.findProfileInfos(listOf(2L, 3L)) } returns infos
+                every { blocks.blockedAmong(1L, listOf(2L, 3L)) } returns setOf(2L)
+
+                service.listFollowings(1L, 20, null).map { it.memberId } shouldBe listOf(3L)
+            }
+        }
+
+        When("남의 프로필에서 팔로워 목록을 열면") {
+            Then("viewer 가 차단한 회원이 빠진다 — 판정 기준은 목록 주인이 아니라 viewer 다") {
+                every { blocks.isBlockedBetween(1L, 9L) } returns false
+                every { repo.findFollowers(9L, 20, null) } returns edges
+                every { members.findProfileInfos(listOf(2L, 3L)) } returns infos
+                every { blocks.blockedAmong(1L, listOf(2L, 3L)) } returns setOf(2L)
+
+                service.listFollowersOf(1L, 9L, 20, null).map { it.memberId } shouldBe listOf(3L)
+            }
+        }
+
+        When("남의 프로필에서 팔로잉 목록을 열면") {
+            Then("viewer 가 차단한 회원이 빠진다") {
+                every { blocks.isBlockedBetween(1L, 9L) } returns false
+                every { repo.findFollowings(9L, 20, null) } returns edges
+                every { members.findProfileInfos(listOf(2L, 3L)) } returns infos
+                every { blocks.blockedAmong(1L, listOf(2L, 3L)) } returns setOf(2L)
+
+                service.listFollowingsOf(1L, 9L, 20, null).map { it.memberId } shouldBe listOf(3L)
+            }
+        }
+
+        When("목록이 비어 있으면") {
+            Then("차단 포트를 부르지 않는다 — 빈 목록에 왕복을 쓸 이유가 없다") {
+                every { repo.findFollowers(1L, 20, null) } returns emptyList()
+
+                service.listFollowers(1L, 20, null) shouldBe emptyList()
+
+                verify(exactly = 0) { blocks.blockedAmong(any(), any()) }
             }
         }
     }

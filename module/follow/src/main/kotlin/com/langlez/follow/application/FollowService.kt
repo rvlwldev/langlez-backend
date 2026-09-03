@@ -75,42 +75,55 @@ class FollowService(
     }
 
     /**
-     * 목록 조회에는 트랜잭션을 걸지 않는다. 저장소 읽기 한 번 + `MemberReader` 배치 조회 한 번인데,
-     * 그 포트가 원격이 되면 트랜잭션이 커넥션을 쥔 채 네트워크를 기다린다. 감싸도 한 스냅샷이
-     * 되지도 않는다 — 회원 정보는 이미 다른 저장소다.
+     * 목록 조회에는 트랜잭션을 걸지 않는다. 저장소 읽기 한 번 + `MemberReader`·`BlockReader` 배치
+     * 조회 각 한 번인데, 그 포트가 원격이 되면 트랜잭션이 커넥션을 쥔 채 네트워크를 기다린다.
+     * 감싸도 한 스냅샷이 되지도 않는다 — 회원 정보도 차단 여부도 이미 다른 저장소다.
+     *
+     * 내 목록의 viewer 는 나 자신이다.
      */
     fun listFollowers(memberId: Long, size: Int, cursor: Long?): List<FollowMemberView> =
-        toViews(repo.findFollowers(memberId, size, cursor))
+        toViews(memberId, repo.findFollowers(memberId, size, cursor))
 
     fun listFollowings(memberId: Long, size: Int, cursor: Long?): List<FollowMemberView> =
-        toViews(repo.findFollowings(memberId, size, cursor))
+        toViews(memberId, repo.findFollowings(memberId, size, cursor))
 
-    /** 남의 프로필에서 보는 팔로워 목록. */
+    /** 남의 프로필에서 보는 팔로워 목록. 목록에 든 회원과 viewer 사이의 차단은 [toViews] 가 본다. */
     fun listFollowersOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<FollowMemberView> {
         requireVisible(viewerId, targetId)
 
-        return toViews(repo.findFollowers(targetId, size, cursor))
+        return toViews(viewerId, repo.findFollowers(targetId, size, cursor))
     }
 
     /** 남의 프로필에서 보는 팔로잉 목록. */
     fun listFollowingsOf(viewerId: Long, targetId: Long, size: Int, cursor: Long?): List<FollowMemberView> {
         requireVisible(viewerId, targetId)
 
-        return toViews(repo.findFollowings(targetId, size, cursor))
+        return toViews(viewerId, repo.findFollowings(targetId, size, cursor))
     }
 
     /**
-     * 목록에 회원 정보를 붙인다.
+     * 목록에 회원 정보를 붙이고 [viewerId] 와 차단 관계인 회원을 걷어낸다.
+     *
+     * **차단 필터가 여기 있어야 하는 이유.** 차단은 커밋 즉시 효력이 나지만 팔로우 행 정리는
+     * `member-blocked` 컨슈머가 할 때까지 지연된다. 그 창 동안 남아 있는 팔로우 행을 그대로
+     * 내보내면 방금 차단한 상대가 목록에 보인다. 차단 판정은 항목마다 `isBlockedBetween` 을
+     * 도는 대신 `blockedAmong` 한 번으로 묻는다 — 포트가 원격이 될 때 페이지 크기만큼 왕복이 는다.
+     *
+     * 걸러낸 만큼 페이지가 짧아지는 건 감수한다. 탈퇴 회원이 빠지는 것과 같은 성질이고,
+     * `EchoService.fill` 같은 재조회 루프를 붙일 만큼 차단이 흔한 목록이 아니다.
      *
      * 조회는 한 번뿐이고, 그 사이 탈퇴해 사라진 회원은 빠진다 —
      * 팔로우 행은 회원 삭제와 별개라 껍데기 id 만 남을 수 있다.
      */
-    private fun toViews(edges: List<Edge>): List<FollowMemberView> {
+    private fun toViews(viewerId: Long, edges: List<Edge>): List<FollowMemberView> {
         if (edges.isEmpty()) return emptyList()
 
-        val infos = members.findProfileInfos(edges.map { it.memberId })
+        val ids = edges.map { it.memberId }
+        val infos = members.findProfileInfos(ids)
+        val blocked = blocks.blockedAmong(viewerId, ids)
 
         return edges.mapNotNull { edge ->
+            if (edge.memberId in blocked) return@mapNotNull null
             infos[edge.memberId]?.let { FollowMemberView(edge.id, it.id, it.handle, it.imageUrl) }
         }
     }
