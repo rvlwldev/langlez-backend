@@ -4,7 +4,7 @@ import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -13,6 +13,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.redisson.api.RBucket
 import org.redisson.api.RedissonClient
+import java.util.Base64
 
 /**
  * 1인 1기기 정책. 새 기기에서 로그인하면 이전 기기 세션은 끊긴다.
@@ -20,17 +21,20 @@ import org.redisson.api.RedissonClient
  */
 class AuthDeviceTest : BehaviorSpec({
 
-    val jwt = mockk<JwtTokenProvider>()
+    val secret = Base64.getEncoder().encodeToString("super-secret-key-12345678901234567890".toByteArray())
+
+    // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 서비스에 넘긴다.
+    val tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 1209600, redisson = mockk(relaxed = true))
+
     val memberService = mockk<MemberService>()
     val redisson = mockk<RedissonClient>()
-    val tokenBlacklist = mockk<com.langlez.core.TokenBlacklist>()
     val recorder = mockk<MemberOnlineTracker>(relaxed = true)
 
     val tokenBucket = mockk<RBucket<String>>(relaxed = true)
     val deviceBucket = mockk<RBucket<String>>(relaxed = true)
 
     val service = AuthService(
-        jwt, memberService, redisson, tokenBlacklist, recorder,
+        tokens, memberService, redisson, recorder,
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )
@@ -44,10 +48,10 @@ class AuthDeviceTest : BehaviorSpec({
         providerId = "p1",
     )
 
+    val refreshToken = tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
+
     every { redisson.getBucket<String>("refresh_token:1") } returns tokenBucket
     every { redisson.getBucket<String>("refresh_device:1") } returns deviceBucket
-    every { jwt.createRefreshToken(1L, "tester", "ROLE_MEMBER") } returns "rt"
-    every { jwt.createAccessToken(1L, "tester", "ROLE_MEMBER") } returns "at"
 
     Given("기기 A 에서 로그인하면") {
         service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("1.1.1.1", "device-A"))
@@ -62,16 +66,16 @@ class AuthDeviceTest : BehaviorSpec({
     }
 
     Given("기기 A 의 리프레시 토큰으로 갱신할 때") {
-        every { jwt.extractTokenType("rt") } returns "refresh"
-        every { jwt.extractId("rt") } returns 1L
         every { memberService.findById(1L) } returns member()
-        every { tokenBucket.get() } returns "rt"
+        every { tokenBucket.get() } returns refreshToken
 
         When("같은 기기에서 요청하면") {
             every { deviceBucket.get() } returns "device-A"
 
             Then("정상 갱신된다") {
-                service.refresh("rt", AccessContext("1.1.1.1", "device-A")).second shouldBe "at"
+                val accessToken = service.refresh(refreshToken, AccessContext("1.1.1.1", "device-A")).second
+
+                tokens.parse(accessToken).memberId shouldBe 1L
             }
         }
 
@@ -80,7 +84,7 @@ class AuthDeviceTest : BehaviorSpec({
 
             Then("401 로 거부된다") {
                 val ex = shouldThrow<LanglezException> {
-                    service.refresh("rt", AccessContext("2.2.2.2", "device-A"))
+                    service.refresh(refreshToken, AccessContext("2.2.2.2", "device-A"))
                 }
                 ex.status.value() shouldBe 401
             }
@@ -92,7 +96,7 @@ class AuthDeviceTest : BehaviorSpec({
             Then("검증을 건너뛰지 않고 401 로 거부된다") {
                 // 헤더를 빼면 통과하는 fail-open 이면 탈취한 리프레시 토큰을 아무 기기에서나 쓸 수 있다
                 val ex = shouldThrow<LanglezException> {
-                    service.refresh("rt", AccessContext("2.2.2.2", null))
+                    service.refresh(refreshToken, AccessContext("2.2.2.2", null))
                 }
                 ex.status.value() shouldBe 401
             }
@@ -102,7 +106,9 @@ class AuthDeviceTest : BehaviorSpec({
             every { deviceBucket.get() } returns null
 
             Then("이번 기기로 바인딩하며 정상 갱신된다") {
-                service.refresh("rt", AccessContext("1.1.1.1", "device-A")).second shouldBe "at"
+                val accessToken = service.refresh(refreshToken, AccessContext("1.1.1.1", "device-A")).second
+
+                tokens.parse(accessToken).memberId shouldBe 1L
                 verify { deviceBucket.set("device-A", any()) }
             }
         }

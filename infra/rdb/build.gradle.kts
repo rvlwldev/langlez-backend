@@ -31,6 +31,9 @@ dependencies {
     // TestRdbApplication 이 JwtAuthenticationFilter 용 MemberReader 대역을 올린다
     testImplementation(project(":module:member-api"))
 
+    // TokenManager 가 RedissonClient 를 받는다. infra:redis 없이 뜨는 컨텍스트라 대역을 직접 올린다
+    testImplementation(libs.dependency.redisson)
+
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.testcontainers)

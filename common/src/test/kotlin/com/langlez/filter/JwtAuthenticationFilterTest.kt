@@ -1,10 +1,8 @@
 package com.langlez.filter
 
-import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberReader
-import com.langlez.utility.JwtTokenProvider
-import io.jsonwebtoken.Claims
+import com.langlez.security.TokenManager
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -19,21 +17,27 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.redisson.api.RBucket
+import org.redisson.api.RedissonClient
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.HandlerExceptionResolver
+import java.util.Base64
 
 class JwtAuthenticationFilterTest {
 
-    private val jwt = mockk<JwtTokenProvider>()
-    private val blacklist = mockk<TokenBlacklist>()
+    // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 필터에 태운다.
+    private val bucket = mockk<RBucket<String>>(relaxed = true)
+    private val redisson = mockk<RedissonClient>().also { every { it.getBucket<String>(any<String>()) } returns bucket }
+    private val tokens = TokenManager(SECRET, accessTokenTTL = 3600, refreshTokenTTL = 86400, redisson = redisson)
+
     private val resolver = mockk<HandlerExceptionResolver>(relaxed = true)
     private val members = mockk<MemberReader>()
 
-    private val filter = JwtAuthenticationFilter(jwt, blacklist, members, resolver)
+    private val filter = JwtAuthenticationFilter(tokens, members, resolver)
 
     private val req = mockk<HttpServletRequest>(relaxed = true)
     private val res = mockk<HttpServletResponse>(relaxed = true)
@@ -50,14 +54,10 @@ class JwtAuthenticationFilterTest {
     @AfterEach
     fun tearDown() = SecurityContextHolder.clearContext()
 
-    private fun givenValidToken(token: String = "valid-token") {
-        val claims = mockk<Claims>()
-        every { req.getHeader("Authorization") } returns "Bearer $token"
-        every { blacklist.isBlacklisted(token) } returns false
-        every { jwt.parseToClaims(token) } returns claims
-        every { jwt.extractTokenType(claims) } returns "access"
-        every { jwt.extractId(claims) } returns 1L
-        every { jwt.extractRole(claims) } returns "ROLE_MEMBER"
+    private fun givenValidToken() {
+        every { req.getHeader("Authorization") } returns
+            "Bearer " + tokens.issueAccessToken(1L, "tester", "ROLE_MEMBER")
+        every { bucket.isExists } returns false
         every { members.findStatus(1L) } returns MemberReader.Status.ACTIVE
     }
 
@@ -110,19 +110,19 @@ class JwtAuthenticationFilterTest {
     @Test
     fun `토큰 파싱 실패는 이 필터가 resolver 로 넘긴다`() {
         every { req.getHeader("Authorization") } returns "Bearer broken"
-        every { blacklist.isBlacklisted("broken") } returns false
-        every { jwt.parseToClaims("broken") } throws IllegalArgumentException("malformed")
+        every { bucket.isExists } returns false
 
         filter.doFilter(req, res, chain)
 
-        verify { resolver.resolveException(req, res, null, any<IllegalArgumentException>()) }
+        verify { resolver.resolveException(req, res, null, any<LanglezException>()) }
         verify(exactly = 0) { chain.doFilter(req, res) }
     }
 
     @Test
-    fun `블랙리스트에 오른 토큰은 인증 없이 401 로 넘긴다`() {
-        every { req.getHeader("Authorization") } returns "Bearer revoked"
-        every { blacklist.isBlacklisted("revoked") } returns true
+    fun `차단된 토큰은 인증 없이 401 로 넘긴다`() {
+        every { req.getHeader("Authorization") } returns
+            "Bearer " + tokens.issueAccessToken(1L, "tester", "ROLE_MEMBER")
+        every { bucket.isExists } returns true
 
         filter.doFilter(req, res, chain)
 
@@ -133,11 +133,9 @@ class JwtAuthenticationFilterTest {
 
     @Test
     fun `refresh 토큰으로는 인증되지 않는다`() {
-        val claims = mockk<Claims>()
-        every { req.getHeader("Authorization") } returns "Bearer refresh-token"
-        every { blacklist.isBlacklisted("refresh-token") } returns false
-        every { jwt.parseToClaims("refresh-token") } returns claims
-        every { jwt.extractTokenType(claims) } returns "refresh"
+        every { req.getHeader("Authorization") } returns
+            "Bearer " + tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
+        every { bucket.isExists } returns false
 
         filter.doFilter(req, res, chain)
 
@@ -154,5 +152,10 @@ class JwtAuthenticationFilterTest {
 
         verify { chain.doFilter(req, res) }
         assertNull(SecurityContextHolder.getContext().authentication)
+    }
+
+    companion object {
+        private val SECRET =
+            Base64.getEncoder().encodeToString("super-secret-key-12345678901234567890".toByteArray())
     }
 }

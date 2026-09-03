@@ -1,13 +1,12 @@
 package com.langlez.filter
 
-import com.langlez.core.TokenBlacklist
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.MemberReader.Status.ACTIVE
 import com.langlez.member.contract.MemberReader.Status.CREATED
 import com.langlez.member.contract.MemberReader.Status.SUSPENDED
 import com.langlez.member.contract.MemberReader.Status.WITHDRAWN
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -23,8 +22,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 
 @Component
 class JwtAuthenticationFilter(
-    private val jwt: JwtTokenProvider,
-    private val tokenBlacklist: TokenBlacklist,
+    private val tokens: TokenManager,
     private val members: MemberReader,
     @param:Lazy @param:Qualifier("handlerExceptionResolver") private val resolver: HandlerExceptionResolver
 ) : OncePerRequestFilter() {
@@ -51,23 +49,20 @@ class JwtAuthenticationFilter(
             ?.substring(7)
             ?: return
 
-        if (tokenBlacklist.isBlacklisted(token)) {
+        if (tokens.isRevoked(token)) {
             throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token")
         }
 
-        val claims = jwt.parseToClaims(token)
+        val info = tokens.parse(token)
 
-        if (jwt.extractTokenType(claims) != "access")
+        if (info.type != TokenManager.Type.ACCESS)
             throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token")
 
-        val id = jwt.extractId(claims)
-        val role = jwt.extractRole(claims)
-
         // 인증을 심기 전에 검사한다. 뒤에 두면 거부된 요청도 컨텍스트에 인증이 남는다.
-        requireUsableAccount(id, req.requestURI)
+        requireUsableAccount(info.memberId, req.requestURI)
 
         SecurityContextHolder.getContext().authentication =
-            UsernamePasswordAuthenticationToken(id, null, listOf(SimpleGrantedAuthority(role)))
+            UsernamePasswordAuthenticationToken(info.memberId, null, listOf(SimpleGrantedAuthority(info.role)))
     }
 
     /**

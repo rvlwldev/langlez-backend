@@ -4,7 +4,7 @@ import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -14,23 +14,27 @@ import org.redisson.api.RedissonClient
 import org.springframework.http.HttpStatus
 import java.lang.reflect.InvocationTargetException
 import java.time.Duration
+import java.util.Base64
 
 class AuthServiceTest : BehaviorSpec({
 
-    val jwt = mockk<JwtTokenProvider>()
+    val secret = Base64.getEncoder().encodeToString("super-secret-key-12345678901234567890".toByteArray())
+
+    // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 서비스에 넘긴다.
+    val tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 1209600, redisson = mockk(relaxed = true))
+
     val memberService = mockk<MemberService>()
     val redisson = mockk<RedissonClient>()
     val bucket = mockk<RBucket<String>>()
     val deviceBucket = mockk<RBucket<String>>(relaxed = true).also { every { it.get() } returns null }
-    val tokenBlacklist = mockk<com.langlez.core.TokenBlacklist>()
 
     val service = AuthService(
-        jwt, memberService, redisson, tokenBlacklist, mockk(relaxed = true),
+        tokens, memberService, redisson, mockk(relaxed = true),
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )
 
-    afterEach { clearMocks(jwt, memberService, redisson, bucket, tokenBlacklist, answers = false) }
+    afterEach { clearMocks(memberService, redisson, bucket, answers = false) }
 
     Given("토큰 갱신 요청 시") {
         val memberId = 1L
@@ -42,64 +46,58 @@ class AuthServiceTest : BehaviorSpec({
             providerId = "g123",
             providerDisplayName = "tester"
         )
-        val validRefreshToken = "valid-refresh-token"
-        val newRefreshToken = "new-refresh-token"
-        val newAccessToken = "new-access-token"
+        val validRefreshToken = tokens.issueRefreshToken(memberId, "tester", "ROLE_MEMBER")
 
         every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
         every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
 
         When("유효한 리프레시 토큰으로 갱신하면") {
-            every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractId(validRefreshToken) } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns validRefreshToken
-            // 갱신 토큰의 role 도 최초 로그인과 같은 ROLE_ 접두사여야 한다. 안 그러면 hasRole 검사가 깨진다.
-            every { jwt.createRefreshToken(memberId, "tester", "ROLE_MEMBER") } returns newRefreshToken
-            every { jwt.createAccessToken(memberId, "tester", "ROLE_MEMBER") } returns newAccessToken
             every { bucket.set(any(), any<Duration>()) } just runs
 
             Then("새로운 토큰 쌍이 반환되고 Redis에 저장된다") {
-                val result = service.refresh(validRefreshToken)
-                result.first shouldBe newRefreshToken
-                result.second shouldBe newAccessToken
-                verify { bucket.set(newRefreshToken, Duration.ofDays(14)) }
+                val (refreshToken, accessToken) = service.refresh(validRefreshToken)
+
+                tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
+                // 갱신 토큰의 role 도 최초 로그인과 같은 ROLE_ 접두사여야 한다. 안 그러면 hasRole 검사가 깨진다.
+                tokens.parse(accessToken).role shouldBe "ROLE_MEMBER"
+                tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
+
+                verify { bucket.set(refreshToken, Duration.ofDays(14)) }
             }
         }
 
         When("액세스 토큰으로 갱신을 시도하면") {
-            every { jwt.extractTokenType("access-token") } returns "access"
+            val accessToken = tokens.issueAccessToken(memberId, "tester", "ROLE_MEMBER")
 
             Then("UNAUTHORIZED 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh("access-token") }
+                val ex = shouldThrow<LanglezException> { service.refresh(accessToken) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
             }
         }
 
         When("존재하지 않는 회원의 토큰으로 갱신하면") {
-            every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractId(validRefreshToken) } returns 999L
+            val orphanToken = tokens.issueRefreshToken(999L, "ghost", "ROLE_MEMBER")
             every { memberService.findById(999L) } returns null
             every { redisson.getBucket<String>("refresh_token:999") } returns bucket
-        every { redisson.getBucket<String>("refresh_device:999") } returns deviceBucket
+            every { redisson.getBucket<String>("refresh_device:999") } returns deviceBucket
 
             Then("UNAUTHORIZED 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
+                val ex = shouldThrow<LanglezException> { service.refresh(orphanToken) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
             }
         }
 
         When("Redis에 저장된 토큰과 다른 토큰으로 갱신하면") {
-            every { jwt.extractTokenType("old-token") } returns "refresh"
-            every { jwt.extractId("old-token") } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns "different-token"
             every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh("old-token") }
+                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
                 verify(exactly = 1) { bucket.delete() }
@@ -107,10 +105,9 @@ class AuthServiceTest : BehaviorSpec({
         }
 
         When("Redis에 토큰이 없으면(만료)") {
-            every { jwt.extractTokenType(validRefreshToken) } returns "refresh"
-            every { jwt.extractId(validRefreshToken) } returns memberId
             every { memberService.findById(memberId) } returns member
             every { bucket.get() } returns null
+            every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
@@ -123,20 +120,21 @@ class AuthServiceTest : BehaviorSpec({
     Given("로그인 성공으로 토큰을 최초 발급할 때") {
         val memberId = 1L
         val handle = "tester"
-        val role = "MEMBER"
+        val role = "ROLE_MEMBER"
 
         every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
         every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
-        every { jwt.createRefreshToken(memberId, handle, role) } returns "issued-refresh-token"
-        every { jwt.createAccessToken(memberId, handle, role) } returns "issued-access-token"
         every { bucket.set(any(), any<Duration>()) } just runs
 
         When("issueTokens를 호출하면") {
             Then("토큰 쌍을 반환하고 refresh token을 Redis에 저장한다") {
-                val result = service.issueTokens(memberId, handle, role)
-                result.first shouldBe "issued-refresh-token"
-                result.second shouldBe "issued-access-token"
-                verify { bucket.set("issued-refresh-token", Duration.ofDays(14)) }
+                val (refreshToken, accessToken) = service.issueTokens(memberId, handle, role)
+
+                tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
+                tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
+                tokens.parse(accessToken).memberId shouldBe memberId
+
+                verify { bucket.set(refreshToken, Duration.ofDays(14)) }
             }
         }
     }

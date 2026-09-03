@@ -2,7 +2,7 @@ package com.langlez.chat
 
 import com.langlez.core.MessageBroadcaster
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -58,7 +58,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
     var port: Int = 0
 
     @Autowired
-    lateinit var jwt: JwtTokenProvider
+    lateinit var tokens: TokenManager
 
     @Autowired
     lateinit var broadcaster: MessageBroadcaster
@@ -134,7 +134,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
         Given("유효한 액세스 토큰으로 STOMP 연결하면") {
             // 1번 회원이 참여자인 방을 실제로 만든다. 구독 인가가 참여 여부를 보기 때문이다.
             val myRoom = chatRepository.createRoom(1L, 2L)
-            val session = connect(jwt.createAccessToken(1L, "tester", "ROLE_USER"))
+            val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
 
             Then("연결이 수립된다") {
                 session.isConnected shouldBe true
@@ -169,7 +169,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             // 구독이 거부되면 STOMP 세션이 끊긴다. 그 과정에서 나는 예외는 무시하고
             // "메시지를 못 받았다"는 사실만 본다.
             runCatching {
-                val session = connect(jwt.createAccessToken(1L, "tester", "ROLE_USER"))
+                val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
                 session.subscribe(
                     "/topic/chat/room/${othersRoom.id}",
                     object : StompFrameHandler {
@@ -195,7 +195,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             val received = LinkedBlockingQueue<Any>()
 
             runCatching {
-                val session = connect(jwt.createAccessToken(1L, "tester", "ROLE_USER"))
+                val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
                 session.subscribe(
                     "/topic/chat/room/*",
                     object : StompFrameHandler {
@@ -220,7 +220,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             val topic = "/topic/chat/room/${room.id}"
             // viewers 는 접속 여부와 교집합이라 실제 앱처럼 핑이 먼저 있어야 한다
             tracker.toOnline(31L)
-            val session = connect(jwt.createAccessToken(31L, "viewer", "ROLE_USER"))
+            val session = connect(tokens.issueAccessToken(31L, "viewer", "ROLE_USER"))
             val subscription = session.subscribe(topic, discardingHandler())
 
             Then("그 방을 보고 있는 사람으로 기록된다") {
@@ -246,7 +246,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             val topic = "/topic/chat/room/${room.id}"
             // viewers 는 접속 여부와 교집합이라 실제 앱처럼 핑이 먼저 있어야 한다
             tracker.toOnline(41L)
-            val session = connect(jwt.createAccessToken(41L, "viewer", "ROLE_USER"))
+            val session = connect(tokens.issueAccessToken(41L, "viewer", "ROLE_USER"))
             session.subscribe(topic, discardingHandler())
 
             eventually(3.seconds) { tracker.viewers(topic) shouldContain 41L }
@@ -265,7 +265,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
 
         Given("액세스 토큰이 아닌 토큰으로 STOMP 연결하면") {
             Then("연결이 거부된다") {
-                shouldThrow<ExecutionException> { connect(jwt.createRefreshToken(1L, "tester", "ROLE_USER")) }
+                shouldThrow<ExecutionException> { connect(tokens.issueRefreshToken(1L, "tester", "ROLE_USER")) }
             }
         }
     }

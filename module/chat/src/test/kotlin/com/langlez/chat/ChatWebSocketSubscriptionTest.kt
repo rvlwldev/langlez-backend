@@ -4,9 +4,8 @@ import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.infrastructure.ChatSubscriptionAuthorizer
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.SubscriptionAuthorizer
-import com.langlez.core.TokenBlacklist
 import com.langlez.member.contract.OnlineTracker
-import com.langlez.utility.JwtTokenProvider
+import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -22,6 +21,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.messaging.support.ChannelInterceptor
 import org.springframework.messaging.support.MessageBuilder
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import java.util.Base64
 
 /** `getInterceptors()` 가 protected 라 하위 클래스로만 꺼낼 수 있다. */
 private class ExposedRegistration : ChannelRegistration() {
@@ -39,10 +39,12 @@ class ChatWebSocketSubscriptionTest : BehaviorSpec({
         every { it.iterator() } answers { mutableListOf<SubscriptionAuthorizer>(ChatSubscriptionAuthorizer(repo)).iterator() }
     }
 
+    // CONNECT 프레임은 이 스펙이 다루지 않는다. 토큰은 만들지도 검사하지도 않는다.
+    val secret = Base64.getEncoder().encodeToString("super-secret-key-12345678901234567890".toByteArray())
+
     fun chain(): List<ChannelInterceptor> {
         val configuration = ChatWebSocketConfiguration(
-            jwt = mockk<JwtTokenProvider>(),
-            tokenBlacklist = mockk<TokenBlacklist>(),
+            tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 86400, redisson = mockk(relaxed = true)),
             tracker = tracker,
             gate = WebSocketSubscriptionGate(authorizers),
         )

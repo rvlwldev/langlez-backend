@@ -257,7 +257,7 @@ data class MemberMeResponse(
 
 **인증은 채널 공통, 인가는 공용 게이트 한 곳이다.** 모듈마다 `ChannelInterceptor` 를 달고 "내 접두사가 아니면 통과"시키던 구조는 실제로 뚫렸다 — 어느 접두사에도 안 걸리는 목적지를 아무도 검사하지 않아서, 별표 두 개짜리 구독 패턴과 인터셉터가 없던 `/topic/notification/{id}` 가 그대로 열려 있었다. **새 모듈이 인가를 빠뜨리면 열리는 게 아니라 닫혀야 한다.**
 
-- **CONNECT** — `Authorization: Bearer` 헤더에서 토큰을 꺼내 `TokenBlacklist.isBlacklisted` 와 토큰 타입(`access`)을 확인하고, `accessor.user` 에 회원 id 를 심는다. 채널 전체에 한 번만 걸려 있다(현재 `ChatWebSocketConfiguration`). **소켓은 한 번 열리면 계속 살아 있어서 연결 시점에 못 막으면 그 뒤로 검사할 기회가 없다.**
+- **CONNECT** — `Authorization: Bearer` 헤더에서 토큰을 꺼내 `TokenManager.isRevoked` 와 토큰 타입(`ACCESS`)을 확인하고, `accessor.user` 에 회원 id 를 심는다. 채널 전체에 한 번만 걸려 있다(현재 `ChatWebSocketConfiguration`). **소켓은 한 번 열리면 계속 살아 있어서 연결 시점에 못 막으면 그 뒤로 검사할 기회가 없다.**
 - **SUBSCRIBE** — `common` 의 `WebSocketSubscriptionGate` 가 모든 구독을 받아, 등록된 `core.SubscriptionAuthorizer` 중 `supports` 가 참인 것에게 묻고 **하나도 없으면 거부한다.** 새 실시간 토픽을 만들면 모듈 `infrastructure` 에 `{Domain}SubscriptionAuthorizer` 를 `@Component` 로 추가하는 것이 전부다. 인터셉터를 새로 달지 않는다 — 다는 순간 기본 통과가 다시 생긴다.
   - 목적지는 **끝을 고정한 정규식**(`Regex("^/topic/chat/room/(\\d+)$")`)으로만 통과시킨다. 심플 브로커는 구독 목적지에 별표 와일드카드를 허용하므로, 방 번호 자리를 느슨하게 열면 전체 방을 한 번에 빨아간다. 숫자만 허용한다.
   - 게이트가 인증(`accessor.user`)까지 확인하므로 authorizer 는 순수 판정만 한다. 프레임워크 타입을 모른다.
