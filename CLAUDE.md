@@ -59,7 +59,7 @@ app/api         조립 + 실행
 **어디에 둘지의 판단 기준은 소유자다.** 그 계약을 구현하고 그 데이터를 소유하는 게 도메인 모듈이면 `{도메인}-api`, 인프라면 `core`.
 
 - **`{도메인}-api`** — 도메인이 구현하는 조회 포트(`MemberReader`), 도메인이 발행하는 이벤트 DTO(`MemberCreatedEvent`).
-- **`core`** — `infra/*` 가 구현하는 포트(`CacheProvider`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`), 그리고 방향이 뒤집힌 것(`SubscriptionAuthorizer` 는 `common` 이 소비하고 도메인들이 구현한다 — 어느 도메인의 것도 아니다).
+- **`core`** — `infra/*` 가 구현하는 포트(`CacheProvider`, `MessageBroadcaster`, `MessageDeduplicator`), 그리고 방향이 뒤집힌 것(`SubscriptionAuthorizer` 는 `common` 이 소비하고 도메인들이 구현한다 — 어느 도메인의 것도 아니다).
 - **애매하면 `core`.** 소유자가 하나로 정해지지 않는 계약을 억지로 도메인에 밀어 넣으면 그 도메인을 안 쓰는 모듈까지 끌려온다.
 
 계약 모듈의 패키지는 `com.langlez.{domain}.contract` 다. 디렉터리는 `-api` 인데 패키지가 `contract` 인 건 **도메인 모듈에 이미 `com.langlez.{domain}.api`(컨트롤러·DTO)가 있어서**다. 같은 이름을 쓰면 두 모듈에 걸친 split package 가 된다.
@@ -117,7 +117,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 | 모듈 | 담긴 것 |
 |---|---|
-| `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `TokenBlacklist`, `SubscriptionAuthorizer` |
+| `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `SubscriptionAuthorizer` |
 | `module/member-api` | `MemberReader`(계정 정보 + 상태), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
 | `module/relationship-api` | `BlockReader`, `FollowReader`, `MemberFollowedEvent` |
 | `module/attachment-api` | `Storage` |
