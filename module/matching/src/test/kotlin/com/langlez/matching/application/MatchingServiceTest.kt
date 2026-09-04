@@ -241,6 +241,54 @@ class MatchingServiceTest : BehaviorSpec({
         }
     }
 
+    Given("캐시된 후보가 그 사이 탈퇴·정지되면") {
+        val head = 40L
+        val withdrawn = 41L
+        val suspended = 42L
+        val alive = 43L
+        val cached = listOf(head, withdrawn, suspended, alive)
+        val page = listOf(withdrawn, suspended, alive)
+
+        every { langs.languagesOf(me) } returns mine
+
+        // 랭킹은 이미 끝났고 순서만 캐시에 남은 상태를 직접 만든다. rank() 를 다시 태우면
+        // 그 경로가 먼저 걸러 버려 캐시 페이징 경로의 결함이 재현되지 않는다.
+        fun seedCache() {
+            stored[me] = cached.map(Long::toString)
+        }
+
+        // 탈퇴해도 members 행이 남는 정책이라 findProfileInfos 는 null 이 아니라
+        // status = WITHDRAWN 을 돌려준다. null 검사만으로는 못 걸러진다.
+        every { members.findProfileInfos(page) } returns mapOf(
+            withdrawn to profile(withdrawn, MemberReader.Status.WITHDRAWN),
+            suspended to profile(suspended, MemberReader.Status.SUSPENDED),
+            alive to profile(alive),
+        )
+        every { langs.languagesOf(page) } returns page.associateWith { theirs }
+        every { tracker.checkOnline(page) } returns page.associateWith { false }
+
+        Then("탈퇴·정지 회원이 페이지에서 빠진다") {
+            seedCache()
+
+            service.recommend(me, size = 3, offset = 1, refresh = false, locale = Locale.KOREAN)
+                .members.map { it.id } shouldBe listOf(alive)
+        }
+
+        Then("후보 질의를 다시 돌지 않는다 — 랭킹이 아니라 캐시 페이징 경로다") {
+            seedCache()
+            service.recommend(me, size = 3, offset = 1, refresh = false, locale = Locale.KOREAN)
+
+            verify(exactly = 0) { langs.complementaryCandidates(any(), any(), any(), any()) }
+        }
+
+        Then("hasNext 는 캐시된 전체 길이로 계산해 페이지가 짧아져도 흔들리지 않는다") {
+            seedCache()
+
+            service.recommend(me, size = 3, offset = 1, refresh = false, locale = Locale.KOREAN)
+                .hasNext shouldBe false
+        }
+    }
+
     Given("MatchingReader 포트로 물으면") {
         val ids = listOf(21L, 22L, 23L)
 

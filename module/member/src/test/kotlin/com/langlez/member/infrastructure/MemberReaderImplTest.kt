@@ -7,6 +7,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.maps.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -75,6 +76,44 @@ class MemberReaderImplTest : BehaviorSpec({
             Then("생년월일과 handle 이 함께 실린다") {
                 info?.birthDay shouldBe LocalDate.of(1995, 3, 14)
                 info?.handle shouldBe "user1"
+            }
+        }
+
+        // 목록에서 정지·탈퇴 회원을 걸러내는 유일한 근거가 이 필드다(matching 이 쓴다).
+        // Member.Status -> MemberReader.Status 가 when 매핑이라 분기마다 확인한다.
+        When("가입 인증을 마친 회원이면") {
+            every { repo.find(1L) } returns member().apply { verify() }
+
+            Then("status 가 ACTIVE 로 실린다") {
+                query.findProfileInfo(1L)?.status shouldBe MemberReader.Status.ACTIVE
+            }
+        }
+
+        When("아직 인증 전인 회원이면") {
+            every { repo.find(1L) } returns member()
+
+            Then("status 가 CREATED 로 실린다") {
+                query.findProfileInfo(1L)?.status shouldBe MemberReader.Status.CREATED
+            }
+        }
+
+        When("정지된 회원이면") {
+            every { repo.find(1L) } returns member().apply { suspend() }
+
+            Then("status 가 SUSPENDED 로 실린다") {
+                query.findProfileInfo(1L)?.status shouldBe MemberReader.Status.SUSPENDED
+            }
+        }
+
+        // 탈퇴해도 members 행을 지우지 않는 정책이라 null 이 아니라 WITHDRAWN 으로 온다.
+        // 소비자가 null 검사만으로 거르지 못하는 이유가 이것이다.
+        When("탈퇴한 회원이면") {
+            every { repo.find(1L) } returns member().apply { withdraw() }
+
+            Then("null 이 아니라 status = WITHDRAWN 으로 실린다") {
+                val withdrawn = query.findProfileInfo(1L)
+                withdrawn shouldNotBe null
+                withdrawn?.status shouldBe MemberReader.Status.WITHDRAWN
             }
         }
 

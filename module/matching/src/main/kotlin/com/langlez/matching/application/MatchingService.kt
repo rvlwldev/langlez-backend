@@ -81,9 +81,12 @@ class MatchingService(
         val languages = langs.languagesOf(page)
 
         val items = page.mapNotNull { id ->
-            // 랭킹 이후 탈퇴·삭제된 회원이면 여기서 빠진다. hasNext 는 캐시된 전체 길이로 계산하므로
-            // 이 페이지가 size 보다 짧아도 다음 페이지는 정상적으로 이어진다.
-            val profile = profiles[id] ?: return@mapNotNull null
+            // 랭킹 이후 탈퇴·정지된 회원이면 여기서 빠진다. **null 검사만으로는 못 거른다** —
+            // 이 저장소는 탈퇴해도 members 행을 지우지 않아 findProfileInfos 가
+            // status = WITHDRAWN 으로 정상 반환한다. 순서는 10분 캐시라 그 창 안에 상태가 바뀐다.
+            // rank() 와 같은 EXCLUDED 를 본다. 두 곳에 따로 두면 한쪽만 고치는 사고가 난다.
+            // hasNext 는 캐시된 전체 길이로 계산하므로 이 페이지가 size 보다 짧아도 다음 페이지는 이어진다.
+            val profile = profiles[id]?.takeIf { it.status !in EXCLUDED } ?: return@mapNotNull null
             val theirs = languages[id].orEmpty()
             MatchingMemberResponse(
                 member = profile,
@@ -165,6 +168,10 @@ class MatchingService(
 
         private const val LANGUAGE_REQUIRED_KEY = "lang.required"
 
+        /**
+         * 추천에서 빼는 상태. **[rank] 와 [recommend] 가 같은 것을 본다** — 랭킹 시점과 페이지 조회
+         * 시점 사이에 10분 캐시 창이 있어 양쪽에서 각각 걸러야 하고, 둘로 나누면 한쪽만 고치게 된다.
+         */
         private val EXCLUDED = setOf(MemberReader.Status.SUSPENDED, MemberReader.Status.WITHDRAWN)
     }
 }
