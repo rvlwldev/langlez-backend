@@ -364,6 +364,11 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
     → **터지는 경로:** 추천을 한 번 조회해 후보가 캐시된 직후 `PUT /api/v1/langs/me` 로 학습언어나 모국어를 바꾸면, 클라이언트가 `refresh=true` 를 명시하지 않는 한 최대 10분 동안 **이전 언어 기준으로 뽑힌 후보**가 그대로 나온다. 그 사이 `matchedPairs` 는 새 언어로 다시 계산되므로 추천 근거가 빈 배열인 회원이 목록에 남는다 — 사용자에게는 "왜 추천됐는지 알 수 없는 사람"으로 보인다.
     → **지금은 트레이드오프로 받아들인다.** 10분 TTL 과 당겨서 새로고침(`refresh=true`)이 실사용 경로를 덮고, 잘못된 것은 순서일 뿐 차단·정지 같은 안전 필터가 새는 것은 아니다. 고치려면 `lang` 이 `MemberLanguagesChangedEvent` 를 발행하고 `matching` 이 그것을 컨슘해 캐시를 evict 하는 이벤트 기반 무효화가 필요한데, **아웃박스 테이블과 컨슈머를 새로 다는 비용이 이 증상에 비해 크다.** 캐시 TTL 을 늘리거나 언어 변경이 잦아지면 그때 다시 본다.
 
+23. **정지 만료 조회가 인덱스를 못 타고 Seq Scan 을 한다**
+    `MemberSuspendHistoryRepositoryImpl.findExpired` 는 `where is_released = false and release_at <= now` 로 조회하는데, 이 테이블의 유일한 인덱스 `IDX_MEMBER_SUSPEND_RELEASED` 는 `(member_id, is_released)` 순서다. **선두 컬럼이 `member_id` 라 이 조건으로는 레인지 스캔을 못 탄다.** 같은 인덱스를 쓰는 `findOpen(memberId)` 는 정상적으로 탄다.
+    → **터지는 경로:** 배치가 10분마다 도는데 매 주기 `member_suspend_history` 전체를 훑는다. 운영 이력이 수천 건 수준이면 무시할 만하지만, 정지 이력은 **닫힌 행도 지우지 않고 계속 쌓이는 구조**라 단조 증가한다. 수만 건을 넘으면 10분마다 도는 풀스캔이 되고, 그 시점에 정작 만료 대상은 여전히 몇 건뿐이라 비용 대비 소득이 없다.
+    → `(is_released, release_at)` 복합 인덱스나 `where is_released = false` 부분 인덱스를 Flyway 로 추가한다. **부분 인덱스 쪽이 낫다** — 닫힌 행이 인덱스에서 아예 빠져 크기가 "현재 열린 정지 수"에 묶인다. 지금 붙이지 않은 건 행이 없는 상태에서 재는 실행계획이 무의미하고, 규모가 오기 전까지는 Seq Scan 이 오히려 싸기 때문이다.
+
 ### 5.4 정리 대상 (기능 영향 없음)
 
 - **`infra/mongo` 가 빈 디렉터리다** — 소스도 `build.gradle.kts` 도 없다. `MainApplication.kt:9` 주석이 존재하지 않는 이 모듈을 가리킨다. Mongo 의존은 `module/chat/build.gradle.kts` 가 직접 든다
