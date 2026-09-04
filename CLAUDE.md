@@ -39,6 +39,7 @@ core            소유자가 인프라인 순수 계약. 의존성 0
 common          웹·보안·예외·필터·i18n 공용
 infra/rdb       JPA + QueryDSL + Outbox 베이스 + Flyway
 infra/redis     Redisson, 캐시 어댑터, 분산 락, pub/sub 브로드캐스터
+infra/mongo     Mongo 리포지토리 스캔 + 인덱스 초기화
 infra/kafka     프로듀서·컨슈머 설정, DLT
 module/*        도메인 모듈 (api / application / domain / infrastructure 4계층)
 module/*-api    계약 모듈. 그 도메인이 남에게 내주는 포트·이벤트만. 의존성 0

@@ -23,7 +23,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.net.ServerSocket
 
 /**
- * README §5.1-3 회귀 고정.
+ * README §4 "MongoDB 기동 결합 해소" 회귀 고정.
  *
  * `auto-index-creation: true` 였을 때는 `MongoTemplate` 빈 생성 시점(컨텍스트 refresh 중)에
  * `ChatMessage` 인덱스를 동기로 쐈다. Mongo 가 응답하지 않으면 서버 선택 타임아웃까지 블로킹한 뒤
