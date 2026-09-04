@@ -15,7 +15,7 @@ dependencies {
     implementation(project(":module:auth"))
     implementation(project(":module:follow"))
     implementation(project(":module:block"))
-    implementation(project(":module:report"))
+    implementation(project(":module:moderation"))
     implementation(project(":module:echo"))
     implementation(project(":module:chat"))
     implementation(project(":module:wave"))
