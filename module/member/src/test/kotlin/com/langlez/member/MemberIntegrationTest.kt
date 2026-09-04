@@ -9,6 +9,7 @@ import com.langlez.exception.LanglezException
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.application.MemberService
+import com.langlez.member.application.MemberSuspender
 import com.langlez.member.domain.Member
 import com.langlez.member.infrastructure.jpa.MemberOutBoxRepository
 import com.langlez.rdb.outbox.OutBox
@@ -61,6 +62,9 @@ class MemberIntegrationTest : BehaviorSpec() {
 
     @Autowired
     lateinit var memberService: MemberService
+
+    @Autowired
+    lateinit var suspender: MemberSuspender
 
     @Autowired
     lateinit var memberRepository: MemberRepository
@@ -510,17 +514,17 @@ class MemberIntegrationTest : BehaviorSpec() {
                 val m = newMember("suspended")
 
                 Then("곧바로 SUSPENDED 로 보인다") {
-                    memberService.suspendMember(m.id, reason = "test")
+                    suspender.suspend(m.id, reason = "test", days = null, actorId = 9_999L)
                     memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.SUSPENDED
                 }
             }
 
             When("정지를 풀면") {
                 val m = newMember("unsuspended")
-                memberService.suspendMember(m.id, reason = "test")
+                suspender.suspend(m.id, reason = "test", days = null, actorId = 9_999L)
 
                 Then("곧바로 ACTIVE 로 보인다") {
-                    memberService.unsuspendMember(m.id)
+                    suspender.unsuspend(m.id, 9_999L)
                     memberStatusQuery.findStatus(m.id) shouldBe MemberReader.Status.ACTIVE
                 }
             }

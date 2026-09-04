@@ -6,6 +6,7 @@ import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
 import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
+import com.langlez.member.application.MemberSuspender
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import io.kotest.core.spec.style.BehaviorSpec
@@ -110,6 +111,9 @@ class MemberStatusCacheRaceTest : BehaviorSpec() {
     lateinit var memberService: MemberService
 
     @Autowired
+    lateinit var suspender: MemberSuspender
+
+    @Autowired
     lateinit var memberRepository: MemberRepository
 
     @Autowired
@@ -161,7 +165,7 @@ class MemberStatusCacheRaceTest : BehaviorSpec() {
                 StaleReader.reachedCacheWrite.await(10, TimeUnit.SECONDS) shouldBe true
 
                 // 그 사이 정지가 커밋돼 캐시에 최종 상태가 박힌다.
-                memberService.suspendMember(m.id, reason = "race")
+                suspender.suspend(m.id, reason = "race", days = null, actorId = 9_999L)
 
                 // 이제서야 리더가 쥐고 있던 낡은 값이 캐시에 도착한다.
                 StaleReader.released.countDown()

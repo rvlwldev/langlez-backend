@@ -7,8 +7,6 @@ import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.MemberSuspendHistory
-import com.langlez.member.domain.MemberSuspendHistoryRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -17,7 +15,6 @@ import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Duration
 import java.time.LocalDate
 
 @Service
@@ -27,7 +24,6 @@ class MemberService(
     private val tracker: OnlineTracker,
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
-    private val suspendRepo: MemberSuspendHistoryRepository,
     private val tx: TransactionTemplate,
 ) {
 
@@ -159,34 +155,6 @@ class MemberService(
     fun updateFcmToken(id: Long, token: String) {
         findOrThrow(id).apply { fcm = token }
             .also(repo::save)
-    }
-
-    @Transactional
-    fun suspendMember(id: Long, reason: String? = null, days: Long? = null) {
-        val member = findOrThrow(id)
-
-        try {
-            member.suspend()
-        } catch (e: IllegalArgumentException) {
-            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
-        }
-
-        repo.save(member)
-        suspendRepo.save(MemberSuspendHistory(member, reason, days?.let { Duration.ofDays(it) }))
-    }
-
-    /** 어드민 정지 해제. 정지 이력도 해제 처리한다. */
-    @Transactional
-    fun unsuspendMember(id: Long) {
-        val member = findOrThrow(id)
-
-        try {
-            member.unsuspend()
-        } catch (e: IllegalArgumentException) {
-            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
-        }
-
-        repo.save(member)
     }
 
     @Transactional
