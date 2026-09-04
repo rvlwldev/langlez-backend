@@ -8,6 +8,7 @@ import com.langlez.member.domain.MemberSuspendHistory
 import com.langlez.member.domain.MemberSuspendHistoryRepository
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus.BAD_REQUEST
+import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,7 +37,14 @@ class MemberSuspender(
 
     @Transactional
     override fun suspend(memberId: Long, reason: String?, days: Long?, actorId: Long) {
+        // 안전장치는 호출자가 아니라 여기 둔다. 회원의 역할을 아는 게 member 뿐이고,
+        // 포트 쪽에 두면 새 소비자가 검사를 빠뜨렸을 때 열리는 게 아니라 닫혀야 한다.
+        if (memberId == actorId) throw LanglezException(BAD_REQUEST, "member.suspend.self")
+
         val member = findOrThrow(memberId)
+
+        // 운영자끼리 서로 잠그면 복구 수단이 DB 직접 수정밖에 남지 않는다.
+        if (member.role == Member.Role.ADMIN) throw LanglezException(FORBIDDEN, "member.suspend.admin-target")
 
         try {
             member.suspend()

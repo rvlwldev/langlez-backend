@@ -5,6 +5,22 @@ interface ReportRepository {
 
     fun save(report: Report): Report
 
+    /** 없으면 null. 예외 변환은 application 몫이다. */
+    fun find(id: Long): Report?
+
+    /**
+     * 운영 목록. [status] / [sourceType] 이 null 이면 그 조건을 걸지 않는다.
+     *
+     * 정렬·커서는 `created_at` 이 아니라 id 다. 인스턴스 간 시계 차이로 같은 시각이 겹치면
+     * 페이지가 새거나 겹친다.
+     */
+    fun findAll(
+        status: Report.Status?,
+        sourceType: Report.SourceType?,
+        size: Int,
+        cursor: Long?,
+    ): List<Report>
+
     /**
      * 같은 신고가 이미 있는지.
      *

@@ -29,6 +29,8 @@ import java.time.Instant
         Index(name = "IDX_REPORT_SOURCE", columnList = "source_type, id"),
         Index(name = "IDX_REPORT_REPORTED_USER", columnList = "reported_user_id, id"),
         Index(name = "IDX_REPORT_REPORTER", columnList = "reporter_id, id"),
+        // 운영 목록의 기본 질의가 "미처리부터 최신순"이다. 실제 DDL 은 V16 이 만든다.
+        Index(name = "IDX_REPORT_STATUS", columnList = "status, id desc"),
     ],
 )
 class Report(
@@ -44,5 +46,46 @@ class Report(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long = 0
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var status: Status = Status.RECEIVED
+        private set
+
+    /** 운영자 메모. 사용자에게 나가지 않는다. */
+    @Column(columnDefinition = "TEXT")
+    var adminNote: String? = null
+        private set
+
+    var handledBy: Long? = null
+        private set
+
+    var handledAt: Instant? = null
+        private set
+
+    /**
+     * 운영자가 신고를 처리한다. 상태와 함께 처리자·처리 시각을 남긴다.
+     *
+     * **[Status.RECEIVED] 로는 되돌릴 수 없다.** 접수 시점을 뜻하는 상태라
+     * 처리자·처리 시각이 채워진 행과 의미가 어긋난다.
+     *
+     * 종결(ACTIONED/DISMISSED) 뒤에 다시 바꾸는 것은 막지 않는다. 오분류를 정정할 길이
+     * 없으면 남는 수단이 DB 직접 수정뿐이고, 그게 잘못 종결된 신고가 남는 것보다 나쁘다.
+     * 마지막으로 만진 사람이 [handledBy] 에 남는다.
+     *
+     * [note] 가 null 이면 기존 메모를 지우지 않고 그대로 둔다. null 을 "지움"으로 보면
+     * 상태만 바꾸려는 요청이 앞선 운영자의 메모를 날린다.
+     */
+    fun handle(status: Status, note: String?, actorId: Long, now: Instant = Instant.now()) {
+        require(status != Status.RECEIVED) { "report.status.invalid" }
+
+        this.status = status
+        note?.let { adminNote = it }
+        handledBy = actorId
+        handledAt = now
+    }
+
     enum class SourceType { ECHO_POST, CHAT_USER }
+
+    /** RECEIVED 접수됨 / REVIEWING 확인 중 / ACTIONED 조치함 / DISMISSED 조치 안 함 */
+    enum class Status { RECEIVED, REVIEWING, ACTIONED, DISMISSED }
 }

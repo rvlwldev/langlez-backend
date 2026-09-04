@@ -85,6 +85,34 @@ class MemberSuspenderTest : BehaviorSpec({
             }
         }
 
+        // 안전장치를 호출자가 아니라 여기서 검증한다. 포트 소비자가 늘어도 검사가 따라와야 한다.
+        When("운영자가 자기 자신을 정지하려 하면") {
+            Then("400 이고 회원을 조회하지도 않는다") {
+                val ex = shouldThrow<LanglezException> {
+                    suspender.suspend(7L, reason = null, days = null, actorId = 7L)
+                }
+
+                ex.status.value() shouldBe 400
+                ex.message shouldBe "member.suspend.self"
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+
+        // 운영자끼리 서로 잠그면 복구 수단이 DB 직접 수정밖에 없다.
+        When("대상이 다른 운영자면") {
+            every { repo.find(3L) } returns member(id = 3L).apply { role = Member.Role.ADMIN }
+
+            Then("403 이고 정지되지 않는다") {
+                val ex = shouldThrow<LanglezException> {
+                    suspender.suspend(3L, reason = null, days = null, actorId = 7L)
+                }
+
+                ex.status.value() shouldBe 403
+                ex.message shouldBe "member.suspend.admin-target"
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+
         When("존재하지 않는 회원을 정지하려 하면") {
             every { repo.find(999L) } returns null
 

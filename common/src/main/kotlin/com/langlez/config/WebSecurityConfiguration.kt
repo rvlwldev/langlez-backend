@@ -54,6 +54,14 @@ class WebSecurityConfiguration(
 
                 customizer
                     .requestMatchers(*oauth2, *swagger, *auth, *actuator, *websocket).permitAll()
+                    // 운영자 전용 구역은 URL 접두사 하나로 막는다. @PreAuthorize 로 메서드마다 걸면
+                    // 어노테이션을 빠뜨린 메서드가 조용히 열린 채 남는다 — 새 엔드포인트가
+                    // 늘어날 때 열리는 게 아니라 닫혀야 한다.
+                    //
+                    // hasRole 은 "ROLE_" 을 자동으로 붙인다. Member.Role.authority 가
+                    // "ROLE_$name" 을 만들고 JwtAuthenticationFilter 가 그 값을 그대로 심으므로
+                    // ROLE_ADMIN 과 맞는다. hasAuthority 로 바꾸려면 "ROLE_ADMIN" 을 통째로 적어야 한다.
+                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtFilter, AuthorizationFilter::class.java)
