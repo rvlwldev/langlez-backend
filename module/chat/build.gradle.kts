@@ -20,7 +20,8 @@ dependencies {
     implementation(libs.dependency.springboot.websocket)
 
     // 메시지 본문은 Mongo 에 있다. 방·참여자만 JPA 다.
-    implementation(libs.dependency.springboot.mongodb)
+    // Mongo 라이브러리는 infra:mongo 가 api 로 노출한다 — 여기서 다시 선언하지 않는다.
+    implementation(project(":infra:mongo"))
 
     ksp(libs.dependency.querydsl.ksp)
 

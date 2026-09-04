@@ -1,6 +1,7 @@
 package com.langlez.chat.infrastructure.mongo
 
 import com.langlez.chat.domain.ChatMessage
+import com.langlez.mongo.index.MongoIndexInitializer
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.collections.shouldContainAll
@@ -15,7 +16,11 @@ import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 
 /**
- * `auto-index-creation` 을 끈 상태에서 `ChatMessageIndexInitializer` 가 그 자리를 실제로 채우는지 고정한다.
+ * `auto-index-creation` 을 끈 상태에서 `infra:mongo` 의 `MongoIndexInitializer` 가 그 자리를 실제로 채우는지 고정한다.
+ *
+ * 초기화기는 도메인 엔티티를 알지 않고 `MongoMappingContext` 가 아는 `@Document` 전부를 훑는다.
+ * 그 일반화가 실제 도메인 엔티티에서도 그대로 동작하는지는 인프라 단독 컨텍스트로 확인할 수 없어
+ * `ChatMessage` 를 가진 여기에 남긴다.
  */
 @SpringBootTest(
     properties = [
@@ -28,12 +33,12 @@ import org.testcontainers.utility.DockerImageName
         "app.cors.allowed-origins=http://localhost:3000",
     ]
 )
-class ChatMessageIndexInitializerIntegrationTest : BehaviorSpec() {
+class MongoIndexInitializerIntegrationTest : BehaviorSpec() {
 
     override fun extensions() = listOf(SpringExtension)
 
     @Autowired
-    internal lateinit var initializer: ChatMessageIndexInitializer
+    lateinit var initializer: MongoIndexInitializer
 
     @Autowired
     lateinit var template: MongoTemplate
