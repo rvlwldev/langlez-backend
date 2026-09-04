@@ -66,6 +66,7 @@ core            소유자가 인프라인 순수 계약. 의존성 0
 common          웹·보안·예외·필터·i18n 공용
 infra/rdb       JPA + QueryDSL + Outbox 베이스 + Flyway
 infra/redis     Redisson, 캐시 어댑터, 분산 락, pub/sub 브로드캐스터
+infra/mongo     Mongo 리포지토리 스캔 + 인덱스 초기화
 infra/kafka     프로듀서·컨슈머 설정, DLT
 module/*        도메인 모듈 (api / application / domain / infrastructure 4계층)
 module/*-api    계약 모듈. 그 도메인이 남에게 내주는 포트·이벤트만. 의존성 0
@@ -155,6 +156,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 채팅 메시지 본문 + 첨부 | MongoDB | 무한 증가, 첨부 임베드로 조회 1회 |
 | 접속·화면 상태·분산 락·캐시·wave 채팅 | Redis | 휘발성·고빈도 |
 
+각 저장소의 연결·설정은 인프라 모듈이 소유한다 — `infra/rdb`(JPA·QueryDSL·Flyway), `infra/mongo`(리포지토리 스캔·인덱스 초기화), `infra/redis`(Redisson·캐시·분산 락). **도메인 모듈은 저장소 라이브러리를 직접 물지 않고 이 모듈들을 통해 받는다.**
+
 ### 스키마 관리
 
 Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V14__member_languages.sql`.
@@ -227,6 +230,8 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 - **캐시 포트 이행** — Spring `@Cacheable`/`CacheManager` 전면 제거, `core.CacheProvider` 로 교체
 - **Redis pub/sub 팬아웃** — `MessageBroadcaster` 포트 + `RedisMessageBroadcaster`. 인메모리 STOMP 브로커는 자기 JVM 세션에만 닿아 다중 인스턴스에서 조용히 깨진다
 - **Lettuce 스택 제거** — Redisson만 사용. 쿼리 로거가 관측 대상 0건이었다
+- **MongoDB 기동 결합 해소** — `auto-index-creation` 을 끄고 인덱스 생성을 기동 경로 밖 스케줄러로 뺐다. Mongo 가 잠깐 흔들려도 `MongoTemplate` 빈 생성이 컨텍스트 refresh 를 취소시키지 않는다. 회귀 고정은 `app/api` 의 `MongoStartupResilienceTest`
+- **`infra/mongo` 신설** — 리포지토리 스캔(`@EnableMongoRepositories`)과 인덱스 초기화기가 `module/chat` 에 얹혀 있던 것을 인프라 계층으로 올렸다. 초기화기는 `MongoMappingContext` 가 아는 `@Document` 전부를 훑어 도메인 엔티티를 알지 않는다
 
 ### 모듈
 
@@ -309,63 +314,58 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
    `NotificationService.kt:82,98` 이 `title` 에 메시지 키(`notification.chat-message.title`, `notification.member-followed`)를 넣는다. **인앱 브로드캐스트에는 맞는 설계다** — 클라이언트가 키를 받아 번역한다. 그런데 같은 값이 `:66` `push.send(...)` → `FcmPushSender.kt:44` `.setNotification(...)` 으로 들어가고, 그렇게 만든 FCM 메시지는 **OS 가 앱 코드 개입 없이 배너를 그린다.** 번역할 기회가 없다.
    → 서버가 수신자 언어로 렌더할지(`Member.locale` 을 알림 모듈이 알아야 하는데 `MemberReader` 에 없다), `data-only` 푸시로 바꿔 클라이언트가 그릴지 결정 필요. 후자는 iOS 백그라운드 전달 보장이 약해진다.
 
-3. **MongoDB 가 잠깐만 응답하지 않아도 앱 전체가 부팅하지 못한다**
-   `application.yml:41` 의 `spring.data.mongodb.auto-index-creation: true` 가 `MongoTemplate` **빈 생성 시점**에 `ChatMessage` 의 인덱스(`@CompoundIndex` ×3, `@Indexed` ×1)를 실제로 Mongo 에 쏜다. 응답이 없으면 드라이버 기본 `serverSelectionTimeoutMS`(30초)만큼 블로킹한 뒤 빈 생성이 실패하고, `chatMessageMongoRepository` → `chatService` → `chatController` 로 의존 체인이 무너져 **Spring 컨텍스트 refresh 자체가 취소**된다. `chat` 은 `app/api` 가 항상 조립하므로 회피 경로가 없다.
-   → 저장소 분담표(§2)는 Mongo 를 "채팅 메시지"에만 쓴다고 하지만 **실제 결합도는 회원가입·프로필·알림까지 전부다.** 롤링 재기동 중 Mongo 가 순간 흔들리면 chat 과 무관한 신규 인스턴스까지 부팅에 실패해 배포가 멈춘다. 인덱스 생성을 기동 경로에서 떼거나(마이그레이션·배포 파이프라인으로 이관), 서버 선택 타임아웃을 짧게 잡고 실패를 격리한다. **정상 상태에서는 13.6초에 조용히 통과하므로 평소엔 안 보인다.**
-
-4. **`application-production.yml` 이 플레이스홀더 상태다**
+3. **`application-production.yml` 이 플레이스홀더 상태다**
    `:24,26,72,76,79` 에 DataSource·프론트엔드 URL·CORS 오리진·S3 설정이 TODO 로 남아 있다. production 프로필로는 기동 불가 또는 오설정 기동.
 
-5. **`interest` 재설계** — 사용자가 직접 설계 예정. 붙으면 `MatchScorer` 에 가중치 항을 하나 더한다
-6. **`matching` 이 관심사를 아직 못 본다** — 언어·차단·팔로우·접속만 본다. `interest` 가 5번에서 나오면
+4. **`interest` 재설계** — 사용자가 직접 설계 예정. 붙으면 `MatchScorer` 에 가중치 항을 하나 더한다
+5. **`matching` 이 관심사를 아직 못 본다** — 언어·차단·팔로우·접속만 본다. `interest` 가 4번에서 나오면
    `MatchScorer.score` 에 항을 추가한다. 지금 구조는 그걸 전제로 점수 계산을 한 클래스에 몰아 뒀다.
    **`lastAccessedAt` 가점(최근 7일 접속 +3)도 아직 없다** — `MemberReader.ProfileInfo` 에 그 필드가 없고,
    계약을 그 항목 하나 때문에 넓히지 않았다. 필요해지면 `Member.audit` 을 노출하는 방식부터 정해야 한다
 
-7. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
+6. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
    `member-api` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
 
 ### 5.2 중간
 
-8. **앱 전체의 `@Scheduled` 가 WebSocket 하트비트 스레드풀을 공유한다**
+7. **앱 전체의 `@Scheduled` 가 WebSocket 하트비트 스레드풀을 공유한다**
    `MainApplication.kt:15` 의 `@EnableScheduling` 이 `TaskScheduler` 빈을 지정하지 않는데, 컨텍스트에 있는 유일한 `TaskScheduler` 가 `ChatWebSocketConfiguration` 의 `@EnableWebSocketMessageBroker` 가 STOMP 하트비트용으로 노출하는 `messageBrokerTaskScheduler`(스레드명 `MessageBroker-*`)뿐이다. Spring 은 그럴 때 **`@Scheduled` 전부를 그 빈에 위임**한다. 아웃박스 폴러(2초 × 3모듈)·캐시 헬스(5초)·`ChatReconciler`(5분)·접속 동기화(10분)가 전부 하트비트용 풀 위에서 돈다.
    → **정상 상태에서는 무증상이다.** Mongo·Redis 가 느려져 스케줄러 하나가 스레드를 30초씩 잡으면 관계없는 아웃박스 발행까지 밀린다. `@DistributedLock(throwOnFailure = false)` 는 **락 획득 실패만** 넘기지 본문 블로킹은 못 막는다. 애플리케이션용 `TaskScheduler` 를 별도 등록해 분리한다. 장애 증폭기이지 상시 결함은 아니다.
 
-9. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
+8. **`MessageDeduplicator` 표시가 처리 성공 *전*에 남아 강제 종료 시 유실된다**
    `MessageDeduplicator.kt:31-38` 이 한계를 직접 서술한다 — 되돌림은 같은 JVM 에서 `Exception` 이 잡혔을 때만 돈다. `Error`(OOM)나 SIGKILL·OOMKilled 로 죽으면 표시만 남고 오프셋은 미커밋이라, 재기동 후 재배달이 "중복"으로 걸러져 TTL(1시간)까지 유실된다. 그레이스풀 셧다운은 in-flight 를 기다리므로 정상 배포로는 안 터진다.
    → 표시를 **처리 성공 후**로 옮기면(전형적 idempotent-consumer) 유실 경로가 사라지고 `release` 자체가 불필요해진다. 대신 리밸런싱 중 겹치는 재배달을 못 막는다. 이 설계가 선언한 우선순위("중복 < 유실")와는 그쪽이 일치한다.
 
-10. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
+9. **Swagger `{Domain}API` 인터페이스 누락** — `ProfileController`(7개 엔드포인트), `AuthController`(2개). `AttachmentController`(1개, 로컬 전용)는 면제 가능.
 
-11. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
-12. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
+10. **`ExceptionResponse` 포맷 확장** — 지금 `status` + `message` 뿐. `code`, `timestamp`, `path`, `traceId`(MDC) 추가 + TraceId 주입 필터
+11. **통합 테스트 부재** — `echo`, `wave`, `attachment`, `auth` 는 Testcontainers 통합 테스트가 없다. `app/api` E2E 가 전 모듈을 기동하므로 스키마 정합만은 검증된다.
 
 ### 5.3 낮음 / 정책 결정 필요
 
-13. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
-14. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
-15. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
+12. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
+13. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+14. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
     **기반(pg_trgm + unaccent)은 만들었다** — `infra/rdb` 의 `V10__trgm_search_base.sql`(확장 + `f_unaccent` IMMUTABLE 래퍼)과 `StringPathSearch.kt`(`StringPath.search()` QueryDSL 확장, `MIN_SEARCH_LENGTH = 2`). 실제 테이블(`members.handle` 등)에 GIN 인덱스를 걸고 검색 API 를 붙이는 건 아직이다 — **호출자가 0건**이라 이 기반이 죽은 스캐폴딩으로 남지 않으려면 다음 작업이 필요하다. 컬럼 적용 시 `create index using gin (f_unaccent(컬럼) gin_trgm_ops)` 를 Flyway 로 만들어야 함수 인덱스를 탄다.
     **운영 배포 전 확인 필요**: `V10` 의 `create extension pg_trgm/unaccent` 는 슈퍼유저(또는 AWS RDS `rds_superuser`) 권한이 필요하다. 로컬·Testcontainers 는 슈퍼유저 계정이라 통과하지만, 운영 Flyway 실행 계정이 최소 권한이면 `permission denied to create extension` 으로 배포가 그 자리에서 죽는다. 마스터 계정으로 두 확장을 미리 설치해 두거나 Flyway 계정에 권한을 부여해야 한다.
-16. **신고 원본 내용 조회** — 운영 API 는 메타데이터(`sourceType`/`sourceId`)까지만 준다. 운영자가 실제 글·채팅 내용을 보려면 `echo-api` 에 `PostReader`, `chat-api` 에 `MessageReader` 를 신설해야 한다(채팅은 MongoDB 다). 상태 전이(접수→검토→조치)와 정지 조치는 `moderation` 이 갖췄다
-17. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
-18. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
-19. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
-20. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
-21. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
-22. **내 언어를 바꿔도 matching 후보 캐시가 그대로다**
+15. **신고 원본 내용 조회** — 운영 API 는 메타데이터(`sourceType`/`sourceId`)까지만 준다. 운영자가 실제 글·채팅 내용을 보려면 `echo-api` 에 `PostReader`, `chat-api` 에 `MessageReader` 를 신설해야 한다(채팅은 MongoDB 다). 상태 전이(접수→검토→조치)와 정지 조치는 `moderation` 이 갖췄다
+16. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
+17. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
+18. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
+19. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
+20. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+21. **내 언어를 바꿔도 matching 후보 캐시가 그대로다**
     `LanguageService.replace` 는 `member_languages` 만 갈아끼우고 `matching` 의 후보 캐시(`match:candidates:{회원id}`, TTL 10분)를 건드리지 않는다. `lang` 은 모듈 경계상 그 캐시의 존재를 알지 못하고, 알게 만들면 `lang` 이 `matching` 을 참조하게 돼 경계가 뒤집힌다.
     → **터지는 경로:** 추천을 한 번 조회해 후보가 캐시된 직후 `PUT /api/v1/langs/me` 로 학습언어나 모국어를 바꾸면, 클라이언트가 `refresh=true` 를 명시하지 않는 한 최대 10분 동안 **이전 언어 기준으로 뽑힌 후보**가 그대로 나온다. 그 사이 `matchedPairs` 는 새 언어로 다시 계산되므로 추천 근거가 빈 배열인 회원이 목록에 남는다 — 사용자에게는 "왜 추천됐는지 알 수 없는 사람"으로 보인다.
     → **지금은 트레이드오프로 받아들인다.** 10분 TTL 과 당겨서 새로고침(`refresh=true`)이 실사용 경로를 덮고, 잘못된 것은 순서일 뿐 차단·정지 같은 안전 필터가 새는 것은 아니다. 고치려면 `lang` 이 `MemberLanguagesChangedEvent` 를 발행하고 `matching` 이 그것을 컨슘해 캐시를 evict 하는 이벤트 기반 무효화가 필요한데, **아웃박스 테이블과 컨슈머를 새로 다는 비용이 이 증상에 비해 크다.** 캐시 TTL 을 늘리거나 언어 변경이 잦아지면 그때 다시 본다.
 
-23. **정지 만료 조회가 인덱스를 못 타고 Seq Scan 을 한다**
+22. **정지 만료 조회가 인덱스를 못 타고 Seq Scan 을 한다**
     `MemberSuspendHistoryRepositoryImpl.findExpired` 는 `where is_released = false and release_at <= now` 로 조회하는데, 이 테이블의 유일한 인덱스 `IDX_MEMBER_SUSPEND_RELEASED` 는 `(member_id, is_released)` 순서다. **선두 컬럼이 `member_id` 라 이 조건으로는 레인지 스캔을 못 탄다.** 같은 인덱스를 쓰는 `findOpen(memberId)` 는 정상적으로 탄다.
     → **터지는 경로:** 배치가 10분마다 도는데 매 주기 `member_suspend_history` 전체를 훑는다. 운영 이력이 수천 건 수준이면 무시할 만하지만, 정지 이력은 **닫힌 행도 지우지 않고 계속 쌓이는 구조**라 단조 증가한다. 수만 건을 넘으면 10분마다 도는 풀스캔이 되고, 그 시점에 정작 만료 대상은 여전히 몇 건뿐이라 비용 대비 소득이 없다.
     → `(is_released, release_at)` 복합 인덱스나 `where is_released = false` 부분 인덱스를 Flyway 로 추가한다. **부분 인덱스 쪽이 낫다** — 닫힌 행이 인덱스에서 아예 빠져 크기가 "현재 열린 정지 수"에 묶인다. 지금 붙이지 않은 건 행이 없는 상태에서 재는 실행계획이 무의미하고, 규모가 오기 전까지는 Seq Scan 이 오히려 싸기 때문이다.
 
 ### 5.4 정리 대상 (기능 영향 없음)
 
-- **`infra/mongo` 가 빈 디렉터리다** — 소스도 `build.gradle.kts` 도 없다. `MainApplication.kt:9` 주석이 존재하지 않는 이 모듈을 가리킨다. Mongo 의존은 `module/chat/build.gradle.kts` 가 직접 든다
 - **echo 아웃박스 스캐폴딩** — `EchoOutBox`·`EchoOutBoxHistory`·`EchoOutBoxRepository` 와 테이블이 있으나 쓰는 코드도 스케줄러도 없다. `echo-api` 의 DTO 2종도 발행하는 코드가 없다
 - **`member-created` / `member-handle-changed` 컨슈머 부재** — 발행되지만 듣는 사람이 없다
 - **`EchoRepository.aggregateDailyStats` 호출자 없음** — `hashtag_daily_stat` 이 영원히 비어 있다

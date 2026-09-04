@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
     implementation(project(":infra:kafka"))
+    implementation(project(":infra:mongo"))
     implementation(project(":module:member"))
     implementation(project(":module:profile"))
     implementation(project(":module:auth"))
