@@ -26,13 +26,7 @@
 ./gradlew :module:member:test   # 모듈 단위 테스트
 ```
 
-`local-infra-start.sh` 는 `docker/postgresql.yml`, `docker/redis.yml`, `docker/kafka.yml`, `docker/monitoring.yml` 을 `-p langlez` 단일 compose 프로젝트로 합쳐 올린다.
-**MongoDB 는 기본 기동에서 빠져 있다.** 그런데 §5.1-3 때문에 **Mongo 없이는 앱이 아예 뜨지 않는다.** `-f docker/mongodb.yml` 을 함께 줘야 한다.
-
-```bash
-docker compose -p langlez -f docker/postgresql.yml -f docker/redis.yml \
-  -f docker/kafka.yml -f docker/monitoring.yml -f docker/mongodb.yml up -d
-```
+`local-infra-start.sh` 는 `docker/postgresql.yml`, `docker/redis.yml`, `docker/kafka.yml`, `docker/mongodb.yml`, `docker/monitoring.yml` 을 `-p langlez` 단일 compose 프로젝트로 합쳐 올린다. **MongoDB 도 포함된다.** 없어도 앱은 뜨지만(인덱스 생성은 기동 경로 밖으로 빠져 있다) `chat` 이 동작하지 않고 health 가 DOWN 이라, 빼두면 확인할 때마다 손으로 덧붙이게 된다.
 
 ### 인프라가 이상할 때
 

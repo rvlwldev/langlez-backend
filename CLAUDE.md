@@ -21,7 +21,7 @@ Kotlin / Spring Boot 3.5.8 멀티모듈 백엔드. 언어교환 모바일 앱(iO
 ### 검증
 
 ```bash
-./local-infra-start.sh                               # 로컬 인프라 (Postgres·Redis·Kafka·모니터링). mongodb 는 제외돼 있다
+./local-infra-start.sh                               # 로컬 인프라 (Postgres·Redis·Kafka·MongoDB·모니터링)
 ./gradlew build                                      # 전체 빌드 + 테스트. Testcontainers 를 쓰므로 Docker 필요
 ./gradlew :app:api:bootRun                           # 앱 실행. 인프라 기동이 선행돼야 한다
 ./gradlew :module:<name>:test --tests "*MemberTest"  # 모듈별 / 단일 클래스 테스트
