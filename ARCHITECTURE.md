@@ -17,7 +17,7 @@ sequenceDiagram
     participant chat
     participant fol as follow
     participant blk as block
-    participant rep as report
+    participant mod as moderation
     participant member
     participant K as Kafka
     participant noti as notification
@@ -30,7 +30,7 @@ sequenceDiagram
     K->>noti: Notification 행 저장 → 인앱 + FCM
 
     chat->>K: chat-user-reported
-    K->>rep: Report 행 저장 (chat 은 아무것도 저장하지 않는다)
+    K->>mod: Report 행 저장 (chat 은 아무것도 저장하지 않는다)
 
     fol->>K: member-followed
     K->>noti: Notification 행 저장 → 인앱 + FCM
@@ -53,9 +53,9 @@ sequenceDiagram
 **읽는 법 두 가지가 갈린다.**
 
 - `member-followed` 와 `chat-message-sent` 는 **이미 저장된 것에 대한 알림**이다. 발행 모듈이 트랜잭션 안에서 원본 데이터를 저장하고, 이벤트는 그 결과다. 수신 모듈은 `Notification` 만 만든다 — 팔로우 관계나 메시지 본문을 다시 저장하지 않는다.
-- `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 report 다 — 신고 데이터는 report 소유이기 때문이다.
+- `chat-user-reported` 만 반대다. chat 은 **접수 사실만 알리고 아무것도 저장하지 않는다.** `Report` 를 만드는 건 moderation 이다 — 신고 데이터는 moderation 소유이기 때문이다.
 
-듣는 쪽은 **notification·report·follow·auth·profile 다섯이다.**
+듣는 쪽은 **notification·moderation·follow·auth·profile 다섯이다.**
 
 ---
 
@@ -110,7 +110,7 @@ sequenceDiagram
 
 ### `chat-user-reported`
 
-> chat ──▶ **report**
+> chat ──▶ **moderation**
 
 | | |
 |---|---|
@@ -119,9 +119,9 @@ sequenceDiagram
 | **파티션 키** | `roomId` |
 | **멱등 키** | 페이로드 전체 (고유 id 가 없다) |
 
-chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 report 다 — 신고 데이터는 report 소유다.
+chat 은 **신고 접수 사실만 알린다.** `Report` 를 저장하는 건 moderation 이다 — 신고 데이터는 moderation 소유다.
 
-**report 가 받아서 하는 일**
+**moderation 이 받아서 하는 일**
 
 ```mermaid
 sequenceDiagram

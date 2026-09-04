@@ -123,12 +123,12 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 모듈 | 담긴 것 |
 |---|---|
 | `core` | `CacheProvider`/`Cache`, `MessageBroadcaster`, `MessageDeduplicator`, `SubscriptionAuthorizer` |
-| `module/member-api` | `MemberReader`(계정 정보 + 상태), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
+| `module/member-api` | `MemberReader`(계정 정보 + 상태), `MemberWriter`(정지·해제), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
 | `module/follow-api` | `FollowReader`, `MemberFollowedEvent` |
 | `module/block-api` | `BlockReader`, `MemberBlockedEvent` |
 | `module/lang-api` | `LanguageReader` (언어 프로필 조회 + 상호보완 후보 질의) |
 | `module/matching-api` | `MatchingReader` (아직 소비자 없음 — 추천 소유가 matching 이라는 사실을 계약으로 못 박아 둔 것) |
-| `module/report-api` | `ReportWriter` (아직 소비자 없음 — 신고 소유가 report 라는 사실을 계약으로 못 박아 둔 것) |
+| `module/moderation-api` | `ReportWriter` (아직 소비자 없음 — 신고 소유가 moderation 이라는 사실을 계약으로 못 박아 둔 것) |
 | `module/attachment-api` | `Storage` |
 | `module/notification-api` | `Notificator` |
 | `module/chat-api` | `ChatMessageSentEvent`, `ChatUserReportedEvent` |
@@ -169,7 +169,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | 응답 DTO | `{Domain}{범위}Response` | `MemberMeResponse`, `MemberPublicResponse` |
 | Outbox 스케줄러 | `{Domain}OutBoxScheduler` | `MemberOutBoxScheduler` |
 | 계약 포트 (읽기) | `{도메인}Reader` (`{도메인}-api`) | `MemberReader` |
-| 계약 포트 (쓰기) | `{도메인}Writer` (`{도메인}-api`) | — (아직 없음) |
+| 계약 포트 (쓰기) | `{도메인}Writer` (`{도메인}-api`) | `MemberWriter`, `ReportWriter` |
 | 계약 모듈의 조회 결과 DTO | `{...}Info` | `MemberReader.ProfileInfo`, `FollowReader.CountInfo` |
 | 계약 모듈의 조작 결과 DTO | `{...}Result` | `Storage.PresignedResult` |
 
