@@ -186,5 +186,55 @@ class MemberSuspendReleaseIntegrationTest : BehaviorSpec() {
                 suspendRepo.findOpen(normal.id).shouldBeEmpty()
             }
         }
+
+        /**
+         * 3일 정지 도중 중대 위반이 적발돼 30일 정지가 덧붙는 경우.
+         * 만료된 이력만 보고 회원을 풀면 남은 27일을 통째로 잃는다.
+         */
+        Given("정지 이력이 둘이고 짧은 쪽만 만료됐으면") {
+            val member = newMember("overlap", Member.Status.SUSPENDED)
+            openHistory(member.id, Instant.now().minus(1, DAYS))
+            val longer = openHistory(member.id, Instant.now().plus(27, DAYS))
+
+            scheduler.releaseExpiredBefore(Instant.now())
+
+            Then("정지가 유지된다") {
+                statusOf(member.id) shouldBe Member.Status.SUSPENDED
+            }
+
+            Then("만료된 이력은 닫고 남은 이력은 그대로 둔다") {
+                suspendRepo.findOpen(member.id).map { it.id } shouldBe listOf(longer.id)
+            }
+
+            Then("남은 이력까지 만료되면 그때 풀린다") {
+                scheduler.releaseExpiredBefore(Instant.now().plus(28, DAYS))
+
+                statusOf(member.id) shouldBe Member.Status.ACTIVE
+                suspendRepo.findOpen(member.id).shouldBeEmpty()
+            }
+        }
+
+        /** 무기한 정지는 `releaseAt` 이 null 이라 만료 조회에 안 잡힌다. "아직 유효" 판정에서 빠뜨리기 쉽다. */
+        Given("기간 정지와 무기한 정지가 함께 열려 있고 기간 쪽만 만료됐으면") {
+            val member = newMember("overlap-forever", Member.Status.SUSPENDED)
+            openHistory(member.id, Instant.now().minus(1, DAYS))
+            val forever = openHistory(member.id, releaseAt = null)
+
+            scheduler.releaseExpiredBefore(Instant.now())
+
+            Then("정지가 유지된다") {
+                statusOf(member.id) shouldBe Member.Status.SUSPENDED
+            }
+
+            Then("만료된 이력은 닫고 무기한 이력은 그대로 둔다") {
+                suspendRepo.findOpen(member.id).map { it.id } shouldBe listOf(forever.id)
+            }
+
+            Then("아무리 시간이 지나도 배치가 풀지 않는다 (사람이 풀어야 한다)") {
+                scheduler.releaseExpiredBefore(Instant.now().plus(3_650, DAYS))
+
+                statusOf(member.id) shouldBe Member.Status.SUSPENDED
+            }
+        }
     }
 }
