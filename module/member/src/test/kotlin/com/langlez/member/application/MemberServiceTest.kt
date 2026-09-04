@@ -6,8 +6,6 @@ import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
-import com.langlez.member.domain.MemberSuspendHistory
-import com.langlez.member.domain.MemberSuspendHistoryRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -23,15 +21,14 @@ class MemberServiceTest : BehaviorSpec({
     val tracker = mockk<OnlineTracker>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    val suspendHistoryRepo = mockk<MemberSuspendHistoryRepository>()
 
     // updateProfileUrl 이 TransactionTemplate 으로 읽기+쓰기를 묶는다. 테스트에선 그대로 실행시킨다.
     val tx = mockk<TransactionTemplate>()
     every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
 
-    val service = MemberService(repo, creator, tracker, storage, publisher, suspendHistoryRepo, tx)
+    val service = MemberService(repo, creator, tracker, storage, publisher, tx)
 
-    afterEach { clearMocks(repo, creator, tracker, storage, publisher, suspendHistoryRepo, answers = false) }
+    afterEach { clearMocks(repo, creator, tracker, storage, publisher, answers = false) }
 
     fun member(id: Long = 1L, status: Member.Status = Member.Status.ACTIVE) = Member(
         id = id,
@@ -77,41 +74,6 @@ class MemberServiceTest : BehaviorSpec({
 
             Then("false를 반환한다") {
                 service.isOnline("user1") shouldBe false
-            }
-        }
-    }
-
-    Given("회원 정지 시") {
-
-        When("존재하는 활성 회원을 정지하면") {
-            val target = member(status = Member.Status.ACTIVE)
-            every { repo.find(1L) } returns target
-            every { repo.save(any()) } answers { firstArg() }
-            every { suspendHistoryRepo.save(any()) } answers { firstArg() }
-
-            service.suspendMember(1L, "policy violation")
-
-            Then("상태가 SUSPENDED로 바뀌어 저장되고 정지 이력이 남는다") {
-                verify { repo.save(match { it.status == Member.Status.SUSPENDED }) }
-                verify { suspendHistoryRepo.save(match<MemberSuspendHistory> { it.reason == "policy violation" }) }
-            }
-        }
-
-        When("이미 탈퇴한 회원을 정지하려 하면") {
-            every { repo.find(2L) } returns member(id = 2L, status = Member.Status.WITHDRAWN)
-
-            Then("400 LanglezException이 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.suspendMember(2L) }
-                ex.status.value() shouldBe 400
-            }
-        }
-
-        When("존재하지 않는 회원을 정지하려 하면") {
-            every { repo.find(999L) } returns null
-
-            Then("404 LanglezException이 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.suspendMember(999L) }
-                ex.status.value() shouldBe 404
             }
         }
     }

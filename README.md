@@ -82,8 +82,8 @@ app/api         조립 + 실행
 다만 **등록만으로는 앱이 그 모듈을 로드하지 않는다** — `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다.
 **계약 모듈(`module/*-api`)만 예외다** — 빈이 없어 소비 모듈이 물면 런타임 클래스패스에 그대로 올라온다.
 
-현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `lang`, `matching`, `chat`, `notification`, `follow`, `block`, `report`, `echo`, `wave`.
-현재 계약 모듈: `member-api`, `follow-api`, `block-api`, `lang-api`, `matching-api`, `report-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
+현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `lang`, `matching`, `chat`, `notification`, `follow`, `block`, `moderation`, `echo`, `wave`.
+현재 계약 모듈: `member-api`, `follow-api`, `block-api`, `lang-api`, `matching-api`, `moderation-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
 
 ### 4계층
 
@@ -128,6 +128,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `MemberReader` | `member-api` (`com.langlez.member.contract`) | 계정 정보 + 상태 조회 | `member`(`MemberReaderImpl`) |
 | `PushTokenReader` | 〃 | FCM 토큰 조회 | `member`(`MemberReaderImpl`) |
 | `OnlineTracker` | 〃 | 접속·화면(viewing) 상태 | `member`(`MemberOnlineTracker`) |
+| `MemberWriter` | 〃 | 정지·정지 해제 운영 조치 | `member`(`MemberSuspender`) |
 | `Member{Created,HandleChanged,Withdrawn}Event` | 〃 | 회원 도메인 이벤트 | — |
 | `FollowReader` | `follow-api` (`com.langlez.follow.contract`) | 팔로잉 id 목록·카운트 | `follow`(`FollowReaderImpl`) |
 | `MemberFollowedEvent` | 〃 | 팔로우 이벤트 | — |
@@ -135,7 +136,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `LanguageReader` | `lang-api` (`com.langlez.lang.contract`) | 언어 프로필 조회 + 상호보완 후보 질의 | `lang`(`LanguageReaderImpl`) |
 | `MatchingReader` | `matching-api` (`com.langlez.matching.contract`) | 추천 회원 id. **아직 소비자 없음** | `matching`(`MatchingService`) |
 | `MemberBlockedEvent` | 〃 | 차단 이벤트 (follow 가 컨슘해 팔로우를 끊는다) | — |
-| `ReportWriter` | `report-api` (`com.langlez.report.contract`) | 신고 접수. **아직 소비자 없음** | `report`(`ReportService`) |
+| `ReportWriter` | `moderation-api` (`com.langlez.moderation.contract`) | 신고 접수. **아직 소비자 없음** | `moderation`(`ReportService`) |
 | `Storage` | `attachment-api` | presign / key 확정 | `attachment` |
 | `Notificator` | `notification-api` | 알림 발송 | `notification` |
 | `Chat{MessageSent,UserReported}Event` | `chat-api` | 채팅 도메인 이벤트 | — |
@@ -199,7 +200,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 **8단계 — 이벤트 소비와 알림**
 `module/notification/api/NotificationConsumer.kt`(`chat-message-sent`) → `application/NotificationService.kt`(3상태 판정) → `infrastructure/FcmPushSender.kt`.
-`module/report/api/ReportConsumer.kt`(`chat-user-reported`)와 `module/follow/api/FollowConsumer.kt`(`member-blocked`)도 같이 본다.
+`module/moderation/api/ReportConsumer.kt`(`chat-user-reported`)와 `module/follow/api/FollowConsumer.kt`(`member-blocked`)도 같이 본다.
 
 **9단계 — Redis 인프라**
 `infra/redis/src/main/kotlin/com/langlez/redis/`: `cache/ResilientCache.kt`·`cache/ResilientCacheProvider.kt`(Redis + Caffeine 폴백), `distributedLock/DistributedLock.kt`·`DistributedLockAspect.kt`, `broadcast/RedisMessageBroadcaster.kt`, `config/RedissonConfiguration.kt`.
@@ -247,7 +248,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
 | `follow` | 완료. 팔로우 API + `FollowReader` 구현 + `member-blocked` 소비 → 팔로우 양방향 해제 |
 | `block` | 완료. 차단 API + `BlockReader` 구현 + `member-blocked` 발행 |
-| `report` | 완료. 신고 API + `chat-user-reported` 소비 → `Report` 저장 |
+| `moderation` | 완료. 신고 API + `chat-user-reported` 소비 → `Report` 저장 + 운영자 창구(`/api/v1/admin`, 신고 상태 전이·회원 정지/해제) |
 | `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. `EchoAPI` + `EchoController` 로 `/api/v1/echoes` 아래 12개 엔드포인트 노출. 아웃박스는 여전히 미사용 스캐폴딩이다(§5.4) |
 | `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
 
@@ -271,7 +272,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 `docs/superpowers/plans/2026-08-14-remaining-modules.md` 기준. 전부 병렬 구현 후 점검 완료.
 
 - **A. notification** — `chat-message-sent` 수신 → 세 상태 판정(그 방 보는 중 / 앱만 켜짐 / 미접속) → 인앱 또는 FCM. `FcmPushSender` 는 Firebase Admin SDK 실사용, `fcm.credentials` 미설정 시 경고 로그만 남기고 무시
-- **B. relationship** — 팔로우·차단·신고 API + `chat-user-reported` 수신 → `Report` 저장 (그 뒤 `follow`/`block`/`report` 셋으로 분리됐다)
+- **B. relationship** — 팔로우·차단·신고 API + `chat-user-reported` 수신 → `Report` 저장 (그 뒤 `follow`/`block`/`report` 셋으로 분리됐고, `report` 는 다시 `moderation` 으로 넓어졌다)
 - **C. echo** — 트위터형 피드 (글·타임라인·좋아요·댓글·해시태그·이미지)
 - **D. wave** — 음성방 + **사라지는 채팅** (Redis 링버퍼만, 저장 안 함)
 
@@ -352,7 +353,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 15. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
     **기반(pg_trgm + unaccent)은 만들었다** — `infra/rdb` 의 `V10__trgm_search_base.sql`(확장 + `f_unaccent` IMMUTABLE 래퍼)과 `StringPathSearch.kt`(`StringPath.search()` QueryDSL 확장, `MIN_SEARCH_LENGTH = 2`). 실제 테이블(`members.handle` 등)에 GIN 인덱스를 걸고 검색 API 를 붙이는 건 아직이다 — **호출자가 0건**이라 이 기반이 죽은 스캐폴딩으로 남지 않으려면 다음 작업이 필요하다. 컬럼 적용 시 `create index using gin (f_unaccent(컬럼) gin_trgm_ops)` 를 Flyway 로 만들어야 함수 인덱스를 탄다.
     **운영 배포 전 확인 필요**: `V10` 의 `create extension pg_trgm/unaccent` 는 슈퍼유저(또는 AWS RDS `rds_superuser`) 권한이 필요하다. 로컬·Testcontainers 는 슈퍼유저 계정이라 통과하지만, 운영 Flyway 실행 계정이 최소 권한이면 `permission denied to create extension` 으로 배포가 그 자리에서 죽는다. 마스터 계정으로 두 확장을 미리 설치해 두거나 Flyway 계정에 권한을 부여해야 한다.
-16. **신고 처리 워크플로** — `Report` 를 저장만 하고 운영자 화면도, 상태 전이(접수→검토→조치)도 없다. `admin` 모듈은 삭제됐다
+16. **신고 원본 내용 조회** — 운영 API 는 메타데이터(`sourceType`/`sourceId`)까지만 준다. 운영자가 실제 글·채팅 내용을 보려면 `echo-api` 에 `PostReader`, `chat-api` 에 `MessageReader` 를 신설해야 한다(채팅은 MongoDB 다). 상태 전이(접수→검토→조치)와 정지 조치는 `moderation` 이 갖췄다
 17. **소셜 계정 추가 연동 / 연동 해제** — Google ↔ Apple 교차 연동. 현재는 가입 시 provider 하나에 고정
 18. **마케팅 수신 동의 *일시*** — `agreedMarketingReceive`(Boolean) 만 있고 시각이 없다. 법무 확인 후 `MemberAudit.agreedMarketingAt` 추가
 19. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
@@ -362,6 +363,11 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
     `LanguageService.replace` 는 `member_languages` 만 갈아끼우고 `matching` 의 후보 캐시(`match:candidates:{회원id}`, TTL 10분)를 건드리지 않는다. `lang` 은 모듈 경계상 그 캐시의 존재를 알지 못하고, 알게 만들면 `lang` 이 `matching` 을 참조하게 돼 경계가 뒤집힌다.
     → **터지는 경로:** 추천을 한 번 조회해 후보가 캐시된 직후 `PUT /api/v1/langs/me` 로 학습언어나 모국어를 바꾸면, 클라이언트가 `refresh=true` 를 명시하지 않는 한 최대 10분 동안 **이전 언어 기준으로 뽑힌 후보**가 그대로 나온다. 그 사이 `matchedPairs` 는 새 언어로 다시 계산되므로 추천 근거가 빈 배열인 회원이 목록에 남는다 — 사용자에게는 "왜 추천됐는지 알 수 없는 사람"으로 보인다.
     → **지금은 트레이드오프로 받아들인다.** 10분 TTL 과 당겨서 새로고침(`refresh=true`)이 실사용 경로를 덮고, 잘못된 것은 순서일 뿐 차단·정지 같은 안전 필터가 새는 것은 아니다. 고치려면 `lang` 이 `MemberLanguagesChangedEvent` 를 발행하고 `matching` 이 그것을 컨슘해 캐시를 evict 하는 이벤트 기반 무효화가 필요한데, **아웃박스 테이블과 컨슈머를 새로 다는 비용이 이 증상에 비해 크다.** 캐시 TTL 을 늘리거나 언어 변경이 잦아지면 그때 다시 본다.
+
+23. **정지 만료 조회가 인덱스를 못 타고 Seq Scan 을 한다**
+    `MemberSuspendHistoryRepositoryImpl.findExpired` 는 `where is_released = false and release_at <= now` 로 조회하는데, 이 테이블의 유일한 인덱스 `IDX_MEMBER_SUSPEND_RELEASED` 는 `(member_id, is_released)` 순서다. **선두 컬럼이 `member_id` 라 이 조건으로는 레인지 스캔을 못 탄다.** 같은 인덱스를 쓰는 `findOpen(memberId)` 는 정상적으로 탄다.
+    → **터지는 경로:** 배치가 10분마다 도는데 매 주기 `member_suspend_history` 전체를 훑는다. 운영 이력이 수천 건 수준이면 무시할 만하지만, 정지 이력은 **닫힌 행도 지우지 않고 계속 쌓이는 구조**라 단조 증가한다. 수만 건을 넘으면 10분마다 도는 풀스캔이 되고, 그 시점에 정작 만료 대상은 여전히 몇 건뿐이라 비용 대비 소득이 없다.
+    → `(is_released, release_at)` 복합 인덱스나 `where is_released = false` 부분 인덱스를 Flyway 로 추가한다. **부분 인덱스 쪽이 낫다** — 닫힌 행이 인덱스에서 아예 빠져 크기가 "현재 열린 정지 수"에 묶인다. 지금 붙이지 않은 건 행이 없는 상태에서 재는 실행계획이 무의미하고, 규모가 오기 전까지는 Seq Scan 이 오히려 싸기 때문이다.
 
 ### 5.4 정리 대상 (기능 영향 없음)
 
@@ -389,7 +395,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | member | 97% | 12 | | attachment | 88% | 5 |
 | chat | 92% | 14 | | common | 92% | 6 |
 | auth | 92% | 10 | | app/api | 78% | 6 |
-| follow/block/report | 92% | 9 | | infra/rdb | 95% | 4 |
+| follow/block/moderation | 92% | 9 | | infra/rdb | 95% | 4 |
 | echo | 70% | 9 | | core | 96% | 3 |
 | profile | 84% | 8 | | infra/redis | 96% | 3 |
 | notification | 85% | 7 | | infra/kafka | 80% | 2 |
@@ -419,7 +425,9 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | Redis Stream DLQ (`autoClaim` 재시도 추적) | Redis Stream 을 안 쓴다. 메시징은 Kafka 로 통일했고 DLT 가 그 역할을 한다 |
 | `Member.status` 라이프사이클 도입 | 완료 (`CREATED`/`ACTIVE`/`SUSPENDED`/`WITHDRAWN` + `suspend`/`unsuspend`/`withdraw`/`requireActive`) |
 | `Member.profileImageUrl`, 약관 동의 이력, `getMe` 통합 조회 | 완료 (`Member.imageUrl`, `MemberAudit.agreedTermsAt`, `MemberMeResponse`) |
-| Kafka 컨슈머 짝 맞추기 | 완료. `chat-message-sent` → notification, `chat-user-reported` → report, `member-blocked` → follow |
+| Kafka 컨슈머 짝 맞추기 | 완료. `chat-message-sent` → notification, `chat-user-reported` → moderation, `member-blocked` → follow |
+| 신고 처리 워크플로 / 운영자 창구 | 완료. `moderation` 이 신고 상태 전이와 회원 정지·해제를 `/api/v1/admin` 으로 낸다. 삭제된 `admin` 모듈을 되살리지 않고 신고 소유 모듈이 갖는다 |
+| 기간 정지 만료 해제 | 완료. `MemberSuspendReleaseScheduler`. `releaseAt` 을 읽는 코드가 없어 기간 정지가 영구 정지였다 |
 
 ---
 
