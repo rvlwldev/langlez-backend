@@ -33,12 +33,13 @@ class MemberReaderImpl(private val repo: MemberRepository) : MemberReader, PushT
         return repo.findAll(memberIds.toSet()).associate { it.id to it.toProfileInfo() }
     }
 
-    override fun findStatus(memberId: Long): MemberReader.Status? = when (repo.find(memberId)?.status) {
+    override fun findStatus(memberId: Long): MemberReader.Status? = repo.find(memberId)?.let { toStatus(it.status) }
+
+    private fun toStatus(status: Member.Status) = when (status) {
         Member.Status.CREATED -> MemberReader.Status.CREATED
         Member.Status.ACTIVE -> MemberReader.Status.ACTIVE
         Member.Status.SUSPENDED -> MemberReader.Status.SUSPENDED
         Member.Status.WITHDRAWN -> MemberReader.Status.WITHDRAWN
-        null -> null
     }
 
     override fun findPushToken(memberId: Long): String? =
@@ -57,5 +58,6 @@ class MemberReaderImpl(private val repo: MemberRepository) : MemberReader, PushT
         locale = locale,
         birthDay = birthDay,
         imageUrl = imageUrl,
+        status = toStatus(status),
     )
 }

@@ -82,8 +82,8 @@ app/api         조립 + 실행
 다만 **등록만으로는 앱이 그 모듈을 로드하지 않는다** — `app/api/build.gradle.kts` 에 `implementation(project(":module:<name>"))` 을 직접 추가해야 한다.
 **계약 모듈(`module/*-api`)만 예외다** — 빈이 없어 소비 모듈이 물면 런타임 클래스패스에 그대로 올라온다.
 
-현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `chat`, `notification`, `follow`, `block`, `report`, `echo`, `wave`.
-현재 계약 모듈: `member-api`, `follow-api`, `block-api`, `report-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
+현재 도메인 모듈: `member`, `auth`, `attachment`, `profile`, `lang`, `matching`, `chat`, `notification`, `follow`, `block`, `report`, `echo`, `wave`.
+현재 계약 모듈: `member-api`, `follow-api`, `block-api`, `lang-api`, `matching-api`, `report-api`, `attachment-api`, `notification-api`, `chat-api`, `echo-api`.
 
 ### 4계층
 
@@ -96,6 +96,9 @@ module/member/src/main/kotlin/com/langlez/member/
 ├── domain/             # 엔티티 + 저장소 포트(인터페이스)
 └── infrastructure/     # 포트의 구현(어댑터), jpa/, outbox/
 ```
+
+**`matching` 만 예외로 `api`/`application` 두 계층뿐이다.** 자기 테이블이 없는 조합 모듈이라
+`domain` 에 넣을 엔티티도 `infrastructure` 가 구현할 포트도 없다. 새 모듈에 복사하지 마라.
 
 의존 방향은 한쪽으로만 흐른다.
 
@@ -129,6 +132,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `FollowReader` | `follow-api` (`com.langlez.follow.contract`) | 팔로잉 id 목록·카운트 | `follow`(`FollowReaderImpl`) |
 | `MemberFollowedEvent` | 〃 | 팔로우 이벤트 | — |
 | `BlockReader` | `block-api` (`com.langlez.block.contract`) | 차단 관계 확인 | `block`(`BlockReaderImpl`) |
+| `LanguageReader` | `lang-api` (`com.langlez.lang.contract`) | 언어 프로필 조회 + 상호보완 후보 질의 | `lang`(`LanguageReaderImpl`) |
+| `MatchingReader` | `matching-api` (`com.langlez.matching.contract`) | 추천 회원 id. **아직 소비자 없음** | `matching`(`MatchingService`) |
 | `MemberBlockedEvent` | 〃 | 차단 이벤트 (follow 가 컨슘해 팔로우를 끊는다) | — |
 | `ReportWriter` | `report-api` (`com.langlez.report.contract`) | 신고 접수. **아직 소비자 없음** | `report`(`ReportService`) |
 | `Storage` | `attachment-api` | presign / key 확정 | `attachment` |
@@ -157,7 +162,7 @@ api ──▶ application ──▶ domain ◀── infrastructure
 
 ### 스키마 관리
 
-Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V8__outbox_history_retention_indexes.sql`.
+Flyway. `infra/rdb/src/main/resources/migration/V{n}__*.sql`. 현재 `V1__init.sql` ~ `V14__member_languages.sql`.
 운영·개발·테스트 모두 `ddl-auto: validate`. **이미 적용된 V 파일은 절대 수정하지 않는다** (체크섬 불일치로 기동 실패). 고칠 게 있으면 새 V 파일을 만든다.
 
 ---
@@ -235,7 +240,9 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `member` | 완료. 기준 모듈. 2단계 캐시, 상태 머신, 접속 기록 배치 동기화 |
 | `auth` | 완료. OAuth2, JWT, **1인 1기기** 정책, 쿠키 제거(모바일 전용) |
 | `attachment` | 완료. presign → key 확정 흐름 |
-| `profile` | 완료. 개인정보(성별·생일·국가)는 `member` 로 이관 |
+| `profile` | 완료. 개인정보(성별·생일·국가)는 `member` 로, 언어는 `lang` 으로 이관 |
+| `lang` | 완료. 언어 프로필(모국어·학습언어+레벨) CRUD + `LanguageReader` 구현 |
+| `matching` | 완료. 언어 상호보완 추천. 자기 데이터가 없는 조합 모듈이라 2계층이다 |
 | `chat` | 완료. 1:1 채팅 전체 (아래 상세) |
 | `notification` | 완료. `chat-message-sent` 소비 → 3상태 판정 → 인앱/FCM |
 | `follow` | 완료. 팔로우 API + `FollowReader` 구현 + `member-blocked` 소비 → 팔로우 양방향 해제 |
@@ -244,7 +251,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `echo` | 글·타임라인·좋아요·댓글·해시태그·미디어. `EchoAPI` + `EchoController` 로 `/api/v1/echoes` 아래 12개 엔드포인트 노출. 아웃박스는 여전히 미사용 스캐폴딩이다(§5.4) |
 | `wave` | 완료. 음성방 + Redis 링버퍼 휘발성 채팅 |
 
-`matching`, `interest`, `admin` 은 삭제됐다. `matching` 은 의존 계층이 소실돼 재설계가 필요하고, `interest` 는 재설계 예정, `admin` 은 폐기다.
+`interest` 는 재설계 예정, `admin` 은 폐기다. `matching` 은 `lang` 신설로 입력이 생겨 다시 만들었다 — 레벨만 있고 어떤 언어의 레벨인지가 없어 추천이 원리적으로 불가능했던 것이 원래 삭제 사유였다.
 
 ### chat 모듈 상세
 
@@ -314,8 +321,11 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 4. **`application-production.yml` 이 플레이스홀더 상태다**
    `:24,26,72,76,79` 에 DataSource·프론트엔드 URL·CORS 오리진·S3 설정이 TODO 로 남아 있다. production 프로필로는 기동 불가 또는 오설정 기동.
 
-5. **`interest` 재설계** — 사용자가 직접 설계 예정. 6번의 선행 조건이다
-6. **`matching` 재설계** — 매칭 알고리즘 입력(관심사·언어레벨·차단)을 먼저 정해야 한다
+5. **`interest` 재설계** — 사용자가 직접 설계 예정. 붙으면 `MatchScorer` 에 가중치 항을 하나 더한다
+6. **`matching` 이 관심사를 아직 못 본다** — 언어·차단·팔로우·접속만 본다. `interest` 가 5번에서 나오면
+   `MatchScorer.score` 에 항을 추가한다. 지금 구조는 그걸 전제로 점수 계산을 한 클래스에 몰아 뒀다.
+   **`lastAccessedAt` 가점(최근 7일 접속 +3)도 아직 없다** — `MemberReader.ProfileInfo` 에 그 필드가 없고,
+   계약을 그 항목 하나 때문에 넓히지 않았다. 필요해지면 `Member.audit` 을 노출하는 방식부터 정해야 한다
 
 7. **`MemberWithdrawnEvent` + 탈퇴 시 토큰 전면 무효화**
    `member-api` 에는 `MemberCreatedEvent`, `MemberHandleChangedEvent` 뿐이다. 잔여 액세스 토큰은 상태 검사 필터가 매 요청 막지만 **리프레시 토큰은 그대로 남는다.** 탈퇴 이벤트 발행 → auth 가 리프레시 토큰 삭제 + 잔여 액세스 토큰 블랙리스트 등록.
@@ -348,6 +358,10 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 19. **wave 채팅 신고 증거** — 휘발성이라 신고 시 스냅샷을 뜰지, 뜬다면 보존 기간을 얼마로 할지. **안 뜨면 신고를 받아도 근거가 없다**
 20. **팔로워 수 비정규화 시점** — 지금은 COUNT 쿼리다(항상 정확, 백필 불필요). 팔로워 수십만 계정이 생기면 재검토하고, 그때는 `block()` 이 팔로우를 양방향으로 끊는 경로까지 카운터를 내려야 한다
 21. **`chat_messages` 시간 파티셔닝** — Mongo 로 옮겨 당장은 불필요. Postgres 에 대용량 테이블이 생기면 재검토
+22. **내 언어를 바꿔도 matching 후보 캐시가 그대로다**
+    `LanguageService.replace` 는 `member_languages` 만 갈아끼우고 `matching` 의 후보 캐시(`match:candidates:{회원id}`, TTL 10분)를 건드리지 않는다. `lang` 은 모듈 경계상 그 캐시의 존재를 알지 못하고, 알게 만들면 `lang` 이 `matching` 을 참조하게 돼 경계가 뒤집힌다.
+    → **터지는 경로:** 추천을 한 번 조회해 후보가 캐시된 직후 `PUT /api/v1/langs/me` 로 학습언어나 모국어를 바꾸면, 클라이언트가 `refresh=true` 를 명시하지 않는 한 최대 10분 동안 **이전 언어 기준으로 뽑힌 후보**가 그대로 나온다. 그 사이 `matchedPairs` 는 새 언어로 다시 계산되므로 추천 근거가 빈 배열인 회원이 목록에 남는다 — 사용자에게는 "왜 추천됐는지 알 수 없는 사람"으로 보인다.
+    → **지금은 트레이드오프로 받아들인다.** 10분 TTL 과 당겨서 새로고침(`refresh=true`)이 실사용 경로를 덮고, 잘못된 것은 순서일 뿐 차단·정지 같은 안전 필터가 새는 것은 아니다. 고치려면 `lang` 이 `MemberLanguagesChangedEvent` 를 발행하고 `matching` 이 그것을 컨슘해 캐시를 evict 하는 이벤트 기반 무효화가 필요한데, **아웃박스 테이블과 컨슈머를 새로 다는 비용이 이 증상에 비해 크다.** 캐시 TTL 을 늘리거나 언어 변경이 잦아지면 그때 다시 본다.
 
 ### 5.4 정리 대상 (기능 영향 없음)
 

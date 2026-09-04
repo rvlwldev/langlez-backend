@@ -3,6 +3,7 @@ package com.langlez.profile.application
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.follow.contract.FollowReader
+import com.langlez.lang.contract.LanguageReader
 import com.langlez.member.contract.MemberReader
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.api.ProfileResponse
@@ -24,6 +25,7 @@ class ProfileService(
     private val profileImageLocker: ProfileImageLocker,
     private val follows: FollowReader,
     private val members: MemberReader,
+    private val langs: LanguageReader,
     private val tx: TransactionTemplate,
 ) {
 
@@ -77,11 +79,15 @@ class ProfileService(
         // 팔로워/팔로잉 수는 follow 소유라 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
         // 여기 실어 보낸다 — 클라이언트가 follow 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
         val counts = follows.counts(member.id)
+        // 언어 프로필은 lang 소유다. 따로 엔드포인트를 두지 않고 여기 실어 보낸다 —
+        // 프로필 화면이 "무슨 언어를 하고 무엇을 배우는지"를 항상 함께 그린다.
+        val languages = langs.languagesOf(member.id)
         return ProfileResponse.Detail(
-            profile,
-            member,
-            profile.visitCount + visitDelta,
-            counts,
+            profile = profile,
+            member = member,
+            visitCount = profile.visitCount + visitDelta,
+            follows = counts,
+            languages = languages,
         )
     }
 
@@ -152,7 +158,6 @@ class ProfileService(
             request.goal?.let { profile.goal = it }
             request.want?.let { profile.want = it }
             request.mbti?.let { profile.mbti = it }
-            request.languageLevel?.let { profile.languageLevel = it }
 
             repo.saveProfile(profile)
         }!!

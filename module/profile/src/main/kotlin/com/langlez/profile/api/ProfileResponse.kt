@@ -1,6 +1,7 @@
 package com.langlez.profile.api
 
 import com.langlez.follow.contract.FollowReader
+import com.langlez.lang.contract.LanguageReader
 import com.langlez.member.contract.MemberReader
 import com.langlez.profile.domain.Profile
 import com.langlez.profile.domain.ProfileImage
@@ -17,7 +18,6 @@ class ProfileResponse {
         val mbti: String?,
         val locale: Locale?,
         val birthDay: LocalDate?,
-        val languageLevel: String? = null,
         val interests: Set<String> = emptySet(),
     ) {
         // 성별/국가/생년월일은 계정(Member) 소유라 core 포트로 받아 온다. 화면 하나에 요청이 둘이 되지 않게
@@ -34,7 +34,6 @@ class ProfileResponse {
             mbti = profile.mbti?.name,
             locale = member.locale,
             birthDay = member.birthDay,
-            languageLevel = profile.languageLevel?.name,
             interests = interests,
         )
     }
@@ -51,7 +50,9 @@ class ProfileResponse {
         val visitCount: Long,
         val followerCount: Long,
         val followingCount: Long,
-        val languageLevel: String? = null,
+        // 언어는 lang 소유라 포트로 받아 온다. 프로필 화면이 "무슨 언어를 하고 무엇을 배우는지"를
+        // 함께 그려서 여기 실어 보낸다 — 따로 엔드포인트를 두면 화면 하나에 요청이 넷이 된다.
+        val languages: List<Language> = emptyList(),
         val interests: Set<String> = emptySet(),
     ) {
         // 두 숫자를 Long 두 개로 받으면 순서를 바꿔 넘겨도 컴파일된다. 묶어서 받는다.
@@ -60,6 +61,7 @@ class ProfileResponse {
             member: MemberReader.ProfileInfo,
             visitCount: Long,
             follows: FollowReader.CountInfo,
+            languages: List<LanguageReader.LanguageInfo> = emptyList(),
             interests: Set<String> = emptySet(),
         ) : this(
             handle = member.handle,
@@ -73,8 +75,21 @@ class ProfileResponse {
             visitCount = visitCount,
             followerCount = follows.followers,
             followingCount = follows.followings,
-            languageLevel = profile.languageLevel?.name,
+            languages = languages.map(::Language),
             interests = interests,
+        )
+    }
+
+    /** `LanguageReader.LanguageInfo` 의 표현용 사본. 계약 타입을 그대로 응답에 내보내지 않는다. */
+    data class Language(
+        val language: String,
+        val role: String,
+        val level: String?,
+    ) {
+        constructor(info: LanguageReader.LanguageInfo) : this(
+            language = info.language,
+            role = info.role.name,
+            level = info.level?.name,
         )
     }
 

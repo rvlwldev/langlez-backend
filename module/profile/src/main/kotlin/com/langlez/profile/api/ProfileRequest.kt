@@ -19,6 +19,5 @@ class ProfileRequest {
         @field:Size(max = 500, message = "validation.member.want.size")
         val want: String? = null,
         val mbti: Profile.MBTI? = null,
-        val languageLevel: Profile.LanguageLevel? = null,
     )
 }

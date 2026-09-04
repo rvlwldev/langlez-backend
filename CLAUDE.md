@@ -89,6 +89,11 @@ module/member/src/main/kotlin/com/langlez/member/
     └── outbox/                 # Outbox 엔티티 + 스케줄러
 ```
 
+**`module/matching` 은 4계층의 유일한 예외다.** `api`/`application` 만 갖고 `domain`·`infrastructure` 가 없다.
+자기 테이블이 하나도 없는 **조합 모듈**이라 `domain` 에 넣을 엔티티도, `infrastructure` 가 구현할 포트도 없다.
+계층을 억지로 채우면 빈 패키지와 통과 전용 인터페이스만 남는다. 데이터를 갖게 되면 그때 만든다.
+**새 모듈에 이 예외를 복사하지 마라** — 판단 기준은 "자기 소유 데이터가 있는가"다.
+
 **의존 방향은 한쪽으로만 흐른다.**
 
 ```
@@ -121,6 +126,8 @@ api ──▶ application ──▶ domain ◀── infrastructure
 | `module/member-api` | `MemberReader`(계정 정보 + 상태), `PushTokenReader`, `OnlineTracker`, `Member{Created,HandleChanged,Withdrawn}Event` |
 | `module/follow-api` | `FollowReader`, `MemberFollowedEvent` |
 | `module/block-api` | `BlockReader`, `MemberBlockedEvent` |
+| `module/lang-api` | `LanguageReader` (언어 프로필 조회 + 상호보완 후보 질의) |
+| `module/matching-api` | `MatchingReader` (아직 소비자 없음 — 추천 소유가 matching 이라는 사실을 계약으로 못 박아 둔 것) |
 | `module/report-api` | `ReportWriter` (아직 소비자 없음 — 신고 소유가 report 라는 사실을 계약으로 못 박아 둔 것) |
 | `module/attachment-api` | `Storage` |
 | `module/notification-api` | `Notificator` |

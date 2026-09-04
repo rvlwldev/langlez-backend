@@ -3,6 +3,7 @@ package com.langlez.profile.application
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.follow.contract.FollowReader
+import com.langlez.lang.contract.LanguageReader
 import com.langlez.member.contract.MemberReader
 import com.langlez.profile.api.ProfileRequest
 import com.langlez.profile.domain.Profile
@@ -26,14 +27,15 @@ class ProfileServiceTest : BehaviorSpec({
 
     val follows = mockk<FollowReader>()
     val members = mockk<MemberReader>()
+    val langs = mockk<LanguageReader>(relaxed = true)
 
     // 포트 호출을 트랜잭션 밖에서 끝내고 DB 만 TransactionTemplate 으로 감싼다. 테스트에선 그대로 실행시킨다.
     val tx = mockk<TransactionTemplate>()
     every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
 
-    val service = ProfileService(repo, storage, profileImageLocker, follows, members, tx)
+    val service = ProfileService(repo, storage, profileImageLocker, follows, members, langs, tx)
 
-    afterEach { clearMocks(repo, storage, profileImageLocker, follows, members, answers = false) }
+    afterEach { clearMocks(repo, storage, profileImageLocker, follows, members, langs, answers = false) }
 
     fun memberInfo(id: Long, handle: String = "user$id") = MemberReader.ProfileInfo(
         id = id,
@@ -41,6 +43,7 @@ class ProfileServiceTest : BehaviorSpec({
         gender = "SECRET",
         locale = null,
         birthDay = null,
+        status = MemberReader.Status.ACTIVE,
     )
 
     fun profile(id: Long) = Profile(id = id)

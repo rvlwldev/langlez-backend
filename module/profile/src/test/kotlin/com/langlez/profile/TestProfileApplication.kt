@@ -2,6 +2,7 @@ package com.langlez.profile
 
 import com.langlez.attachment.contract.Storage
 import com.langlez.follow.contract.FollowReader
+import com.langlez.lang.contract.LanguageReader
 import com.langlez.member.contract.MemberReader
 import org.mockito.Mockito
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -55,6 +56,22 @@ class TestProfileApplication {
         override fun findProfileInfos(memberIds: Collection<Long>) = emptyMap<Long, MemberReader.ProfileInfo>()
 
         override fun findStatus(memberId: Long) = MemberReader.Status.ACTIVE
+    }
+
+    /** 구현체는 lang 모듈에 있다. profile 단독 컨텍스트엔 없어서 언어가 없는 것으로 둔다. */
+    @Bean
+    fun languageReader(): LanguageReader = object : LanguageReader {
+        override fun languagesOf(memberId: Long) = emptyList<LanguageReader.LanguageInfo>()
+
+        override fun languagesOf(memberIds: Collection<Long>) =
+            emptyMap<Long, List<LanguageReader.LanguageInfo>>()
+
+        override fun complementaryCandidates(
+            myNativeLanguages: Collection<String>,
+            myLearningLanguages: Collection<String>,
+            excludeMemberId: Long,
+            limit: Int,
+        ) = emptyList<Long>()
     }
 
     /**

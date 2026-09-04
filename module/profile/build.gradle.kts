@@ -11,6 +11,9 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":module:member-api"))
     implementation(project(":module:follow-api"))
+
+    // 프로필 화면이 상대의 언어 프로필을 함께 그린다. 계약(LanguageReader)만 본다
+    implementation(project(":module:lang-api"))
     implementation(project(":module:attachment-api"))
     implementation(project(":infra:rdb"))
     implementation(project(":infra:redis"))
