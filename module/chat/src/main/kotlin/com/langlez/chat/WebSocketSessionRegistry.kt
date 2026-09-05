@@ -74,9 +74,22 @@ class WebSocketSessionRegistry(redisson: RedissonClient) {
 
     /** 이 회원의 열린 세션을 모든 인스턴스에서 끊는다. */
     fun terminate(memberId: Long) {
-        channel.publish(Signal(memberId))
+        // 로컬을 먼저 끊는다. 전파에만 의존하면 레디스가 순단일 때 정지를 처리한 바로 그 서버에
+        // 붙어 있는 세션조차 안 끊긴다 — 보안 격리가 외부 인프라 장애로 무력화된다.
+        // closeLocal 은 멱등이라 전파된 신호가 되돌아와도 두 번 끊지 않는다.
+        closeLocal(memberId)
+
+        // AFTER_COMMIT 리스너에서 불린다. 여기서 던지면 이미 커밋된 정지 API 가 500 을 내고,
+        // 운영자가 재시도해도 member.already-suspended 로 400 이라 손 쓸 방법이 없다.
+        // 다만 조용히 삼키면 보안 조치가 실패한 줄도 모른다 — 그래서 error 다.
+        runCatching { channel.publish(Signal(memberId)) }
+            .onFailure { logger.error("실시간 세션 강제 종료 전파 실패. member={}", memberId, it) }
     }
 
+    /**
+     * 회원당 세션 수가 아니라 이 인스턴스의 전체 세션 수에 비례해 훑는다.
+     * 정지·탈퇴는 드물어 지금은 이 비용이 문제가 아니다. 잦아지면 `memberId → 세션 id` 역인덱스를 둔다.
+     */
     private fun closeLocal(memberId: Long) {
         val targets = owners.filterValues { it == memberId }.keys
         if (targets.isEmpty()) return
