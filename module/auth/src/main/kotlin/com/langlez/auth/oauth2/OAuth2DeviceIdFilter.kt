@@ -32,11 +32,19 @@ import org.springframework.web.filter.OncePerRequestFilter
 class OAuth2DeviceIdFilter : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
-        if (req.requestURI.startsWith(AUTHORIZATION_BASE_URI)) {
-            val deviceId = req.getParameter(DEVICE_ID_PARAM) ?: req.getHeader(AuthController.DEVICE_ID_HEADER)
-
+        // requestURI 가 아니라 servletPath 다. context-path 가 붙으면 requestURI 는 그것까지 포함해
+        // 접두사 비교가 조용히 어긋난다.
+        if (req.servletPath.startsWith(AUTHORIZATION_BASE_URI)) {
             // 공백만 든 값을 넣으면 바인딩이 그 문자열로 잡혀 1인 1기기 판정이 무의미해진다.
-            deviceId?.takeIf { it.isNotBlank() }?.let { req.getSession(true).setAttribute(SESSION_ATTRIBUTE, it) }
+            val deviceId = (req.getParameter(DEVICE_ID_PARAM) ?: req.getHeader(AuthController.DEVICE_ID_HEADER))
+                ?.takeIf { it.isNotBlank() }
+
+            // 기기 id 가 없으면 남아 있던 값을 지운다. 앞선 시도가 동의 화면에서 취소되면
+            // SuccessHandler 가 안 불려 그 기기 id 가 세션에 남고, 같은 세션의 다음 로그인이
+            // 그걸 물려받아 엉뚱한 기기로 바인딩된다. 로그인은 반드시 이 경로에서 시작하므로
+            // 취소·이탈·타임아웃을 가리지 않고 여기서 한 번에 정리된다.
+            if (deviceId != null) req.getSession(true).setAttribute(SESSION_ATTRIBUTE, deviceId)
+            else req.getSession(false)?.removeAttribute(SESSION_ATTRIBUTE)
         }
 
         chain.doFilter(req, res)
