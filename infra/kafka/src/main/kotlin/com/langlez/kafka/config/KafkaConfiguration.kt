@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.SerializationException
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.annotation.EnableKafka
@@ -30,20 +31,36 @@ class KafkaConfiguration {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * 리스너 컨테이너를 명시 선언한다.
+     * 리스너 컨테이너를 명시 선언한다. 리스너 작업은 대부분 DB/외부 호출 대기라 가상 스레드로 돌린다.
      *
-     * 오토컨피그 기본값은 컨슈머 스레드 1개라, 파티션을 늘려도 처리량이 안 늘어난다.
-     * 리스너 작업은 대부분 DB/외부 호출 대기라 가상 스레드로 돌린다.
-     * `concurrency` 는 파티션 수를 넘겨도 남는 컨슈머가 놀 뿐이라 3으로 잡는다.
+     * **`configurer.configure()` 를 반드시 먼저 부른다. 빼면 `spring.kafka.listener.*` 가 통째로 버려진다.**
+     *
+     * 이 빈의 이름이 정확히 `kafkaListenerContainerFactory` 라서, 같은 이름에
+     * `@ConditionalOnMissingBean` 을 건 오토컨피그(`KafkaAnnotationDrivenConfiguration`)가 백오프한다.
+     * 그런데 `spring.kafka.listener.*` 를 컨테이너로 옮기는 코드가 그 오토컨피그가 부르던
+     * `configure()` 안에만 있다. 그래서 configure 를 안 부르면 yml 이 파싱은 되지만 아무 데도 안 닿고,
+     * `ackMode` 는 기본값 `BATCH` 로 남는다 — 컴파일도 테스트도 통과하고 런타임에만 어긋난다.
+     * 실제로 `ack-mode: record` 가 이 이유로 오랫동안 무시됐다.
+     *
+     * 순서가 중요하다. `configure()` 는 `PropertyMapper.alwaysApplyingWhenNonNull()` 이라
+     * **값이 있는 것은 전부 덮어쓴다** — `concurrency`, `commonErrorHandler`, `listenerTaskExecutor` 포함.
+     * 그러니 우리가 고정해야 하는 것은 configure 뒤에 얹는다.
+     *
+     * - `concurrency` 는 `application.yml` 로 옮겼다. 여기서 덮어쓰면 yml 값이 다시 조용히 무시된다.
+     * - `commonErrorHandler` 는 configure 도 `CommonErrorHandler` 빈에서 채우지만 `getIfUnique()` 라,
+     *   같은 타입 빈이 둘이 되면 조용히 null 이 되어 재시도·DLT 배선이 통째로 사라진다. 명시로 못 박는다.
+     * - `listenerTaskExecutor` 는 프로퍼티로 표현이 안 된다. 게다가 `spring.threads.virtual.enabled` 를
+     *   켜면 configure 가 자기 executor 로 갈아끼우므로 반드시 뒤에서 다시 넣는다.
      */
     @Bean
     fun kafkaListenerContainerFactory(
-        consumerFactory: ConsumerFactory<String, String>,
+        configurer: ConcurrentKafkaListenerContainerFactoryConfigurer,
+        consumerFactory: ConsumerFactory<Any, Any>,
         errorHandler: DefaultErrorHandler,
-    ): ConcurrentKafkaListenerContainerFactory<String, String> =
-        ConcurrentKafkaListenerContainerFactory<String, String>().apply {
-            this.consumerFactory = consumerFactory
-            setConcurrency(3)
+    ): ConcurrentKafkaListenerContainerFactory<Any, Any> =
+        ConcurrentKafkaListenerContainerFactory<Any, Any>().apply {
+            configurer.configure(this, consumerFactory)
+
             setCommonErrorHandler(errorHandler)
             containerProperties.listenerTaskExecutor =
                 VirtualThreadTaskExecutor("kafka-listener-")
