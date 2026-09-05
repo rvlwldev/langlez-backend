@@ -22,7 +22,15 @@ class OAuth2SuccessHandler(
 
     override fun onAuthenticationSuccess(req: HttpServletRequest, res: HttpServletResponse, auth: Authentication) {
         val user = auth.principal as OAuth2LanglezUser
-        val ctx = AuthController.accessContext(req, req.getHeader(AuthController.DEVICE_ID_HEADER))
+
+        // IdP 리다이렉트라 커스텀 헤더가 남지 않는다. 로그인 시작 때 OAuth2DeviceIdFilter 가
+        // 세션에 넣어 둔 값을 쓴다. 한 번 쓰고 지운다 — 다음 로그인이 옛 기기를 물려받으면 안 된다.
+        val session = req.getSession(false)
+        val deviceId = session?.getAttribute(OAuth2DeviceIdFilter.SESSION_ATTRIBUTE) as? String
+            ?: req.getHeader(AuthController.DEVICE_ID_HEADER)
+        session?.removeAttribute(OAuth2DeviceIdFilter.SESSION_ATTRIBUTE)
+
+        val ctx = AuthController.accessContext(req, deviceId)
 
         val (refreshToken, accessToken) = service.issueTokens(user.id, user.handle, user.role, ctx)
 
