@@ -4,6 +4,7 @@ import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -146,6 +147,24 @@ class TokenManagerTest : BehaviorSpec({
             Then("차단되지 않은 것으로 본다") {
                 tokens.isRevoked(token) shouldBe false
             }
+        }
+    }
+
+    Given("같은 초에 같은 클레임으로 두 번 발급하면") {
+        Then("토큰 문자열이 서로 다르다") {
+            // iat/exp 는 초 단위라 jti 가 없으면 완전히 같은 문자열이 나온다. 그러면 리프레시
+            // 회전이 제자리 교체가 돼, 그 1초 안에 탈취된 토큰이 무효화되지 않는다.
+            val first = tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
+            val second = tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
+
+            first shouldNotBe second
+        }
+
+        Then("두 토큰 다 정상 파싱된다") {
+            val token = tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
+
+            tokens.parse(token).memberId shouldBe 1L
+            tokens.parse(token).type shouldBe TokenManager.Type.REFRESH
         }
     }
 })

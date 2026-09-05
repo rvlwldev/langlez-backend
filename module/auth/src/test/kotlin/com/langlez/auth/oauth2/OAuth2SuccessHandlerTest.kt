@@ -53,4 +53,37 @@ class OAuth2SuccessHandlerTest : BehaviorSpec({
             verify { service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("10.0.0.1", "device-A")) }
         }
     }
+
+    Given("IdP 리다이렉트라 커스텀 헤더가 실리지 않은 콜백이면") {
+        every { service.issueTokens(1L, "tester", "ROLE_MEMBER", any()) } returns ("r" to "a")
+
+        // 로그인 시작 요청에서 OAuth2DeviceIdFilter 가 세션에 넣어 둔 값을 쓴다.
+        val req = MockHttpServletRequest().apply {
+            remoteAddr = "10.0.0.2"
+            session!!.setAttribute(OAuth2DeviceIdFilter.SESSION_ATTRIBUTE, "device-B")
+        }
+
+        handler.onAuthenticationSuccess(req, MockHttpServletResponse(), auth)
+
+        Then("로그인 시작 때 받아 둔 기기 id 로 세션을 묶는다") {
+            verify { service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("10.0.0.2", "device-B")) }
+        }
+
+        Then("한 번 쓴 값은 세션에서 지운다") {
+            req.session!!.getAttribute(OAuth2DeviceIdFilter.SESSION_ATTRIBUTE) shouldBe null
+        }
+    }
+
+    Given("기기 id 를 어디서도 못 받은 콜백이면") {
+        every { service.issueTokens(1L, "tester", "ROLE_MEMBER", any()) } returns ("r" to "a")
+
+        val req = MockHttpServletRequest().apply { remoteAddr = "10.0.0.3" }
+
+        handler.onAuthenticationSuccess(req, MockHttpServletResponse(), auth)
+
+        Then("기기 id 없이 발급한다") {
+            // AuthService 가 이 경우 옛 바인딩을 지워 다음 갱신이 TOFU 로 다시 묶이게 한다.
+            verify { service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("10.0.0.3", null)) }
+        }
+    }
 })

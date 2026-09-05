@@ -295,6 +295,8 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 | `Attachment.key` 유니크 인덱스가 MySQL 3072 byte 한계 초과 | **해당 없음.** PostgreSQL + Flyway 로 확정돼 지적 전제가 사라졌다 |
 | 정지/탈퇴 회원이 일반 API 경로를 그대로 통과 | `JwtAuthenticationFilter` 가 매 요청 `MemberReader.findStatus` 로 상태를 확인하고 SUSPENDED/WITHDRAWN 을 403 으로 막는다. `/api/v1/auth/` 는 면제(로그아웃·리프레시는 각자 `requireActive` 로 막힌다) |
 | 상태 검사가 보는 캐시를 커밋 전 값이 덮어씀 | read-through 적재를 `Cache.putIfAbsent` 로 바꿔 쓰기 경로만 덮어쓰게 했다. 캐시 히트 시 되쓰기(TTL 무한 갱신)도 제거. 회귀 방지는 `MemberStatusCacheRaceTest` |
+| 동시 리프레시가 방금 발급한 토큰을 지움 | 회전을 `compareAndSet` 원자 교체로 바꾸고(교체 뒤 `expire` 로 TTL 재설정), **불일치에 세션을 지우지 않는다.** 거부만 한다. 기기 검사를 토큰 비교보다 앞에 둬 밀려난 기기가 `session-taken-over` 를 받는다. 회귀 방지는 `AuthSessionTest` |
+| OAuth2 로그인이 기기 바인딩을 갱신하지 않아 기종 변경 사용자가 1시간마다 401 | 로그인 시작 요청(`/oauth2/authorization/*`)의 `deviceId` 를 `OAuth2DeviceIdFilter` 가 세션에 옮겨 콜백에서 쓴다. 기기 id 를 못 받은 발급은 옛 바인딩을 지워 다음 갱신이 TOFU 로 다시 묶게 한다 |
 
 ---
 
@@ -345,6 +347,7 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
 
 12. **차단 상대의 팔로워/팔로잉 *수*는 프로필로 그대로 나간다** — 목록은 403 인데 숫자는 열려 있다. 일관성 문제이자 제품 판단.
 13. **리프레시 토큰 재사용 감지(RTR)** — 1인 1기기 정책이라 새 기기 로그인 시 기존 세션이 끊긴다(`auth.session-taken-over`). 무효화된 리프레시 토큰으로 재발행을 시도하면 전 세션 강제 파기까지 갈지 결정 필요
+    **현재 동작**: 무효 토큰은 401 로 거부만 하고 세션은 건드리지 않는다. 회전 때문에 "저장값과 다르다" 가 탈취뿐 아니라 "다른 요청이 방금 갱신했다" 는 뜻이기도 해서, 삭제로 처리하면 정상 사용자가 동시 갱신만으로 잘렸다. 재사용을 **감지해도 조치하지 않는** 상태이므로, 조치를 넣으려면 정상 동시 갱신과 진짜 재사용을 가르는 기준(직전 토큰 grace window, 토큰별 jti 등)을 먼저 정해야 한다.
 14. **회원 검색 API** — handle 부분 일치 검색이 없다. 팔로우 기능이 생겨 **사람을 찾을 방법이 필요해졌다** — 지금은 정확한 handle 을 알아야 한다.
     **기반(pg_trgm + unaccent)은 만들었다** — `infra/rdb` 의 `V10__trgm_search_base.sql`(확장 + `f_unaccent` IMMUTABLE 래퍼)과 `StringPathSearch.kt`(`StringPath.search()` QueryDSL 확장, `MIN_SEARCH_LENGTH = 2`). 실제 테이블(`members.handle` 등)에 GIN 인덱스를 걸고 검색 API 를 붙이는 건 아직이다 — **호출자가 0건**이라 이 기반이 죽은 스캐폴딩으로 남지 않으려면 다음 작업이 필요하다. 컬럼 적용 시 `create index using gin (f_unaccent(컬럼) gin_trgm_ops)` 를 Flyway 로 만들어야 함수 인덱스를 탄다.
     **운영 배포 전 확인 필요**: `V10` 의 `create extension pg_trgm/unaccent` 는 슈퍼유저(또는 AWS RDS `rds_superuser`) 권한이 필요하다. 로컬·Testcontainers 는 슈퍼유저 계정이라 통과하지만, 운영 Flyway 실행 계정이 최소 권한이면 `permission denied to create extension` 으로 배포가 그 자리에서 죽는다. 마스터 계정으로 두 확장을 미리 설치해 두거나 Flyway 계정에 권한을 부여해야 한다.
@@ -363,6 +366,12 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
     `MemberSuspendHistoryRepositoryImpl.findExpired` 는 `where is_released = false and release_at <= now` 로 조회하는데, 이 테이블의 유일한 인덱스 `IDX_MEMBER_SUSPEND_RELEASED` 는 `(member_id, is_released)` 순서다. **선두 컬럼이 `member_id` 라 이 조건으로는 레인지 스캔을 못 탄다.** 같은 인덱스를 쓰는 `findOpen(memberId)` 는 정상적으로 탄다.
     → **터지는 경로:** 배치가 10분마다 도는데 매 주기 `member_suspend_history` 전체를 훑는다. 운영 이력이 수천 건 수준이면 무시할 만하지만, 정지 이력은 **닫힌 행도 지우지 않고 계속 쌓이는 구조**라 단조 증가한다. 수만 건을 넘으면 10분마다 도는 풀스캔이 되고, 그 시점에 정작 만료 대상은 여전히 몇 건뿐이라 비용 대비 소득이 없다.
     → `(is_released, release_at)` 복합 인덱스나 `where is_released = false` 부분 인덱스를 Flyway 로 추가한다. **부분 인덱스 쪽이 낫다** — 닫힌 행이 인덱스에서 아예 빠져 크기가 "현재 열린 정지 수"에 묶인다. 지금 붙이지 않은 건 행이 없는 상태에서 재는 실행계획이 무의미하고, 규모가 오기 전까지는 Seq Scan 이 오히려 싸기 때문이다.
+
+23. **다중 인스턴스에서 OAuth2 로그인이 sticky session 없이 실패한다**
+    Spring Security 의 기본 `HttpSessionOAuth2AuthorizationRequestRepository` 가 인가 요청(state 포함)을 톰캣 로컬 세션에 담는다. 이 저장소는 이 저장소가 고른 게 아니라 프레임워크 기본값이고, `spring-session` 이나 Redis 세션 클러스터링은 붙어 있지 않다.
+    → **터지는 경로:** 인스턴스가 2대 이상이고 L7 로드밸런서에 sticky session 이 없는 상태에서, `GET /oauth2/authorization/google` 은 인스턴스 1로 가 세션이 거기 생기고 IdP 인증 후 콜백(`/login/oauth2/code/google`)이 인스턴스 2로 라우팅되면, 인스턴스 2엔 인가 요청이 없어 `authorization_request_not_found` 로 **소셜 로그인 자체가 실패**한다. 무중단 배포로 인스턴스가 교체되는 순간에도 같은 일이 난다.
+    → **`OAuth2DeviceIdFilter` 의 기기 id 도 같은 세션에 얹혀 있다.** 다만 이건 원인이 아니라 같은 배를 탄 것뿐이다 — 정확히 같은 상황에서만 함께 깨지고 새로운 실패 모드를 추가하지 않는다.
+    → **고치려면 둘을 함께 옮겨야 한다.** 인가 요청 저장소를 Redis 기반 `AuthorizationRequestRepository` 로 바꾸고, 기기 id 도 같은 키(state)에 얹는다. **기기 id 만 Redis 로 옮기는 건 효과가 없다** — 콜백이 `OAuth2SuccessHandler` 에 닿기 전에 인가 요청 조회에서 이미 죽기 때문이다. 저장소 교체는 `common` 의 `WebSecurityConfiguration` 에 `authorizationRequestRepository` 등록이 필요해 auth 모듈 안에서 끝나지 않는다. 그때까지는 **단일 인스턴스이거나 `/oauth2/**`·`/login/oauth2/**` 에 sticky session 이 걸려 있어야 한다.**
 
 ### 5.4 정리 대상 (기능 영향 없음)
 
