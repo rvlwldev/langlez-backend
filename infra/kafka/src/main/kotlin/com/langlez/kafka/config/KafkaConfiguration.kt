@@ -46,7 +46,15 @@ class KafkaConfiguration {
      * **값이 있는 것은 전부 덮어쓴다** — `concurrency`, `commonErrorHandler`, `listenerTaskExecutor` 포함.
      * 그러니 우리가 고정해야 하는 것은 configure 뒤에 얹는다.
      *
-     * - `concurrency` 는 `application.yml` 로 옮겼다. 여기서 덮어쓰면 yml 값이 다시 조용히 무시된다.
+     * - `concurrency` 는 `application.yml`(`spring.kafka.listener.concurrency: 3`)로 옮겼다.
+     *   **코드로 되돌리지 마라.** 여기서 `setConcurrency` 를 부르면 값이 configure 뒤에 얹혀
+     *   yml 이 다시 조용히 무시된다 — 이 클래스가 방금 고친 결함과 정확히 같은 모양이다.
+     *   대신 반대쪽 위험을 진다: **yml 에서 그 줄이 빠지면 경고 없이 기본값 1 로 폴백한다.**
+     *   `KafkaProperties.Listener.concurrency` 기본값이 null 이라 configure 가 setter 를 아예
+     *   안 부르고, 컨테이너 필드 초기값 1 이 그대로 남는다. 기동 로그에 아무 표시가 없다.
+     *   파티션 3개짜리 토픽(`member-created` 등)에 스레드가 1개만 붙어 컨슘 지연만 쌓인다.
+     *   새 프로필(`application-staging.yml` 등)을 만들며 `spring.kafka.listener` 블록을
+     *   재정의하거나 빠뜨리면 그렇게 된다. 프로필을 추가하면 이 키가 살아있는지 확인해라.
      * - `commonErrorHandler` 는 configure 도 `CommonErrorHandler` 빈에서 채우지만 `getIfUnique()` 라,
      *   같은 타입 빈이 둘이 되면 조용히 null 이 되어 재시도·DLT 배선이 통째로 사라진다. 명시로 못 박는다.
      * - `listenerTaskExecutor` 는 프로퍼티로 표현이 안 된다. 게다가 `spring.threads.virtual.enabled` 를
