@@ -7,7 +7,9 @@ import com.langlez.member.application.MemberOnlineTracker
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.security.TokenManager
+import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
+import org.redisson.client.codec.StringCodec
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService
@@ -74,11 +76,11 @@ class AuthService(
      * 리프레시 토큰과 기기 바인딩이 함께 덮어써져 이전 세션이 끊긴다.
      * (이전 기기의 access token 은 남은 TTL 동안만 유효하다.)
      */
-    fun issueTokens(id: Long, handle: String, role: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
+    fun issueTokens(id: Long, handle: String, role: String, ctx: AccessContext): Pair<String, String> {
         val refreshToken = tokens.issueRefreshToken(id, handle, role)
         val accessToken = tokens.issueAccessToken(id, handle, role)
 
-        redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, refreshTokenTtl)
+        refreshTokenBucket(id).set(refreshToken, refreshTokenTtl)
         bindDevice(id, ctx.deviceId)
 
         onlineTracker.recordAccess(id, ctx.ip, ctx.deviceId)
@@ -86,7 +88,7 @@ class AuthService(
         return refreshToken to accessToken
     }
 
-    fun refresh(refreshToken: String, ctx: AccessContext = AccessContext()): Pair<String, String> {
+    fun refresh(refreshToken: String, ctx: AccessContext): Pair<String, String> {
         val info = tokens.parse(refreshToken)
         if (info.type != TokenManager.Type.REFRESH) throw LanglezException(401, "auth.invalid-token")
 
@@ -107,7 +109,7 @@ class AuthService(
         //
         // 토큰 비교보다 앞에 둔다. 밀려난 기기의 토큰은 이미 회전으로 무효라 순서를 뒤집으면
         // 원인이 token-expired 로 뭉개진다. 회전을 시도조차 안 하는 편이 부수효과도 적다.
-        val boundDevice = redisson.getBucket<String>(deviceKey(id)).get()
+        val boundDevice = deviceBucket(id).get()
         if (boundDevice != null && boundDevice != ctx.deviceId) {
             throw LanglezException(401, "auth.session-taken-over")
         }
@@ -126,12 +128,9 @@ class AuthService(
         //
         // 재사용 감지(RTR) — 무효 토큰이 다시 오면 전 세션을 파기할지 — 는 정책 미정이라
         // 여기서 정하지 않는다. README 5.3 참고.
-        val bucket = redisson.getBucket<String>(refreshTokenKey(id))
-        if (!bucket.compareAndSet(refreshToken, newRefreshToken)) {
+        if (!rotate(id, from = refreshToken, to = newRefreshToken)) {
             throw LanglezException(401, "auth.token-expired")
         }
-        // compareAndSet 의 SET 에는 TTL 이 없어 만료가 지워진다. 곧바로 다시 건다.
-        bucket.expire(refreshTokenTtl)
 
         bindDevice(id, ctx.deviceId)
         onlineTracker.recordAccess(id, ctx.ip, ctx.deviceId)
@@ -148,9 +147,41 @@ class AuthService(
      * 다음 갱신이 TOFU 로 그 기기를 다시 묶는다.
      */
     private fun bindDevice(id: Long, deviceId: String?) {
-        val bucket = redisson.getBucket<String>(deviceKey(id))
+        val bucket = deviceBucket(id)
         deviceId?.let { bucket.set(it, refreshTokenTtl) } ?: bucket.delete()
     }
+
+    /**
+     * 저장된 토큰이 [from] 일 때만 [to] 로 바꾸고 TTL 을 다시 건다. 교체했으면 true.
+     *
+     * 비교·교체·만료를 한 스크립트로 묶는다. `RBucket.compareAndSet` + `expire` 로 나누면
+     * 그 사이에 배포(SIGTERM)나 OOM 으로 프로세스가 죽었을 때 TTL 없는 영구 키가 남는다 —
+     * compareAndSet 이 쓰는 SET 에는 만료가 없어 기존 TTL 이 날아가기 때문이다. 그러면
+     * 리프레시 토큰 2주 만료 정책이 그 회원에게만 조용히 사라진다.
+     *
+     * 코덱을 [StringCodec] 으로 못 박는다. 기본 코덱은 값을 JSON 으로 감싸므로 Lua 가 보는
+     * 바이트와 `RBucket` 이 쓰는 바이트가 달라져 비교가 영영 실패한다. 이 키를 읽고 쓰는
+     * 경로는 전부 [refreshTokenBucket] 을 거쳐 같은 코덱을 쓴다.
+     */
+    private fun rotate(id: Long, from: String, to: String): Boolean {
+        val rotated: Long = redisson.getScript(StringCodec.INSTANCE).eval(
+            RScript.Mode.READ_WRITE,
+            ROTATE_SCRIPT,
+            RScript.ReturnType.INTEGER,
+            listOf(refreshTokenKey(id)),
+            from,
+            to,
+            refreshTokenTtlSecs.toString(),
+        )
+
+        return rotated == 1L
+    }
+
+    private fun refreshTokenBucket(id: Long) =
+        redisson.getBucket<String>(refreshTokenKey(id), StringCodec.INSTANCE)
+
+    private fun deviceBucket(id: Long) =
+        redisson.getBucket<String>(deviceKey(id), StringCodec.INSTANCE)
 
     fun logout(memberId: Long, accessToken: String) {
         invalidateSession(memberId)
@@ -169,11 +200,19 @@ class AuthService(
      * 넘는다.
      */
     fun invalidateSession(memberId: Long) {
-        redisson.getBucket<String>(refreshTokenKey(memberId)).delete()
-        redisson.getBucket<String>(deviceKey(memberId)).delete()
+        refreshTokenBucket(memberId).delete()
+        deviceBucket(memberId).delete()
     }
 
     companion object {
+        private val ROTATE_SCRIPT = """
+            if redis.call('GET', KEYS[1]) == ARGV[1] then
+                redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+                return 1
+            end
+            return 0
+        """.trimIndent()
+
         private fun refreshTokenKey(id: Long) = "refresh_token:$id"
         private fun deviceKey(id: Long) = "refresh_device:$id"
     }
