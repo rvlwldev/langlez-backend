@@ -62,8 +62,13 @@ class ChatMessage(
      *
      * 사진·음성은 보여줄 본문이 없어 타입만 남기고 문구는 클라이언트가 현지화한다.
      * 서비스와 발행 폴러가 같은 값을 써야 해서 여기 둔다 — 양쪽에 따로 두면 조용히 어긋난다.
+     *
+     * **삭제된 메시지는 본문을 돌려주지 않는다.** "모두에게 삭제"는 대화창(`ChatMessageView`)에서만 가려선
+     * 안 된다. 이 값은 방 목록 프리뷰와 푸시 알림으로도 나가므로, 여기서 새면 지운 본문이 그대로 남는다.
      */
-    fun preview(): String = content?.takeIf { it.isNotBlank() } ?: "[$type]"
+    fun preview(): String =
+        if (isDeleted()) DELETED_PREVIEW
+        else content?.takeIf { it.isNotBlank() } ?: "[$type]"
 
     fun isDeleted(): Boolean = deletedAt != null
 
@@ -71,4 +76,9 @@ class ChatMessage(
     class Attachment(val url: String, val sequence: Int)
 
     enum class Type { TEXT, IMAGE, VIDEO, AUDIO }
+
+    companion object {
+        /** 삭제된 메시지의 프리뷰. 타입 프리뷰와 같은 대괄호 형식이라 클라이언트가 같은 자리에서 현지화한다. */
+        const val DELETED_PREVIEW = "[DELETED]"
+    }
 }
