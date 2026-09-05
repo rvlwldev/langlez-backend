@@ -135,6 +135,11 @@ class ChatWebSocketConfiguration(
             // HTTP 진입점과 같은 판정표를 쓴다. 두 곳이 갈리면 실시간 채널만 열린 채로 남는다.
             // findStatus 가 던지면 그대로 올라가 CONNECT 가 끊긴다 — 보안 판정이라 조회 실패를
             // 통과로 흘리지 않는다.
+            //
+            // 비용: 지금은 MemberReader 가 2단계 캐시를 타 DB 왕복이 거의 없다. 이 포트가 gRPC 로
+            // 나가면 CONNECT 마다 원격 왕복이 된다. 그래도 감수한다 — 소켓은 재검증 지점이 없어
+            // 연결 시점이 유일한 기회고, 빈도도 요청이 아니라 연결 단위라 낮다.
+            // 그때 캐시가 필요해지면 포트 뒤가 아니라 gRPC 클라이언트 쪽에 둔다.
             AccountStatusPolicy.denialOf(members.findStatus(info.memberId))
                 ?.let { throw IllegalArgumentException(it.messageKey) }
 

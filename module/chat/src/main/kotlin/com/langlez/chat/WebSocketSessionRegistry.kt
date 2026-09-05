@@ -67,9 +67,25 @@ class WebSocketSessionRegistry(redisson: RedissonClient) {
         owners.remove(sessionId)
     }
 
-    /** CONNECT 인증이 끝난 뒤 이 세션의 주인을 기록한다. 인증 전 세션은 주인이 없어 끊을 대상도 아니다. */
+    /**
+     * CONNECT 인증이 끝난 뒤 이 세션의 주인을 기록한다. 인증 전 세션은 주인이 없어 끊을 대상도 아니다.
+     *
+     * **소켓은 CONNECT 프레임보다 먼저 열린다.** [register] 가 `afterConnectionEstablished` 에서
+     * 항상 먼저 도므로, 여기서 세션이 안 보이면 "아직 안 열렸다"가 아니라 "이미 닫혔다"는 뜻이다.
+     * 그래서 없으면 기록하지 않는 게 맞다 — 유효한 결속을 놓치는 경우가 아니다.
+     *
+     * **확인이 두 번인 건 중복이 아니다.** 앞의 것만 두면 검사와 기록 사이에 소켓이 닫히는 창이 남는다:
+     * CONNECT 인증 중 `findStatus` 를 기다리는 사이 클라이언트가 끊기면 `afterConnectionClosed` →
+     * [unregister] 가 먼저 돌아 owners 를 비우고(아직 없어서 no-op), 그 뒤 이 메서드가 항목을 남긴다.
+     * 그 세션엔 다시는 [unregister] 가 불리지 않아 그 항목이 영구 잔존한다.
+     * 뒤의 확인이 그 창에서 들어온 항목을 되돌린다.
+     */
     fun bind(sessionId: String, memberId: Long) {
+        if (!sessions.containsKey(sessionId)) return
+
         owners[sessionId] = memberId
+
+        if (!sessions.containsKey(sessionId)) owners.remove(sessionId)
     }
 
     /** 이 회원의 열린 세션을 모든 인스턴스에서 끊는다. */
@@ -104,6 +120,12 @@ class WebSocketSessionRegistry(redisson: RedissonClient) {
 
         logger.info("실시간 세션 강제 종료. member={} sessions={}", memberId, targets.size)
     }
+
+    /**
+     * 주인이 기록된 세션 id. 생명주기 정리가 빠져 항목이 영구 잔존하는 걸 테스트가 감시한다.
+     * `sessions` 는 [unregister] 가 항상 정리하지만 `owners` 는 [bind] 시점이 갈려 창이 생긴다.
+     */
+    internal fun trackedOwnerIds(): Set<String> = owners.keys.toSet()
 
     /** 패키지가 `com.langlez.` 아래여야 레디스 코덱이 타입 정보를 남긴다 (RedissonConfiguration.redisCodec 참고). */
     data class Signal(val memberId: Long = 0)

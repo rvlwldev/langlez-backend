@@ -6,6 +6,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -163,4 +164,56 @@ class WebSocketSessionRegistryTest : BehaviorSpec({
         }
     }
 
+    /**
+     * 소켓은 CONNECT 프레임보다 먼저 열리므로 `register` 는 항상 `bind` 보다 앞선다.
+     * 그래서 bind 시점에 세션이 없다는 건 "아직 안 열렸다"가 아니라 "이미 닫혔다"는 뜻이다.
+     *
+     * CONNECT 인증 중 `findStatus` 를 기다리는 사이 클라이언트가 끊기면 `afterConnectionClosed` →
+     * `unregister` 가 먼저 돌고, 뒤늦게 `bind` 가 owners 에 항목을 남긴다. 그 뒤로는 다시
+     * `unregister` 가 불리지 않아 영구 잔존한다 — 감사 B-07(wave 참여자 누수)과 같은 종류다.
+     */
+    Given("CONNECT 인증 도중 소켓이 먼저 닫히면") {
+
+        val aborted = session("s7")
+        registry.register(aborted)
+        registry.unregister("s7")
+
+        When("뒤늦게 bind 가 불리면") {
+            registry.bind("s7", 7L)
+
+            Then("주인 기록이 남지 않는다") {
+                registry.trackedOwnerIds() shouldNotContain "s7"
+            }
+        }
+    }
+
+    Given("정상적으로 끝난 세션은") {
+
+        val normal = session("s10")
+        registry.register(normal)
+        registry.bind("s10", 10L)
+
+        When("소켓이 닫히면") {
+            registry.unregister("s10")
+
+            Then("주인 기록도 함께 지워진다") {
+                registry.trackedOwnerIds() shouldNotContain "s10"
+            }
+        }
+    }
+
+    Given("강제 종료된 세션은") {
+
+        val killed = session("s11")
+        registry.register(killed)
+        registry.bind("s11", 11L)
+
+        When("closeLocal 이 끊고 나면") {
+            deliver(11L)
+
+            Then("주인 기록이 남지 않는다") {
+                registry.trackedOwnerIds() shouldNotContain "s11"
+            }
+        }
+    }
 })
