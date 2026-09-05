@@ -12,7 +12,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.redisson.api.RBucket
+import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
+import org.redisson.client.codec.StringCodec
 import java.util.Base64
 
 /**
@@ -50,11 +52,14 @@ class AuthDeviceTest : BehaviorSpec({
 
     val refreshToken = tokens.issueRefreshToken(1L, "tester", "ROLE_MEMBER")
 
-    every { redisson.getBucket<String>("refresh_token:1") } returns tokenBucket
-    every { redisson.getBucket<String>("refresh_device:1") } returns deviceBucket
+    every { redisson.getBucket<String>("refresh_token:1", StringCodec.INSTANCE) } returns tokenBucket
+    every { redisson.getBucket<String>("refresh_device:1", StringCodec.INSTANCE) } returns deviceBucket
 
-    // 회전은 읽고-쓰기가 아니라 원자 교체다. 저장값이 제시된 토큰과 같을 때만 교체가 성공한다.
-    every { tokenBucket.compareAndSet(refreshToken, any()) } returns true
+    // 회전은 읽고-쓰기가 아니라 Lua 스크립트 한 방이다. 여기선 성공만 시켜 두고
+    // 스크립트의 원자성은 진짜 레디스에 붙는 AuthSessionTest 가 본다.
+    val script = mockk<RScript>()
+    every { redisson.getScript(StringCodec.INSTANCE) } returns script
+    every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 1L
 
     Given("기기 A 에서 로그인하면") {
         service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("1.1.1.1", "device-A"))

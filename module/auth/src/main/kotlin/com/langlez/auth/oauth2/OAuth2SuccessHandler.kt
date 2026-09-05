@@ -13,6 +13,12 @@ import org.springframework.web.util.UriComponentsBuilder
 /**
  * 모바일 앱 전용이라 쿠키를 쓰지 않는다.
  * 앱이 열어둔 딥링크(`app.oauth2.redirect-uri`)로 토큰을 쿼리 파라미터에 실어 돌려준다.
+ *
+ * **여기서 HttpSession 을 읽는 것은 의도된 잔여다.** 다중 인스턴스에서 sticky session 이 없으면
+ * 이 핸들러에 닿기도 전에 Spring Security 의 기본 `HttpSessionOAuth2AuthorizationRequestRepository`
+ * 가 인가 요청을 못 찾아 로그인이 먼저 죽는다. 그래서 **기기 id 만 Redis 로 옮겨도 얻는 게 없다** —
+ * 인가 요청 저장소와 함께 옮겨야 의미가 있고, 그건 `common` 의 시큐리티 설정을 건드린다.
+ * 자세한 건 README 5.3-23.
  */
 @Component
 class OAuth2SuccessHandler(

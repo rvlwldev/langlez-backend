@@ -10,7 +10,9 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.redisson.api.RBucket
+import org.redisson.api.RScript
 import org.redisson.api.RedissonClient
+import org.redisson.client.codec.StringCodec
 import org.springframework.http.HttpStatus
 import java.lang.reflect.InvocationTargetException
 import java.time.Duration
@@ -27,6 +29,11 @@ class AuthServiceTest : BehaviorSpec({
     val redisson = mockk<RedissonClient>()
     val bucket = mockk<RBucket<String>>()
     val deviceBucket = mockk<RBucket<String>>(relaxed = true).also { every { it.get() } returns null }
+
+    // 회전은 Lua 스크립트 한 방이다(비교+교체+만료). 여기선 성공/실패만 정하고,
+    // 스크립트가 실제로 원자적인지는 진짜 레디스에 붙는 AuthSessionTest 가 본다.
+    val script = mockk<RScript>()
+    every { redisson.getScript(StringCodec.INSTANCE) } returns script
 
     val service = AuthService(
         tokens, memberService, redisson, mockk(relaxed = true),
@@ -48,25 +55,29 @@ class AuthServiceTest : BehaviorSpec({
         )
         val validRefreshToken = tokens.issueRefreshToken(memberId, "tester", "ROLE_MEMBER")
 
-        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
+        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
 
         When("유효한 리프레시 토큰으로 갱신하면") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.compareAndSet(validRefreshToken, any()) } returns true
-            every { bucket.expire(any<Duration>()) } returns true
+            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 1L
 
             Then("새로운 토큰 쌍이 반환되고 Redis에 저장된다") {
-                val (refreshToken, accessToken) = service.refresh(validRefreshToken)
+                val (refreshToken, accessToken) = service.refresh(validRefreshToken, AccessContext())
 
                 tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
                 // 갱신 토큰의 role 도 최초 로그인과 같은 ROLE_ 접두사여야 한다. 안 그러면 hasRole 검사가 깨진다.
                 tokens.parse(accessToken).role shouldBe "ROLE_MEMBER"
                 tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
 
-                // 회전은 원자 교체다. compareAndSet 의 SET 이 TTL 을 지우므로 곧바로 다시 건다.
-                verify { bucket.compareAndSet(validRefreshToken, refreshToken) }
-                verify { bucket.expire(Duration.ofDays(14)) }
+                // 옛 토큰·새 토큰·TTL 이 한 스크립트로 함께 넘어간다.
+                verify {
+                    script.eval<Long>(
+                        any(), any(), any(),
+                        listOf("refresh_token:$memberId"),
+                        validRefreshToken, refreshToken, "1209600",
+                    )
+                }
             }
         }
 
@@ -74,7 +85,7 @@ class AuthServiceTest : BehaviorSpec({
             val accessToken = tokens.issueAccessToken(memberId, "tester", "ROLE_MEMBER")
 
             Then("UNAUTHORIZED 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(accessToken) }
+                val ex = shouldThrow<LanglezException> { service.refresh(accessToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
             }
@@ -83,11 +94,11 @@ class AuthServiceTest : BehaviorSpec({
         When("존재하지 않는 회원의 토큰으로 갱신하면") {
             val orphanToken = tokens.issueRefreshToken(999L, "ghost", "ROLE_MEMBER")
             every { memberService.findById(999L) } returns null
-            every { redisson.getBucket<String>("refresh_token:999") } returns bucket
-            every { redisson.getBucket<String>("refresh_device:999") } returns deviceBucket
+            every { redisson.getBucket<String>("refresh_token:999", StringCodec.INSTANCE) } returns bucket
+            every { redisson.getBucket<String>("refresh_device:999", StringCodec.INSTANCE) } returns deviceBucket
 
             Then("UNAUTHORIZED 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(orphanToken) }
+                val ex = shouldThrow<LanglezException> { service.refresh(orphanToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
             }
@@ -95,11 +106,11 @@ class AuthServiceTest : BehaviorSpec({
 
         When("Redis에 저장된 토큰과 다른 토큰으로 갱신하면") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.compareAndSet(validRefreshToken, any()) } returns false
+            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 0L
             every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생하고 세션은 지워지지 않는다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
+                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
 
@@ -111,11 +122,11 @@ class AuthServiceTest : BehaviorSpec({
 
         When("Redis에 토큰이 없으면(만료)") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.compareAndSet(validRefreshToken, any()) } returns false
+            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 0L
             every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
+                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
             }
@@ -127,13 +138,13 @@ class AuthServiceTest : BehaviorSpec({
         val handle = "tester"
         val role = "ROLE_MEMBER"
 
-        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
+        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
         every { bucket.set(any(), any<Duration>()) } just runs
 
         When("issueTokens를 호출하면") {
             Then("토큰 쌍을 반환하고 refresh token을 Redis에 저장한다") {
-                val (refreshToken, accessToken) = service.issueTokens(memberId, handle, role)
+                val (refreshToken, accessToken) = service.issueTokens(memberId, handle, role, AccessContext())
 
                 tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
                 tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
@@ -146,8 +157,8 @@ class AuthServiceTest : BehaviorSpec({
 
     Given("탈퇴 이벤트를 받아 세션만 끊을 때") {
         val memberId = 1L
-        every { redisson.getBucket<String>("refresh_token:$memberId") } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId") } returns deviceBucket
+        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
+        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
         every { bucket.delete() } returns true
         every { deviceBucket.delete() } returns true
 

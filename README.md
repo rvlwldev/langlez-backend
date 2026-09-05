@@ -367,6 +367,12 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
     → **터지는 경로:** 배치가 10분마다 도는데 매 주기 `member_suspend_history` 전체를 훑는다. 운영 이력이 수천 건 수준이면 무시할 만하지만, 정지 이력은 **닫힌 행도 지우지 않고 계속 쌓이는 구조**라 단조 증가한다. 수만 건을 넘으면 10분마다 도는 풀스캔이 되고, 그 시점에 정작 만료 대상은 여전히 몇 건뿐이라 비용 대비 소득이 없다.
     → `(is_released, release_at)` 복합 인덱스나 `where is_released = false` 부분 인덱스를 Flyway 로 추가한다. **부분 인덱스 쪽이 낫다** — 닫힌 행이 인덱스에서 아예 빠져 크기가 "현재 열린 정지 수"에 묶인다. 지금 붙이지 않은 건 행이 없는 상태에서 재는 실행계획이 무의미하고, 규모가 오기 전까지는 Seq Scan 이 오히려 싸기 때문이다.
 
+23. **다중 인스턴스에서 OAuth2 로그인이 sticky session 없이 실패한다**
+    Spring Security 의 기본 `HttpSessionOAuth2AuthorizationRequestRepository` 가 인가 요청(state 포함)을 톰캣 로컬 세션에 담는다. 이 저장소는 이 저장소가 고른 게 아니라 프레임워크 기본값이고, `spring-session` 이나 Redis 세션 클러스터링은 붙어 있지 않다.
+    → **터지는 경로:** 인스턴스가 2대 이상이고 L7 로드밸런서에 sticky session 이 없는 상태에서, `GET /oauth2/authorization/google` 은 인스턴스 1로 가 세션이 거기 생기고 IdP 인증 후 콜백(`/login/oauth2/code/google`)이 인스턴스 2로 라우팅되면, 인스턴스 2엔 인가 요청이 없어 `authorization_request_not_found` 로 **소셜 로그인 자체가 실패**한다. 무중단 배포로 인스턴스가 교체되는 순간에도 같은 일이 난다.
+    → **`OAuth2DeviceIdFilter` 의 기기 id 도 같은 세션에 얹혀 있다.** 다만 이건 원인이 아니라 같은 배를 탄 것뿐이다 — 정확히 같은 상황에서만 함께 깨지고 새로운 실패 모드를 추가하지 않는다.
+    → **고치려면 둘을 함께 옮겨야 한다.** 인가 요청 저장소를 Redis 기반 `AuthorizationRequestRepository` 로 바꾸고, 기기 id 도 같은 키(state)에 얹는다. **기기 id 만 Redis 로 옮기는 건 효과가 없다** — 콜백이 `OAuth2SuccessHandler` 에 닿기 전에 인가 요청 조회에서 이미 죽기 때문이다. 저장소 교체는 `common` 의 `WebSecurityConfiguration` 에 `authorizationRequestRepository` 등록이 필요해 auth 모듈 안에서 끝나지 않는다. 그때까지는 **단일 인스턴스이거나 `/oauth2/**`·`/login/oauth2/**` 에 sticky session 이 걸려 있어야 한다.**
+
 ### 5.4 정리 대상 (기능 영향 없음)
 
 - **echo 아웃박스 스캐폴딩** — `EchoOutBox`·`EchoOutBoxHistory`·`EchoOutBoxRepository` 와 테이블이 있으나 쓰는 코드도 스케줄러도 없다. `echo-api` 의 DTO 2종도 발행하는 코드가 없다
