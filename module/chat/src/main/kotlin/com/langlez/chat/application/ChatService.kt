@@ -161,7 +161,18 @@ class ChatService(
 
     /**
      * 모두에게 삭제. 문서는 남기고 내용만 가려 상대 화면에 [삭제된 메시지] 자리를 남긴다.
-     * Mongo 단일 문서 쓰기 하나뿐이라 트랜잭션으로 감싸지 않는다.
+     *
+     * **Mongo 문서를 가리는 것만으로는 부족하다.** 방 목록이 보여주는
+     * `chat_rooms.last_message_preview` 는 Postgres 에 비정규화돼 있어 그대로 남는다.
+     * 그 방의 마지막 메시지를 지웠을 때만 다시 써 준다 — 중간 메시지는 프리뷰와 무관하다.
+     *
+     * 직전 메시지로 되돌리지 않고 가려진 프리뷰로 덮는다. 되돌리면 `lastMessageAt` 도 함께 내려가
+     * 목록에서 방이 아래로 튀고, 직전 메시지도 삭제됐을 수 있어 어디까지 거슬러 올라갈지가 끝나지 않는다.
+     * 대사기(`ChatReconciler`)도 마지막 메시지의 `preview()` 를 쓰므로 두 경로가 같은 값으로 수렴한다.
+     *
+     * 마지막 메시지 조회(Mongo)는 트랜잭션 밖에서 먼저 끝낸다 — Postgres 커넥션을 쥔 채 Mongo 를
+     * 기다리면 풀이 마른다. 그 대가로 판정과 갱신 사이에 새 메시지가 들어오면 프리뷰가 잠깐 뒤로 간다.
+     * 그때는 `lastMessageAt` 도 함께 뒤로 가 방이 `isBehind` 로 잡히므로 대사기가 다음 주기에 되돌린다.
      */
     fun deleteMessage(memberId: Long, messageId: String) {
         val message = messages.find(messageId) ?: throw LanglezException(NOT_FOUND, "chat.message.not-found")
@@ -175,6 +186,10 @@ class ChatService(
         }
 
         messages.save(message)
+
+        if (messages.findByRoom(message.roomId, 1, null).firstOrNull()?.id == messageId) {
+            tx.execute { repo.findRoom(message.roomId)?.onMessage(message.preview(), message.createdAt) }
+        }
 
         broadcaster.broadcast(topic(message.roomId), ChatMessageView.of(message))
     }
