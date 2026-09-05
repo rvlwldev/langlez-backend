@@ -6,6 +6,7 @@ import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
+import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
@@ -122,6 +123,8 @@ class ChatServiceActionsTest : BehaviorSpec({
                 val message = ChatMessage(roomId, me, 1L, ChatMessage.Type.TEXT, "oops").apply { id = "m7" }
                 every { messages.find("m7") } returns message
                 every { messages.save(any()) } answers { firstArg() }
+                every { messages.findByRoom(roomId, 1, null) } returns listOf(message)
+                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
 
                 service.deleteMessage(me, "m7")
 
@@ -132,6 +135,40 @@ class ChatServiceActionsTest : BehaviorSpec({
                         match<ChatMessageView> { it.deleted && it.content == null },
                     )
                 }
+            }
+        }
+
+        When("보낸 사람이 방의 마지막 메시지를 지우면") {
+            Then("방 목록 프리뷰에 원문이 남지 않는다") {
+                val message = ChatMessage(roomId, me, 3L, ChatMessage.Type.TEXT, "010-1234-5678").apply { id = "m7" }
+                val room = ChatRoom(
+                    id = roomId,
+                    lastMessageAt = message.createdAt,
+                    lastMessagePreview = "010-1234-5678",
+                )
+                every { messages.find("m7") } returns message
+                every { messages.save(any()) } answers { firstArg() }
+                every { messages.findByRoom(roomId, 1, null) } returns listOf(message)
+                every { repo.findRoom(roomId) } returns room
+
+                service.deleteMessage(me, "m7")
+
+                // 대화창은 ChatMessageView 가 가리지만 방 목록은 Postgres 에 박힌 이 값을 그대로 보여준다.
+                room.lastMessagePreview shouldBe ChatMessage.DELETED_PREVIEW
+            }
+        }
+
+        When("보낸 사람이 중간 메시지를 지우면") {
+            Then("방 프리뷰는 건드리지 않는다") {
+                val message = ChatMessage(roomId, me, 3L, ChatMessage.Type.TEXT, "oops").apply { id = "m7" }
+                val latest = ChatMessage(roomId, partner, 4L, ChatMessage.Type.TEXT, "그 뒤에 온 말").apply { id = "m8" }
+                every { messages.find("m7") } returns message
+                every { messages.save(any()) } answers { firstArg() }
+                every { messages.findByRoom(roomId, 1, null) } returns listOf(latest)
+
+                service.deleteMessage(me, "m7")
+
+                verify(exactly = 0) { repo.findRoom(any()) }
             }
         }
     }
