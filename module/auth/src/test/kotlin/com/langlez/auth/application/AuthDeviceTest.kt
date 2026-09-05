@@ -53,6 +53,9 @@ class AuthDeviceTest : BehaviorSpec({
     every { redisson.getBucket<String>("refresh_token:1") } returns tokenBucket
     every { redisson.getBucket<String>("refresh_device:1") } returns deviceBucket
 
+    // 회전은 읽고-쓰기가 아니라 원자 교체다. 저장값이 제시된 토큰과 같을 때만 교체가 성공한다.
+    every { tokenBucket.compareAndSet(refreshToken, any()) } returns true
+
     Given("기기 A 에서 로그인하면") {
         service.issueTokens(1L, "tester", "ROLE_MEMBER", AccessContext("1.1.1.1", "device-A"))
 
@@ -67,7 +70,6 @@ class AuthDeviceTest : BehaviorSpec({
 
     Given("기기 A 의 리프레시 토큰으로 갱신할 때") {
         every { memberService.findById(1L) } returns member()
-        every { tokenBucket.get() } returns refreshToken
 
         When("같은 기기에서 요청하면") {
             every { deviceBucket.get() } returns "device-A"

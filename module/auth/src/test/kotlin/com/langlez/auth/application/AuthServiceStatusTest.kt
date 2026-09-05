@@ -47,7 +47,8 @@ class AuthServiceStatusTest : BehaviorSpec({
         every { memberService.findById(1L) } returns member(status)
         every { redisson.getBucket<String>("refresh_token:1") } returns bucket
         every { redisson.getBucket<String>("refresh_device:1") } returns deviceBucket
-        every { bucket.get() } returns refreshToken
+        // 회전은 원자 교체다. 저장값이 제시된 토큰과 같을 때만 교체가 성공한다.
+        every { bucket.compareAndSet(refreshToken, any()) } returns true
     }
 
     Given("정지된 회원이 토큰 갱신을 시도하면") {

@@ -34,7 +34,7 @@ class AuthServiceTest : BehaviorSpec({
         refreshTokenTtlSecs = 1209600,
     )
 
-    afterEach { clearMocks(memberService, redisson, bucket, answers = false) }
+    afterEach { clearMocks(memberService, redisson, bucket, deviceBucket, answers = false) }
 
     Given("토큰 갱신 요청 시") {
         val memberId = 1L
@@ -53,8 +53,8 @@ class AuthServiceTest : BehaviorSpec({
 
         When("유효한 리프레시 토큰으로 갱신하면") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.get() } returns validRefreshToken
-            every { bucket.set(any(), any<Duration>()) } just runs
+            every { bucket.compareAndSet(validRefreshToken, any()) } returns true
+            every { bucket.expire(any<Duration>()) } returns true
 
             Then("새로운 토큰 쌍이 반환되고 Redis에 저장된다") {
                 val (refreshToken, accessToken) = service.refresh(validRefreshToken)
@@ -64,7 +64,9 @@ class AuthServiceTest : BehaviorSpec({
                 tokens.parse(accessToken).role shouldBe "ROLE_MEMBER"
                 tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
 
-                verify { bucket.set(refreshToken, Duration.ofDays(14)) }
+                // 회전은 원자 교체다. compareAndSet 의 SET 이 TTL 을 지우므로 곧바로 다시 건다.
+                verify { bucket.compareAndSet(validRefreshToken, refreshToken) }
+                verify { bucket.expire(Duration.ofDays(14)) }
             }
         }
 
@@ -93,20 +95,23 @@ class AuthServiceTest : BehaviorSpec({
 
         When("Redis에 저장된 토큰과 다른 토큰으로 갱신하면") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.get() } returns "different-token"
+            every { bucket.compareAndSet(validRefreshToken, any()) } returns false
             every { bucket.delete() } returns true
 
-            Then("토큰 만료 예외가 발생한다") {
+            Then("토큰 만료 예외가 발생하고 세션은 지워지지 않는다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
-                verify(exactly = 1) { bucket.delete() }
+
+                // 불일치는 탈취뿐 아니라 "다른 요청이 방금 갱신했다" 는 뜻이기도 하다.
+                // 지워버리면 동시 갱신이 정상 사용자를 재로그인시킨다.
+                verify(exactly = 0) { bucket.delete() }
             }
         }
 
         When("Redis에 토큰이 없으면(만료)") {
             every { memberService.findById(memberId) } returns member
-            every { bucket.get() } returns null
+            every { bucket.compareAndSet(validRefreshToken, any()) } returns false
             every { bucket.delete() } returns true
 
             Then("토큰 만료 예외가 발생한다") {

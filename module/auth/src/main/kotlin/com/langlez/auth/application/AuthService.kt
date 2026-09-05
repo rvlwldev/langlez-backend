@@ -79,7 +79,7 @@ class AuthService(
         val accessToken = tokens.issueAccessToken(id, handle, role)
 
         redisson.getBucket<String>(refreshTokenKey(id)).set(refreshToken, refreshTokenTtl)
-        ctx.deviceId?.let { redisson.getBucket<String>(deviceKey(id)).set(it, refreshTokenTtl) }
+        bindDevice(id, ctx.deviceId)
 
         onlineTracker.recordAccess(id, ctx.ip, ctx.deviceId)
 
@@ -99,23 +99,57 @@ class AuthService(
             throw LanglezException(HttpStatus.FORBIDDEN, e.message, e)
         }
 
-        val bucket = redisson.getBucket<String>(refreshTokenKey(id))
-        if (refreshToken != bucket.get()) {
-            bucket.delete()
-            throw LanglezException(401, "auth.token-expired")
-        }
-
         // 1인 1기기: 세션에 묶인 기기와 다르면 다른 기기에서 로그인해 밀려난 것이다.
         //
         // ctx.deviceId 가 null 인 경우를 통과시키면 안 된다. 헤더를 빼기만 하면 검증이
         // 건너뛰어져(fail-open), 탈취한 리프레시 토큰을 아무 기기에서나 쓸 수 있다.
         // 바인딩이 존재하면 반드시 일치해야 하고, 없으면 이번 기기로 바인딩한다(TOFU).
+        //
+        // 토큰 비교보다 앞에 둔다. 밀려난 기기의 토큰은 이미 회전으로 무효라 순서를 뒤집으면
+        // 원인이 token-expired 로 뭉개진다. 회전을 시도조차 안 하는 편이 부수효과도 적다.
         val boundDevice = redisson.getBucket<String>(deviceKey(id)).get()
         if (boundDevice != null && boundDevice != ctx.deviceId) {
             throw LanglezException(401, "auth.session-taken-over")
         }
 
-        return issueTokens(id, member.handle, member.role.authority, ctx)
+        val newRefreshToken = tokens.issueRefreshToken(id, member.handle, member.role.authority)
+        val newAccessToken = tokens.issueAccessToken(id, member.handle, member.role.authority)
+
+        // 회전은 원자 교체로 한다. 읽고-쓰기로 하면 동시 요청 둘이 같은 옛 토큰을 읽고 둘 다
+        // 통과해, 나중에 쓴 쪽이 먼저 쓴 쪽의 토큰을 덮는다 — 진 쪽 클라이언트는 Redis 에 없는
+        // 토큰을 들고 나간다.
+        //
+        // 불일치를 세션 삭제로 처리하지 않는다. 회전 때문에 "저장값과 다르다" 는 탈취뿐 아니라
+        // 다른 요청이 방금 갱신했다는 뜻이기도 하다. 지워버리면 앱이 포그라운드 복귀 시 같은
+        // 토큰으로 두 번 갱신하는 것만으로 재로그인을 강요당하고, 탈취한 옛 토큰을 던지는 것만으로
+        // 피해자 세션을 끊을 수 있다. 거부는 하되 세션은 건드리지 않는다.
+        //
+        // 재사용 감지(RTR) — 무효 토큰이 다시 오면 전 세션을 파기할지 — 는 정책 미정이라
+        // 여기서 정하지 않는다. README 5.3 참고.
+        val bucket = redisson.getBucket<String>(refreshTokenKey(id))
+        if (!bucket.compareAndSet(refreshToken, newRefreshToken)) {
+            throw LanglezException(401, "auth.token-expired")
+        }
+        // compareAndSet 의 SET 에는 TTL 이 없어 만료가 지워진다. 곧바로 다시 건다.
+        bucket.expire(refreshTokenTtl)
+
+        bindDevice(id, ctx.deviceId)
+        onlineTracker.recordAccess(id, ctx.ip, ctx.deviceId)
+
+        return newRefreshToken to newAccessToken
+    }
+
+    /**
+     * 기기 id 를 못 받은 발급은 이전 바인딩을 지운다.
+     *
+     * 남겨두면 새 기기의 첫 갱신이 옛 바인딩과 어긋나 401 로 잘리고, 재로그인해도 바인딩이
+     * 그대로라 액세스 토큰 TTL 마다 반복된다. 이 시점엔 방금의 발급이 리프레시 토큰을 이미
+     * 덮어써 옛 기기 세션이 끝난 뒤라, 남은 바인딩은 아무 세션도 지키지 않는 값이다.
+     * 다음 갱신이 TOFU 로 그 기기를 다시 묶는다.
+     */
+    private fun bindDevice(id: Long, deviceId: String?) {
+        val bucket = redisson.getBucket<String>(deviceKey(id))
+        deviceId?.let { bucket.set(it, refreshTokenTtl) } ?: bucket.delete()
     }
 
     fun logout(memberId: Long, accessToken: String) {
