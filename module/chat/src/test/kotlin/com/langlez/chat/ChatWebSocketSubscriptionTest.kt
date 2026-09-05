@@ -4,6 +4,7 @@ import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.infrastructure.ChatSubscriptionAuthorizer
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.SubscriptionAuthorizer
+import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldNotThrowAny
@@ -45,8 +46,10 @@ class ChatWebSocketSubscriptionTest : BehaviorSpec({
     fun chain(): List<ChannelInterceptor> {
         val configuration = ChatWebSocketConfiguration(
             tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 86400, redisson = mockk(relaxed = true)),
+            members = mockk<MemberReader>(),
             tracker = tracker,
             gate = WebSocketSubscriptionGate(authorizers),
+            sessions = mockk(relaxed = true),
         )
         val registration = ExposedRegistration()
         configuration.configureClientInboundChannel(registration)

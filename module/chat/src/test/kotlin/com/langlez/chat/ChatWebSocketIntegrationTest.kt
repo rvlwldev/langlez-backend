@@ -1,7 +1,10 @@
 package com.langlez.chat
 
 import com.langlez.core.MessageBroadcaster
+import com.langlez.member.contract.MemberSuspendedEvent
 import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.domain.Member
+import com.langlez.member.domain.MemberRepository
 import com.langlez.security.TokenManager
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow
@@ -13,6 +16,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.messaging.converter.MappingJackson2MessageConverter
 import org.springframework.messaging.simp.stomp.StompFrameHandler
@@ -21,6 +25,7 @@ import org.springframework.messaging.simp.stomp.StompSession
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.socket.WebSocketHttpHeaders
 import org.springframework.web.socket.client.standard.StandardWebSocketClient
 import org.springframework.web.socket.messaging.WebSocketStompClient
@@ -69,8 +74,27 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
     @Autowired
     lateinit var tracker: OnlineTracker
 
+    // CONNECT 가 계정 상태를 보므로 접속하는 회원은 실제 행이 있어야 한다.
+    @Autowired
+    lateinit var memberRepository: MemberRepository
+
+    @Autowired
+    lateinit var publisher: ApplicationEventPublisher
+
+    // 정지 리스너가 AFTER_COMMIT 이라 트랜잭션 없이 발행하면 아무 일도 일어나지 않는다.
+    @Autowired
+    lateinit var tx: TransactionTemplate
+
     private val client = WebSocketStompClient(StandardWebSocketClient())
         .apply { messageConverter = MappingJackson2MessageConverter() }
+
+    private fun newMember(): Member = memberRepository.save(
+        Member(
+            email = "ws-${java.util.UUID.randomUUID()}@test.com",
+            provider = Member.Provider.GOOGLE,
+            providerId = java.util.UUID.randomUUID().toString(),
+        )
+    )
 
     private fun connect(token: String?): StompSession {
         val headers = StompHeaders()
@@ -132,9 +156,10 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
 
     init {
         Given("유효한 액세스 토큰으로 STOMP 연결하면") {
-            // 1번 회원이 참여자인 방을 실제로 만든다. 구독 인가가 참여 여부를 보기 때문이다.
-            val myRoom = chatRepository.createRoom(1L, 2L)
-            val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
+            // 접속 회원이 참여자인 방을 실제로 만든다. 구독 인가가 참여 여부를 보기 때문이다.
+            val me = newMember()
+            val myRoom = chatRepository.createRoom(me.id, 2L)
+            val session = connect(tokens.issueAccessToken(me.id, "tester", "ROLE_USER"))
 
             Then("연결이 수립된다") {
                 session.isConnected shouldBe true
@@ -162,6 +187,29 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             session.disconnect()
         }
 
+        /**
+         * CONNECT 검사만으로는 **새 연결만** 막힌다. 소켓은 재검증 지점이 없어 이미 붙어 있던
+         * 세션이 무기한 살아남고, 정지된 회원이 상대 메시지를 계속 읽는다.
+         *
+         * 이벤트 발행 → AFTER_COMMIT 리스너 → 레디스 전파 → 소켓 종료까지 한 번에 확인한다.
+         */
+        Given("이미 붙어 있는 회원이 정지되면") {
+            val target = newMember()
+            val victim = connect(tokens.issueAccessToken(target.id, "victim", "ROLE_USER"))
+
+            Then("연결이 먼저 살아 있다") {
+                victim.isConnected shouldBe true
+            }
+
+            When("정지 이벤트가 커밋되면") {
+                tx.execute { publisher.publishEvent(MemberSuspendedEvent(target.id)) }
+
+                Then("열려 있던 세션이 끊긴다") {
+                    eventually(5.seconds) { victim.isConnected shouldBe false }
+                }
+            }
+        }
+
         Given("내가 참여하지 않은 방을 구독하려 하면") {
             val othersRoom = chatRepository.createRoom(8L, 9L)
             val received = LinkedBlockingQueue<Any>()
@@ -169,7 +217,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             // 구독이 거부되면 STOMP 세션이 끊긴다. 그 과정에서 나는 예외는 무시하고
             // "메시지를 못 받았다"는 사실만 본다.
             runCatching {
-                val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
+                val session = connect(tokens.issueAccessToken(newMember().id, "tester", "ROLE_USER"))
                 session.subscribe(
                     "/topic/chat/room/${othersRoom.id}",
                     object : StompFrameHandler {
@@ -195,7 +243,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
             val received = LinkedBlockingQueue<Any>()
 
             runCatching {
-                val session = connect(tokens.issueAccessToken(1L, "tester", "ROLE_USER"))
+                val session = connect(tokens.issueAccessToken(newMember().id, "tester", "ROLE_USER"))
                 session.subscribe(
                     "/topic/chat/room/*",
                     object : StompFrameHandler {
@@ -216,15 +264,16 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
         }
 
         Given("채팅방을 구독하면") {
-            val room = chatRepository.createRoom(31L, 32L)
+            val viewer = newMember().id
+            val room = chatRepository.createRoom(viewer, 32L)
             val topic = "/topic/chat/room/${room.id}"
             // viewers 는 접속 여부와 교집합이라 실제 앱처럼 핑이 먼저 있어야 한다
-            tracker.toOnline(31L)
-            val session = connect(tokens.issueAccessToken(31L, "viewer", "ROLE_USER"))
+            tracker.toOnline(viewer)
+            val session = connect(tokens.issueAccessToken(viewer, "viewer", "ROLE_USER"))
             val subscription = session.subscribe(topic, discardingHandler())
 
             Then("그 방을 보고 있는 사람으로 기록된다") {
-                eventually(3.seconds) { tracker.viewers(topic) shouldContain 31L }
+                eventually(3.seconds) { tracker.viewers(topic) shouldContain viewer }
             }
 
             When("구독을 해제하면") {
@@ -232,7 +281,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
 
                 // UNSUBSCRIBE 프레임엔 목적지가 없다. 세션 속성에 기억해둔 게 실제로 풀리는지 본다.
                 Then("보고 있는 사람에서 빠진다") {
-                    eventually(3.seconds) { tracker.viewers(topic) shouldNotContain 31L }
+                    eventually(3.seconds) { tracker.viewers(topic) shouldNotContain viewer }
                 }
             }
 
@@ -242,18 +291,34 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
         // 앱이 강제 종료되면 UNSUBSCRIBE 없이 소켓만 끊긴다. 이때 정리가 안 되면
         // 그 회원은 영원히 "그 방을 보는 중"이 되어 알림이 통째로 사라진다.
         Given("구독한 채로 연결이 끊기면") {
-            val room = chatRepository.createRoom(41L, 42L)
+            val viewer = newMember().id
+            val room = chatRepository.createRoom(viewer, 42L)
             val topic = "/topic/chat/room/${room.id}"
             // viewers 는 접속 여부와 교집합이라 실제 앱처럼 핑이 먼저 있어야 한다
-            tracker.toOnline(41L)
-            val session = connect(tokens.issueAccessToken(41L, "viewer", "ROLE_USER"))
+            tracker.toOnline(viewer)
+            val session = connect(tokens.issueAccessToken(viewer, "viewer", "ROLE_USER"))
             session.subscribe(topic, discardingHandler())
 
-            eventually(3.seconds) { tracker.viewers(topic) shouldContain 41L }
+            eventually(3.seconds) { tracker.viewers(topic) shouldContain viewer }
             session.disconnect()
 
             Then("보던 방에서 모두 빠진다") {
-                eventually(3.seconds) { tracker.viewers(topic) shouldNotContain 41L }
+                eventually(3.seconds) { tracker.viewers(topic) shouldNotContain viewer }
+            }
+        }
+
+        // HTTP 는 매 요청 상태를 보는데 실시간 채널은 CONNECT 때 토큰만 보던 시절이 있었다.
+        // 정지된 회원이 토큰 TTL(1시간) 내내 다시 붙어 상대 메시지를 읽을 수 있었다.
+        Given("정지된 회원이 새로 연결하려 하면") {
+            val banned = newMember().also {
+                it.suspend()
+                memberRepository.save(it)
+            }
+
+            Then("연결이 거부된다") {
+                shouldThrow<ExecutionException> {
+                    connect(tokens.issueAccessToken(banned.id, "banned", "ROLE_USER"))
+                }
             }
         }
 

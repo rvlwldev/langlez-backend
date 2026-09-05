@@ -1,12 +1,14 @@
 package com.langlez.member.application
 
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberSuspendedEvent
 import com.langlez.member.contract.MemberWriter
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.MemberSuspendHistory
 import com.langlez.member.domain.MemberSuspendHistoryRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
@@ -43,6 +45,7 @@ import java.time.Duration
 class MemberSuspender(
     private val repo: MemberRepository,
     private val suspendRepo: MemberSuspendHistoryRepository,
+    private val publisher: ApplicationEventPublisher,
 ) : MemberWriter {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -66,6 +69,11 @@ class MemberSuspender(
 
         repo.save(member)
         suspendRepo.save(MemberSuspendHistory(member, reason, days?.let(Duration::ofDays), actorId))
+
+        // 정지는 HTTP 만 막아선 부족하다. 소켓은 CONNECT 때 한 번 검사하고 나면 재검증 지점이 없어
+        // 이미 열린 세션이 그대로 남는다. 실시간 채널이 이 이벤트를 받아 그 세션을 끊는다.
+        // member 는 chat 을 참조하지 않는다 — 이벤트로만 알린다.
+        publisher.publishEvent(MemberSuspendedEvent(memberId))
 
         logger.info("회원 정지. member={} actor={} days={}", memberId, actorId, days)
     }

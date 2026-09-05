@@ -1,7 +1,9 @@
 package com.langlez.chat
 
 import com.langlez.config.WebSocketSubscriptionGate
+import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.OnlineTracker
+import com.langlez.security.AccountStatusPolicy
 import com.langlez.security.TokenManager
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
@@ -18,9 +20,13 @@ import org.springframework.messaging.support.ChannelInterceptor
 import org.springframework.messaging.support.MessageHeaderAccessor
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.web.socket.CloseStatus
+import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration
+import org.springframework.web.socket.handler.WebSocketHandlerDecorator
 import org.springframework.web.socket.messaging.SessionDisconnectEvent
 
 /**
@@ -43,8 +49,10 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
 @EnableWebSocketMessageBroker
 class ChatWebSocketConfiguration(
     private val tokens: TokenManager,
+    private val members: MemberReader,
     private val tracker: OnlineTracker,
     private val gate: WebSocketSubscriptionGate,
+    private val sessions: WebSocketSessionRegistry,
 ) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
@@ -55,6 +63,29 @@ class ChatWebSocketConfiguration(
     override fun configureMessageBroker(registry: MessageBrokerRegistry) {
         registry.enableSimpleBroker("/topic")
         registry.setApplicationDestinationPrefixes("/app")
+    }
+
+    /**
+     * 열린 소켓을 [WebSocketSessionRegistry] 에 등록한다. 정지·탈퇴 시 끊으려면 `WebSocketSession`
+     * 자체를 쥐고 있어야 하는데, 인터셉터도 `SimpUserRegistry` 도 그걸 내주지 않는다.
+     * 핸들러 데코레이터가 세션 객체에 닿는 유일한 지점이다.
+     *
+     * 이 시점엔 아직 CONNECT 프레임이 오지 않아 회원 id 를 모른다. 주인은 인증 인터셉터가 결속한다.
+     */
+    override fun configureWebSocketTransport(registration: WebSocketTransportRegistration) {
+        registration.addDecoratorFactory { handler ->
+            object : WebSocketHandlerDecorator(handler) {
+                override fun afterConnectionEstablished(session: WebSocketSession) {
+                    sessions.register(session)
+                    super.afterConnectionEstablished(session)
+                }
+
+                override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
+                    sessions.unregister(session.id)
+                    super.afterConnectionClosed(session, status)
+                }
+            }
+        }
     }
 
     /**
@@ -101,10 +132,24 @@ class ChatWebSocketConfiguration(
             val info = tokens.parse(token)
             if (info.type != TokenManager.Type.ACCESS) throw IllegalArgumentException("auth.invalid-token")
 
+            // HTTP 진입점과 같은 판정표를 쓴다. 두 곳이 갈리면 실시간 채널만 열린 채로 남는다.
+            // findStatus 가 던지면 그대로 올라가 CONNECT 가 끊긴다 — 보안 판정이라 조회 실패를
+            // 통과로 흘리지 않는다.
+            //
+            // 비용: 지금은 MemberReader 가 2단계 캐시를 타 DB 왕복이 거의 없다. 이 포트가 gRPC 로
+            // 나가면 CONNECT 마다 원격 왕복이 된다. 그래도 감수한다 — 소켓은 재검증 지점이 없어
+            // 연결 시점이 유일한 기회고, 빈도도 요청이 아니라 연결 단위라 낮다.
+            // 그때 캐시가 필요해지면 포트 뒤가 아니라 gRPC 클라이언트 쪽에 둔다.
+            AccountStatusPolicy.denialOf(members.findStatus(info.memberId))
+                ?.let { throw IllegalArgumentException(it.messageKey) }
+
             // 이후 프레임에서 보낸 사람을 알아야 한다(전송 권한 검사 등).
             accessor.user = UsernamePasswordAuthenticationToken(
                 info.memberId, null, listOf(SimpleGrantedAuthority(info.role))
             )
+
+            // 정지·탈퇴 시 이 세션을 찾아 끊을 수 있게 주인을 남긴다.
+            accessor.sessionId?.let { sessions.bind(it, info.memberId) }
 
             return message
         }

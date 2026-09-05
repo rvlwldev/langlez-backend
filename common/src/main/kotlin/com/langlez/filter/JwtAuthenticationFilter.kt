@@ -2,10 +2,7 @@ package com.langlez.filter
 
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.MemberReader.Status.ACTIVE
-import com.langlez.member.contract.MemberReader.Status.CREATED
-import com.langlez.member.contract.MemberReader.Status.SUSPENDED
-import com.langlez.member.contract.MemberReader.Status.WITHDRAWN
+import com.langlez.security.AccountStatusPolicy
 import com.langlez.security.TokenManager
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -71,8 +68,11 @@ class JwtAuthenticationFilter(
      * 상태 검사가 로그인·토큰 갱신에만 있으면 계정을 정지시켜도 이미 발급된 액세스 토큰이
      * 만료될 때까지 모든 API 가 그대로 통과한다. 그 구멍을 매 요청 경로에서 닫는다.
      *
-     * `CREATED` 는 막지 않는다. 가입 직후 상태가 `CREATED` 이고 이를 `ACTIVE` 로 올리는
-     * `Member.verify()` 를 호출하는 엔드포인트가 아직 없다. 여기서 막으면 신규 가입자가 전부 잠긴다.
+     * 판정 자체는 [AccountStatusPolicy] 에 있다. 실시간 채널의 CONNECT 도 같은 표를 봐야
+     * 한쪽만 막히는 구멍이 생기지 않는다.
+     *
+     * `members.findStatus` 가 던지면 그대로 올라가 요청이 거부된다. 보안 판정이라
+     * 조회 실패를 통과로 흘리지 않는다.
      */
     private fun requireUsableAccount(id: Long, uri: String) {
         // 정지·탈퇴 회원도 로그아웃은 할 수 있어야 리프레시 토큰과 기기 바인딩이 정리된다.
@@ -80,14 +80,8 @@ class JwtAuthenticationFilter(
         // 여기서 빼도 정지 회원이 세션을 연장할 구멍은 생기지 않는다.
         if (uri.startsWith(AUTH_PATH_PREFIX)) return
 
-        when (members.findStatus(id)) {
-            CREATED, ACTIVE -> Unit
-            SUSPENDED -> throw LanglezException(HttpStatus.FORBIDDEN, "member.suspended")
-            WITHDRAWN -> throw LanglezException(HttpStatus.FORBIDDEN, "member.withdrawn")
-            // 회원 행은 탈퇴해도 남는다. 없다는 건 실재하지 않는 id 를 담은 토큰이라는 뜻이라
-            // 갱신 경로(AuthService.refresh)와 같이 401 로 다시 로그인시킨다.
-            null -> throw LanglezException(HttpStatus.UNAUTHORIZED, "auth.invalid-token")
-        }
+        AccountStatusPolicy.denialOf(members.findStatus(id))
+            ?.let { throw LanglezException(it.status, it.messageKey) }
     }
 
     companion object {
