@@ -16,6 +16,7 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.Date
+import java.util.UUID
 import javax.crypto.SecretKey
 
 /**
@@ -83,11 +84,20 @@ class TokenManager(
 
     fun isRevoked(token: String): Boolean = redisson.getBucket<String>(revocationKey(token)).isExists
 
+    /**
+     * `jti` 를 반드시 넣는다. `iat`/`exp` 는 초 단위라 같은 초에 같은 클레임으로 발급하면
+     * **문자열이 완전히 같은 토큰**이 나온다. 리프레시 회전은 저장된 토큰을 새 토큰으로
+     * 원자 교체하는데, 두 토큰이 같으면 교체가 성공한 것처럼 보이면서 실제로는 제자리라
+     * 그 1초 안에 탈취된 토큰이 회전으로 무효화되지 않는다.
+     *
+     * 이미 발급된 토큰에는 `jti` 가 없지만 파싱은 이 클레임을 읽지 않으므로 그대로 통한다.
+     */
     private fun issue(id: Long, username: String, role: String, type: Type, ttlSeconds: Long): String {
         val now = Instant.now()
         val expiration = now.plus(Duration.ofSeconds(ttlSeconds))
 
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(id.toString())
             .claim("username", username)
             .claim("role", role)
