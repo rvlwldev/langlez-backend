@@ -1,6 +1,7 @@
 package com.langlez.member.application
 
 import com.langlez.exception.LanglezException
+import com.langlez.member.contract.MemberSuspendedEvent
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.MemberSuspendHistory
@@ -14,14 +15,16 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.context.ApplicationEventPublisher
 
 class MemberSuspenderTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val suspendRepo = mockk<MemberSuspendHistoryRepository>(relaxed = true)
-    val suspender = MemberSuspender(repo, suspendRepo)
+    val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
+    val suspender = MemberSuspender(repo, suspendRepo, publisher)
 
-    afterEach { clearMocks(repo, suspendRepo, answers = false) }
+    afterEach { clearMocks(repo, suspendRepo, publisher, answers = false) }
 
     fun member(id: Long = 1L, status: Member.Status = Member.Status.ACTIVE) = Member(
         id = id,
@@ -41,6 +44,10 @@ class MemberSuspenderTest : BehaviorSpec({
             val saved = slot<MemberSuspendHistory>()
             every { suspendRepo.save(capture(saved)) } answers { firstArg() }
 
+            // afterEach 의 clearMocks 가 Then 사이에 돌아 호출 기록을 지운다. verify 대신 슬롯에 담는다.
+            val published = slot<Any>()
+            every { publisher.publishEvent(capture(published)) } answers { }
+
             suspender.suspend(1L, reason = "policy violation", days = null, actorId = 7L)
 
             Then("상태가 SUSPENDED 로 바뀌어 저장된다") {
@@ -55,6 +62,12 @@ class MemberSuspenderTest : BehaviorSpec({
             // releaseAt 이 null 이면 만료 배치가 집지 않는다. 무기한 정지는 사람이 풀어야 한다.
             Then("기간이 없으면 releaseAt 이 비어 있다") {
                 saved.captured.releaseAt shouldBe null
+            }
+
+            // 실시간 채널이 이 이벤트를 받아 열린 세션을 끊는다. 안 내보내면 HTTP 만 막히고
+            // 이미 붙어 있던 소켓은 그대로 살아남는다.
+            Then("정지 이벤트가 발행된다") {
+                published.captured shouldBe MemberSuspendedEvent(1L)
             }
         }
 
