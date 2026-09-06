@@ -65,7 +65,7 @@ class WaveService(
      * ([WaveSessionRepository.joinIfNotFull]). 락도, 대기도, 조용한 스킵도 없어진다.
      *
      * 감수하는 창: 방이 열려 있는지 본 뒤 등록하기까지 사이에 방장이 방을 닫을 수 있다.
-     * 그러면 이미 닫힌 방의 참여자 집합에 한 명이 남는데, TTL(6시간)이 치운다.
+     * 그러면 이미 닫힌 방의 참여자 집합에 한 명이 남는데, TTL(6시간)과 [WaveRoomReaper] 가 치운다.
      * 이 창은 락이 있던 시절에도 있었다 — `end`/`leave` 는 같은 락을 잡지 않았다.
      */
     fun join(roomId: Long, memberId: Long) {
@@ -109,6 +109,19 @@ class WaveService(
         participantOrThrow(roomId, memberId)
 
         return sessions.recentChats(roomId)
+    }
+
+    /**
+     * 아무도 없는 방을 닫는다. [WaveRoomReaper] 의 진입점이다.
+     *
+     * 명시적 퇴장([leave])과 방장 종료([end]) 만으로는 죽은 방이 남는다 — 앱을 강제 종료하면
+     * `DELETE .../participants/me` 가 오지 않고, WebSocket 종료 이벤트조차 인스턴스가
+     * 통째로 죽으면 발행되지 않는다. `wave_rooms.ended_at` 은 TTL 이 없어 그대로 굳는다.
+     */
+    fun closeIfAbandoned(roomId: Long) {
+        if (sessions.participants(roomId).isNotEmpty()) return
+
+        close(roomId)
     }
 
     private fun close(roomId: Long) {

@@ -215,4 +215,45 @@ class WaveServiceTest : BehaviorSpec({
         }
     }
 
+    Given("버려진 방을 정리할 때") {
+
+        When("아직 사람이 남아 있으면") {
+            Then("방을 건드리지 않는다") {
+                every { sessions.participants(roomId) } returns setOf(host)
+
+                service.closeIfAbandoned(roomId)
+
+                verify(exactly = 0) { repo.save(any()) }
+                verify(exactly = 0) { sessions.clear(roomId) }
+            }
+        }
+
+        When("아무도 없으면") {
+            Then("ended_at 을 채워 목록에서 내린다") {
+                val target = room()
+                every { sessions.participants(roomId) } returns emptySet()
+                every { repo.find(roomId) } returns target
+                every { repo.save(any()) } answers { firstArg() }
+
+                service.closeIfAbandoned(roomId)
+
+                target.isEnded() shouldBe true
+                verify { sessions.clear(roomId) }
+            }
+        }
+
+        When("이미 닫힌 방이면") {
+            Then("종료 시각을 덮어쓰지 않는다") {
+                val target = room(ended = true)
+                val endedAt = target.endedAt
+                every { sessions.participants(roomId) } returns emptySet()
+                every { repo.find(roomId) } returns target
+
+                service.closeIfAbandoned(roomId)
+
+                target.endedAt shouldBe endedAt
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+    }
 })

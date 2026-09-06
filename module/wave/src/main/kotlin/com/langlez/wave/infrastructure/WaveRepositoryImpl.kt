@@ -6,6 +6,7 @@ import com.langlez.wave.infrastructure.jpa.WaveRoomJpaRepository
 import org.springframework.data.domain.Pageable
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
+import java.time.Instant
 
 /**
  * 방 저장소 어댑터.
@@ -22,4 +23,7 @@ class WaveRepositoryImpl(private val jpa: WaveRoomJpaRepository) : WaveRepositor
     // 첫 페이지는 커서가 없다. 상한값으로 시작하면 분기 없이 같은 쿼리 하나로 끝난다.
     override fun findAllOpen(size: Int, cursor: Long?): List<WaveRoom> =
         jpa.findAllByEndedAtIsNullAndIdLessThanOrderByIdDesc(cursor ?: Long.MAX_VALUE, Pageable.ofSize(size))
+
+    override fun findOpenStartedBefore(startedBefore: Instant, limit: Int): List<WaveRoom> =
+        jpa.findAllByEndedAtIsNullAndStartedAtLessThanOrderByIdAsc(startedBefore, Pageable.ofSize(limit))
 }
