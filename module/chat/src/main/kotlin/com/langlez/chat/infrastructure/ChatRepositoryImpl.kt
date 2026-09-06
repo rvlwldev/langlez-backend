@@ -10,6 +10,7 @@ import com.langlez.chat.infrastructure.jpa.ChatRoomMemberJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Propagation.REQUIRES_NEW
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import com.langlez.chat.domain.QChatRoom.Companion.chatRoom as QChatRoom
@@ -46,8 +47,18 @@ class ChatRepositoryImpl(
      * 회원 쌍 충돌(동시 생성)은 여기서 삼키지 않는다. 이 트랜잭션은 제약 위반 시점에 이미
      * rollback-only 로 표시돼 잡아 봐야 커밋에서 `UnexpectedRollbackException` 이 난다.
      * 이 트랜잭션이 끝난 뒤 `ChatService.getOrCreateRoom` 이 밖에서 잡아 기존 방을 돌려준다.
+     *
+     * **`REQUIRES_NEW` 를 지우지 마라.** 지금은 컨트롤러에서만 들어와 외부 트랜잭션이 없으니
+     * 기본 전파(`REQUIRED`)로도 같게 동작한다. 하지만 매칭 성사 처리·온보딩·배치처럼
+     * 이미 `@Transactional` 인 곳에서 `getOrCreateRoom` 을 부르는 순간, 이 메서드가 그 트랜잭션에
+     * 그대로 참여해 유니크 위반이 **외부 트랜잭션을 rollback-only 로 마킹한다.** 그러면 서비스가
+     * 예외를 잡아 기존 방을 정상 반환해도 외부 커밋에서 `UnexpectedRollbackException` 이 나
+     * 500 이 된다 — 밖에서 잡는다는 설계 자체가 호출 컨텍스트에 따라 무너진다.
+     *
+     * 대가로 커넥션을 하나 더 쓴다(바깥 트랜잭션이 자기 커넥션을 쥔 채 이쪽을 기다린다).
+     * 방 생성은 사람이 채팅을 처음 여는 순간에만 일어나는 저빈도 경로라 그 비용을 감수한다.
      */
-    @Transactional
+    @Transactional(propagation = REQUIRES_NEW)
     override fun createRoom(a: Long, b: Long): ChatRoom = rooms.save(ChatRoom.between(a, b)).also { room ->
         participants.saveAll(listOf(ChatRoomMember(room.id, a), ChatRoomMember(room.id, b)))
     }

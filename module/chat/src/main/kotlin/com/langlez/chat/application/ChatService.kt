@@ -52,7 +52,8 @@ class ChatService(
      * 막는 건 `UNQ_CHAT_ROOM_PAIR`(V19) 뿐이고, 진 쪽은 그 방을 받아야지 500 을 보면 안 된다.
      * 그런데 충돌을 **같은 트랜잭션 안에서** 잡으면 하이버네이트가 이미 rollback-only 로 표시한 뒤라
      * 정상 반환해도 커밋에서 `UnexpectedRollbackException` 이 난다(`ReportService.report` 와 같은 함정).
-     * 그래서 `createRoom` 이 자기 트랜잭션을 갖게 두고, 재조회는 그 트랜잭션이 끝난 뒤 새 트랜잭션에서 한다.
+     * 그래서 `createRoom` 이 자기 트랜잭션(`REQUIRES_NEW`)을 갖게 두고, 재조회는 그 트랜잭션이
+     * 끝난 뒤 새 트랜잭션에서 한다. 여기에 `@Transactional` 을 붙이면 그 함정이 그대로 되살아난다.
      */
     fun getOrCreateRoom(memberId: Long, partnerId: Long): ChatRoom {
         if (memberId == partnerId) throw LanglezException(BAD_REQUEST, "chat.self-room")
