@@ -24,11 +24,23 @@
 --
 -- ── 부분 인덱스가 실제로 선택되려면 status 조건이 상수여야 한다
 -- 플래너는 술어를 증명해야 부분 인덱스를 쓴다. status 가 바인드 파라미터로 나가면
--- `status = $1` 이 `status = 'PENDING'` 을 함의한다고 증명하지 못해 인덱스가 통째로 버려진다.
--- 다행히 이 쿼리는 파생 쿼리의 기본 인자(OutBoxRepository.fetch 가 넘기는 Status.PENDING)를
--- Hibernate 가 SQL 에 인라인한다 — 실행 로그가 `where status='PENDING' and tries<=3`,
--- params 는 빈 문자열이다(PerformanceLogger 로 확인). 이 조건을 파라미터로 바꾸면
--- 컴파일도 테스트도 통과한 채 인덱스만 조용히 안 타게 되니 주의한다.
+-- generic plan 에서 `status = $1` 이 `status = 'PENDING'` 을 함의한다고 증명하지 못해
+-- 인덱스가 통째로 버려진다. 2초마다 도는 폴러는 pgjdbc prepareThreshold(기본 5)를 즉시 넘겨
+-- 서버사이드 PREPARE 로 가므로 이건 예외 상황이 아니라 정상 운영 상태다.
+-- 아카이브 직후(06:00)나 앱 재시작 직후처럼 테이블이 거의 빈 시점에 그 전환이 일어나면
+-- Seq Scan 추정 비용이 낮아 플래너가 generic plan 을 영구 채택하고, 그 커넥션이 닫힐 때까지
+-- custom plan 으로 안 돌아온다 — 낮에 수만 건이 쌓여도 계속 전량 Seq Scan 이다.
+--
+-- 그래서 폴링 쿼리를 파생 쿼리에서 `@Query` 로 바꿔 status 를 JPQL 상수로 박았다
+-- (`OutBoxRepository.findPendingOrderByCreatedAtAsc`). 파생 쿼리 시그니처의 기본값
+-- (`status: Status = PENDING`)으로는 안 된다 — Kotlin 이 호출 측에서 채우는 값일 뿐
+-- Hibernate 에게는 그냥 바인드 인자다. 이 조건을 다시 파라미터로 돌리면 컴파일도 통과하고
+-- 리터럴 SQL EXPLAIN 도 통과한 채 인덱스만 조용히 안 타게 된다.
+--
+-- **P6Spy 로그로 확인하지 마라.** `sqlWithValues` 가 `?` 를 값으로 치환해 보여줘서
+-- (`P6SpyEventListener.kt`) 바인드인지 리터럴인지 구분이 안 된다 — 이 PR 의 첫 판이 정확히
+-- 그 로그를 근거로 "Hibernate 가 인라인한다"고 잘못 적었다. 서버가 받은 SQL 을 봐야 한다
+-- (`postgres -c log_statement=all`). `MemberOutBoxIndexIntegrationTest` 가 그 방식으로 본다.
 --
 -- concurrently 는 쓰지 않는다. 아직 운영 배포 전이라 잠글 트래픽이 없고, 무엇보다
 -- CREATE INDEX CONCURRENTLY 는 기존 트랜잭션이 전부 끝나기를 기다려 통합테스트를 세운다(V8 참고).
