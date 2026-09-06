@@ -34,6 +34,25 @@ class ChatDomainTest : BehaviorSpec({
         // 별도 아웃박스 행 없이 이 플래그가 발행 여부를 기억한다. 단일 문서 쓰기라 원자적이다.
         Then("발행 표시가 남는다") { m.published shouldBe true }
     }
+    Given("어느 순서로 방을 만들어도") {
+        // 정렬이 어긋나면 (a,b) 와 (b,a) 가 다른 행이 돼 UNQ_CHAT_ROOM_PAIR 를 그냥 통과한다.
+        Then("회원 쌍이 오름차순으로 정규화된다") {
+            val one = ChatRoom.between(10L, 20L)
+            val other = ChatRoom.between(20L, 10L)
+            one.memberA shouldBe 10L
+            one.memberB shouldBe 20L
+            other.memberA shouldBe one.memberA
+            other.memberB shouldBe one.memberB
+        }
+    }
+    Given("정규화하지 않고 생성자를 직접 부르면") {
+        Then("역순이면 거부된다") {
+            shouldThrow<IllegalArgumentException> { ChatRoom(memberA = 20L, memberB = 10L) }
+        }
+        Then("자기 자신과의 방도 거부된다") {
+            shouldThrow<IllegalArgumentException> { ChatRoom(memberA = 10L, memberB = 10L) }
+        }
+    }
     Given("참여자가 나갔다가 상대가 메시지를 보내면") {
         val p = ChatRoomMember(roomId = 1L, memberId = 10L).apply { leave(Instant.now()) }
         p.rejoin()
