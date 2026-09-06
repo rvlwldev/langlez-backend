@@ -41,7 +41,7 @@ class ChatControllerTest : BehaviorSpec({
 
     Given("방 생성 요청 시") {
         When("상대 id를 보내면") {
-            every { service.getOrCreateRoom(10L, 20L) } returns ChatRoom(id = 1L)
+            every { service.getOrCreateRoom(10L, 20L) } returns ChatRoom(memberA = 10L, memberB = 20L, id = 1L)
 
             Then("방 응답을 돌려주고 인증된 회원 id로 서비스를 부른다") {
                 val response = controller.createRoom(10L, ChatRoomCreateRequest(partnerId = 20L))
@@ -64,7 +64,8 @@ class ChatControllerTest : BehaviorSpec({
         }
 
         When("방이 있으면") {
-            val room = ChatRoom(id = 1L).apply { onMessage("hi", Instant.parse("2026-08-13T00:00:00Z")) }
+            val room = ChatRoom(memberA = 10L, memberB = 20L, id = 1L)
+                .apply { onMessage("hi", Instant.parse("2026-08-13T00:00:00Z")) }
             every { service.listRooms(10L, 20, null) } returns
                 listOf(ChatRoomSummary(room = room, partnerId = 20L, unreadCount = 3L))
 

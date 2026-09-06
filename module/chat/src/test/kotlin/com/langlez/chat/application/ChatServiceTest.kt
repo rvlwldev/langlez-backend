@@ -56,7 +56,7 @@ class ChatServiceTest : BehaviorSpec({
             Then("새로 만든다") {
                 every { blocks.isBlockedBetween(me, partner) } returns false
                 every { repo.findRoomBetween(me, partner) } returns null
-                every { repo.createRoom(me, partner) } returns ChatRoom(id = roomId)
+                every { repo.createRoom(me, partner) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
 
                 service.getOrCreateRoom(me, partner).id shouldBe roomId
                 verify { repo.createRoom(me, partner) }
@@ -66,7 +66,7 @@ class ChatServiceTest : BehaviorSpec({
         When("이미 방이 있으면") {
             Then("기존 방을 그대로 쓴다 (방이 두 개 생기지 않는다)") {
                 every { blocks.isBlockedBetween(me, partner) } returns false
-                every { repo.findRoomBetween(me, partner) } returns ChatRoom(id = roomId)
+                every { repo.findRoomBetween(me, partner) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
 
                 service.getOrCreateRoom(me, partner).id shouldBe roomId
                 verify(exactly = 0) { repo.createRoom(any(), any()) }
@@ -97,8 +97,8 @@ class ChatServiceTest : BehaviorSpec({
 
         When("내가 나간 방이 섞여 있으면") {
             Then("나간 방은 목록에서 빠진다") {
-                val stayed = ChatRoomSummary(ChatRoom(id = roomId), partner, 3)
-                val left = ChatRoomSummary(ChatRoom(id = 200L), 3L, 0)
+                val stayed = ChatRoomSummary(ChatRoom(memberA = 10L, memberB = 20L, id = roomId), partner, 3)
+                val left = ChatRoomSummary(ChatRoom(memberA = 10L, memberB = 20L, id = 200L), 3L, 0)
 
                 every { repo.findRoomSummaries(me, 10, null) } returns listOf(stayed, left)
                 every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
@@ -193,7 +193,7 @@ class ChatServiceTest : BehaviorSpec({
 
         When("사진을 붙여 보내면") {
             Then("첨부는 트랜잭션 밖에서 확정되고, 저장 뒤 방 미리보기 갱신·브로드캐스트가 일어난다") {
-                val room = ChatRoom(id = roomId)
+                val room = ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
 
                 every { repo.findParticipants(roomId) } returns bothParticipants()
                 every { blocks.isBlockedBetween(me, partner) } returns false
@@ -224,7 +224,7 @@ class ChatServiceTest : BehaviorSpec({
             Then("알림 이벤트를 여기서 발행하지 않고 미발행 상태로 남긴다") {
                 every { repo.findParticipants(roomId) } returns bothParticipants()
                 every { blocks.isBlockedBetween(me, partner) } returns false
-                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.findRoom(roomId) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
                 every { repo.saveParticipant(any()) } answers { firstArg() }
                 every { repo.increaseUnread(any(), any()) } returns Unit
                 every { messages.nextSeq(roomId) } returns 1L
@@ -241,7 +241,7 @@ class ChatServiceTest : BehaviorSpec({
             Then("Mongo 저장이 Postgres 갱신보다 먼저 일어난다") {
                 every { repo.findParticipants(roomId) } returns bothParticipants()
                 every { blocks.isBlockedBetween(me, partner) } returns false
-                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.findRoom(roomId) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
                 every { repo.saveParticipant(any()) } answers { firstArg() }
                 every { repo.increaseUnread(any(), any()) } returns Unit
                 every { messages.nextSeq(roomId) } returns 1L
@@ -262,7 +262,7 @@ class ChatServiceTest : BehaviorSpec({
 
                 every { repo.findParticipants(roomId) } returns participants
                 every { blocks.isBlockedBetween(me, partner) } returns false
-                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.findRoom(roomId) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
                 every { repo.saveParticipant(any()) } answers { firstArg() }
                 every { repo.increaseUnread(any(), any()) } returns Unit
                 every { messages.nextSeq(roomId) } returns 1L
@@ -297,7 +297,7 @@ class ChatServiceTest : BehaviorSpec({
 
                 every { repo.findParticipants(roomId) } returns participants
                 every { blocks.isBlockedBetween(me, partner) } returns false
-                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.findRoom(roomId) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
                 every { repo.saveParticipant(any()) } answers { firstArg() }
                 every { repo.increaseUnread(any(), any()) } returns Unit
                 every { messages.nextSeq(roomId) } returns 1L

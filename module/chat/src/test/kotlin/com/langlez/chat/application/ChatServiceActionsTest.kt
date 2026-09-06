@@ -125,7 +125,7 @@ class ChatServiceActionsTest : BehaviorSpec({
                 every { messages.find("m7") } returns message
                 every { messages.save(any()) } answers { firstArg() }
                 every { messages.findByRoom(roomId, 1, null) } returns listOf(message)
-                every { repo.findRoom(roomId) } returns ChatRoom(id = roomId)
+                every { repo.findRoom(roomId) } returns ChatRoom(memberA = 10L, memberB = 20L, id = roomId)
 
                 service.deleteMessage(me, "m7")
 
@@ -149,7 +149,10 @@ class ChatServiceActionsTest : BehaviorSpec({
                     roomId, me, 3L, ChatMessage.Type.TEXT, "010-1234-5678",
                     createdAt = sentAt.truncatedTo(ChronoUnit.MILLIS),
                 ).apply { id = "m7" }
-                val room = ChatRoom(id = roomId, lastMessageAt = sentAt, lastMessagePreview = "010-1234-5678")
+                val room = ChatRoom(
+                    memberA = 10L, memberB = 20L, id = roomId,
+                    lastMessageAt = sentAt, lastMessagePreview = "010-1234-5678",
+                )
 
                 every { messages.find("m7") } returns message
                 every { messages.save(any()) } answers { firstArg() }
@@ -169,7 +172,10 @@ class ChatServiceActionsTest : BehaviorSpec({
                 // 판정 시점엔 m7 이 마지막이었지만, 트랜잭션에 들어가기 전 send() 가 먼저 커밋해
                 // 방 메타는 이미 새 메시지로 넘어가 있다.
                 val newerAt = message.createdAt.plusMillis(50)
-                val room = ChatRoom(id = roomId, lastMessageAt = newerAt, lastMessagePreview = "그 뒤에 온 말")
+                val room = ChatRoom(
+                    memberA = 10L, memberB = 20L, id = roomId,
+                    lastMessageAt = newerAt, lastMessagePreview = "그 뒤에 온 말",
+                )
 
                 every { messages.find("m7") } returns message
                 every { messages.save(any()) } answers { firstArg() }

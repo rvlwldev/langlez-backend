@@ -28,21 +28,27 @@ class ChatRepositoryImpl(
 ) : ChatRepository {
 
     /**
-     * 1:1 방은 참여자 두 행으로만 식별된다. 방에 memberA/memberB 컬럼을 두면
-     * (a,b) 와 (b,a) 를 정규화해 넣어야 하고 한 곳이라도 빼먹으면 방이 두 개 생긴다.
-     * 참여자 테이블을 두 번 조인하면 인자 순서와 무관해진다.
+     * 1:1 방은 정규화된 회원 쌍(member_a < member_b)으로 식별한다.
+     *
+     * 참여자 테이블을 두 번 조인하는 방식은 인자 순서와 무관하다는 장점이 있었지만
+     * "쌍"에 유니크를 걸 자리가 없어 동시 생성 시 방이 둘로 갈렸다(V19 가 UNQ_CHAT_ROOM_PAIR 를 건다).
+     * 조회도 같은 컬럼으로 옮긴다 — 앱이 찾는 조건과 DB 가 막는 조건이 어긋나면
+     * 앱이 "없다"고 본 방을 DB 가 거부해 500 이 된다. 정규화 규칙은 [ChatRoom.between] 과 같다.
      */
-    override fun findRoomBetween(a: Long, b: Long): ChatRoom? {
-        val one = QChatRoomMember("one")
-        val other = QChatRoomMember("other")
-
-        return dsl.selectFrom(QChatRoom)
-            .join(one).on(one.roomId.eq(QChatRoom.id), one.memberId.eq(a))
-            .join(other).on(other.roomId.eq(QChatRoom.id), other.memberId.eq(b))
+    override fun findRoomBetween(a: Long, b: Long): ChatRoom? =
+        dsl.selectFrom(QChatRoom)
+            .where(QChatRoom.memberA.eq(minOf(a, b)), QChatRoom.memberB.eq(maxOf(a, b)))
             .fetchFirst()
-    }
 
-    override fun createRoom(a: Long, b: Long): ChatRoom = rooms.save(ChatRoom()).also { room ->
+    /**
+     * 방과 참여자 두 행은 한 트랜잭션이어야 한다. 쪼개지면 참여자 없는 방이 남는다.
+     *
+     * 회원 쌍 충돌(동시 생성)은 여기서 삼키지 않는다. 이 트랜잭션은 제약 위반 시점에 이미
+     * rollback-only 로 표시돼 잡아 봐야 커밋에서 `UnexpectedRollbackException` 이 난다.
+     * 이 트랜잭션이 끝난 뒤 `ChatService.getOrCreateRoom` 이 밖에서 잡아 기존 방을 돌려준다.
+     */
+    @Transactional
+    override fun createRoom(a: Long, b: Long): ChatRoom = rooms.save(ChatRoom.between(a, b)).also { room ->
         participants.saveAll(listOf(ChatRoomMember(room.id, a), ChatRoomMember(room.id, b)))
     }
 
