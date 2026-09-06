@@ -67,6 +67,12 @@ class ProfileImageConcurrencyIntegrationTest : BehaviorSpec() {
         Given("회원이 가입되어 있을 때") {
             val memberId = 90_001L
 
+            // 다른 memberId 로 한 번 미리 호출해 Hibernate 쿼리 컴파일·AOP 프록시 초기화·Redis 연결의
+            // 콜드 스타트 지연을 흡수한다. 이게 없으면 첫 스레드의 트랜잭션이 비정상적으로 오래 걸려
+            // 나머지 스레드가 waitMs*retries(2초) 안에 락을 못 잡고 전부 실패하는 게 관측됐다 —
+            // 락 정합성과 무관한 테스트 환경의 콜드 스타트 문제라 프로덕션 타임아웃 값을 건드리지 않는다.
+            profileService.confirmAdditionalImage(90_000_001L, "profiles/warmup.jpg")
+
             When("10개의 스레드에서 동시에 confirmAdditionalImage를 호출하면") {
                 val threadCount = 10
                 val executor = Executors.newFixedThreadPool(threadCount)

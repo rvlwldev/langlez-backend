@@ -114,33 +114,31 @@ class ProfileServiceTest : BehaviorSpec({
     Given("대표 사진 업로드 확정 시") {
         every { storage.attach("profiles/new.jpg", 1L) } returns "https://cdn/profiles/new.jpg"
 
-        When("기존 대표 사진이 없을 때 새 URL로 확정하면") {
+        // confirmRepresentImage 는 profileImageLocker 를 거쳐야 정원 검사·락을 탄다 (C-11).
+        // repo 를 직접 찌르는 옛 흐름으로 되돌아가면 이 verify 가 잡는다.
+        When("확정을 요청하면") {
             val newImage = image(1L, "https://cdn/profiles/new.jpg", represent = true)
-            every { repo.findRepresentImage(1L) } returns null
-            every { repo.countImages(1L) } returns 0L
-            every { repo.saveImage(any()) } returns newImage
+            every { profileImageLocker.confirmRepresentImage(1L, "https://cdn/profiles/new.jpg") } returns newImage
 
             val result = service.confirmRepresentImage(1L, "profiles/new.jpg")
 
-            Then("대표 사진으로 저장된다") {
+            Then("ProfileImageLocker로 위임되어 대표 사진으로 저장된다") {
                 result.represent shouldBe true
                 result.url shouldBe "https://cdn/profiles/new.jpg"
+                verify { profileImageLocker.confirmRepresentImage(1L, "https://cdn/profiles/new.jpg") }
+                verify(exactly = 0) { repo.saveImage(any()) }
             }
         }
 
-        When("기존 대표 사진이 있을 때 새 URL로 확정하면") {
-            val oldRepresent = image(1L, "https://cdn/profiles/old.jpg", represent = true)
-            val newImage = image(1L, "https://cdn/profiles/new.jpg", represent = true, sequence = 2)
-            every { repo.findRepresentImage(1L) } returns oldRepresent
-            every { repo.countImages(1L) } returns 1L
-            every { repo.saveImage(match { !it.represent }) } returns oldRepresent.apply { represent = false }
-            every { repo.saveImage(match { it.represent }) } returns newImage
+        When("락 획득이 실패하면 (throwOnFailure=true → IllegalStateException)") {
+            every {
+                profileImageLocker.confirmRepresentImage(1L, "https://cdn/profiles/new.jpg")
+            } throws IllegalStateException("Lock acquisition failed for key: lock:profile-image:1")
 
-            service.confirmRepresentImage(1L, "profiles/new.jpg")
-
-            Then("기존 대표 사진의 represent가 false로 변경되고 새 대표 사진이 저장된다") {
-                verify { repo.saveImage(match { it.url == "https://cdn/profiles/old.jpg" && !it.represent }) }
-                verify { repo.saveImage(match { it.url == "https://cdn/profiles/new.jpg" && it.represent }) }
+            Then("500 이 아니라 409 CONFLICT 로 변환된다") {
+                shouldThrow<LanglezException> {
+                    service.confirmRepresentImage(1L, "profiles/new.jpg")
+                }.status.value() shouldBe HttpStatus.CONFLICT.value()
             }
         }
     }
@@ -158,6 +156,19 @@ class ProfileServiceTest : BehaviorSpec({
                 result.represent shouldBe false
                 result.url shouldBe "https://cdn/profiles/add.jpg"
                 verify { profileImageLocker.confirmAdditionalImage(1L, "https://cdn/profiles/add.jpg") }
+            }
+        }
+
+        // throwOnFailure=false 였으면 null 이 non-null 반환 타입으로 흘러 NPE → 500 이었다 (C-11 (a)).
+        When("락 획득이 실패하면 (throwOnFailure=true → IllegalStateException)") {
+            every {
+                profileImageLocker.confirmAdditionalImage(1L, "https://cdn/profiles/add.jpg")
+            } throws IllegalStateException("Lock acquisition failed for key: lock:profile-image:1")
+
+            Then("500 이 아니라 409 CONFLICT 로 변환된다") {
+                shouldThrow<LanglezException> {
+                    service.confirmAdditionalImage(1L, "profiles/add.jpg")
+                }.status.value() shouldBe HttpStatus.CONFLICT.value()
             }
         }
     }

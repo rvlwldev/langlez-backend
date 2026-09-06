@@ -45,16 +45,16 @@ class ProfileImageConfirmTest : BehaviorSpec({
 
     Given("대표 이미지를 key 로 확정하면") {
         every { storage.attach("profiles/2026/uuid_photo.jpg", 1L) } returns "https://cdn/profiles/2026/uuid_photo.jpg"
-        every { repo.findRepresentImage(1L) } returns null
-        every { repo.countImages(1L) } returns 0L
-        every { repo.saveImage(any()) } answers { firstArg() }
+        every {
+            locker.confirmRepresentImage(1L, "https://cdn/profiles/2026/uuid_photo.jpg")
+        } returns ProfileImage(1L, "https://cdn/profiles/2026/uuid_photo.jpg", 1L, 0L, true)
 
         val saved = service.confirmRepresentImage(1L, "profiles/2026/uuid_photo.jpg")
 
-        Then("스토리지가 확인해 돌려준 URL 만 저장된다") {
+        Then("스토리지가 확인해 돌려준 URL 만 locker 에 전달되어 저장된다") {
             saved.url shouldBe "https://cdn/profiles/2026/uuid_photo.jpg"
             verify { storage.attach("profiles/2026/uuid_photo.jpg", 1L) }
-            verify { repo.saveImage(match<ProfileImage> { it.url == "https://cdn/profiles/2026/uuid_photo.jpg" }) }
+            verify { locker.confirmRepresentImage(1L, "https://cdn/profiles/2026/uuid_photo.jpg") }
         }
     }
 
