@@ -9,6 +9,18 @@ package com.langlez.wave.domain
 interface WaveSessionRepository {
 
     fun join(roomId: Long, memberId: Long)
+
+    /**
+     * 정원이 남아 있을 때만 참여자로 넣는다. 이미 참여 중이면 아무것도 바꾸지 않고 `true`.
+     *
+     * 정원 검사와 등록이 **한 번의 원자 연산**이어야 한다. 둘로 갈리면 두 사람이 동시에
+     * 마지막 자리를 가져간다. 분산 락으로 감싸는 방법도 있지만 그쪽은 락을 못 잡았을 때
+     * 조용히 넘어가는 경로가 생기고, 그러면 사용자는 성공을 받고도 참여자가 아니게 된다.
+     *
+     * @return 정원에 들어갔으면 `true`, 방이 이미 찼으면 `false`
+     */
+    fun joinIfNotFull(roomId: Long, memberId: Long, maxParticipants: Int): Boolean
+
     fun leave(roomId: Long, memberId: Long)
 
     fun participants(roomId: Long): Set<Long>

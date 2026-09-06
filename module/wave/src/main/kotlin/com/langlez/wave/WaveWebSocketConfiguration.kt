@@ -15,6 +15,9 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
  * 인가(SUBSCRIBE)는 `common` 의 `WebSocketSubscriptionGate` 가 한 지점에서 처리한다.
  * 이 모듈은 `WaveSubscriptionAuthorizer` 로 "내 토픽은 이렇게 판정한다"만 선언한다 —
  * 여기서 인터셉터를 따로 달면 다시 모듈마다 기본 통과가 생긴다.
+ *
+ * 세션 종료 정리는 [WaveSessionLifecycleListener] 가 맡는다. chat 처럼 여기 `@Bean` 으로
+ * 넣지 않는 이유는 그쪽 KDoc 에 있다.
  */
 @Configuration
 class WaveWebSocketConfiguration : WebSocketMessageBrokerConfigurer {
