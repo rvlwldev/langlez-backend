@@ -8,6 +8,9 @@ import java.time.Instant
 
 @Entity
 @EntityListeners(AuditingEntityListener::class)
+// 타임라인 인덱스는 `deleted_at is null` 부분 인덱스라 JPA 의 @Index 로 표현할 방법이 없다.
+// 실제 DDL 은 V18 이 만든다 (IDX_POST_AUTHOR (author_id, id desc) where deleted_at is null).
+// validate 는 인덱스를 보지 않으니 여기 선언이 없다고 인덱스가 없는 게 아니다.
 @Table(name = "posts")
 class Post(
     @Id @GeneratedValue(strategy = IDENTITY)

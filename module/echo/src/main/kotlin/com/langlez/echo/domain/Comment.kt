@@ -8,6 +8,8 @@ import java.time.Instant
 
 @Entity
 @EntityListeners(AuditingEntityListener::class)
+// Post 와 같은 이유로 인덱스 선언이 없다. 실제 DDL 은 V18 이 만든다
+// (IDX_COMMENT_POST (post_id, id) where deleted_at is null).
 @Table(name = "comments")
 class Comment(
     @Id @GeneratedValue(strategy = IDENTITY)

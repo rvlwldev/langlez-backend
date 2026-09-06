@@ -21,6 +21,9 @@ dependencies {
 
     ksp(libs.dependency.querydsl.ksp)
 
+    // common 의 JwtAuthenticationFilter 가 MemberReader 를 요구한다. TestEchoApplication 이 대역을 올린다
+    testImplementation(project(":module:member-api"))
+
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.bundles.testcontainers)
