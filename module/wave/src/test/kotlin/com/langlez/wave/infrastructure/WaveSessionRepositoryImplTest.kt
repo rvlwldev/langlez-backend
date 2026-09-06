@@ -91,4 +91,51 @@ class WaveSessionRepositoryImplTest : BehaviorSpec({
             sessions.participants(roomId).size shouldBeGreaterThan 0
         }
     }
+
+    Given("정원 검사와 등록을 한 번에 맡길 때") {
+
+        Then("자리가 남아 있으면 넣는다") {
+            val roomId = 10L
+
+            sessions.joinIfNotFull(roomId, 1L, 2) shouldBe true
+            sessions.isParticipant(roomId, 1L) shouldBe true
+        }
+
+        Then("정원이 찼으면 넣지 않고 거절을 알린다") {
+            val roomId = 11L
+            sessions.joinIfNotFull(roomId, 1L, 2) shouldBe true
+            sessions.joinIfNotFull(roomId, 2L, 2) shouldBe true
+
+            sessions.joinIfNotFull(roomId, 3L, 2) shouldBe false
+            sessions.participants(roomId) shouldContainExactly setOf(1L, 2L)
+        }
+
+        Then("이미 참여 중이면 정원이 차 있어도 되돌아올 수 있다") {
+            val roomId = 12L
+            sessions.joinIfNotFull(roomId, 1L, 1) shouldBe true
+
+            // 재입장을 정원으로 막으면 끊긴 사람이 자기가 차지한 자리 때문에 다시 못 들어온다.
+            sessions.joinIfNotFull(roomId, 1L, 1) shouldBe true
+            sessions.participants(roomId) shouldContainExactly setOf(1L)
+        }
+
+        Then("방을 연 사람(join)과 같은 집합에 담긴다") {
+            val roomId = 13L
+            sessions.join(roomId, 1L)
+
+            // 스크립트와 RSet 이 서로 다른 코덱을 쓰면 같은 회원이 두 번 담겨 정원이 조용히 샌다.
+            sessions.joinIfNotFull(roomId, 1L, 2) shouldBe true
+            sessions.joinIfNotFull(roomId, 2L, 2) shouldBe true
+            sessions.joinIfNotFull(roomId, 3L, 2) shouldBe false
+
+            sessions.participants(roomId) shouldContainExactly setOf(1L, 2L)
+        }
+
+        Then("TTL 이 걸려 방이 죽어도 참여자가 남지 않는다") {
+            val roomId = 14L
+            sessions.joinIfNotFull(roomId, 1L, 2) shouldBe true
+
+            redisson.getSet<String>("wave:room:$roomId:participants").remainTimeToLive() shouldBeGreaterThan 0
+        }
+    }
 })

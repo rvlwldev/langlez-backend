@@ -2,6 +2,7 @@ package com.langlez.wave.application
 
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
+import com.langlez.redis.distributedLock.DistributedLock
 import com.langlez.wave.domain.WaveChat
 import com.langlez.wave.domain.WaveRepository
 import com.langlez.wave.domain.WaveRoom
@@ -9,6 +10,7 @@ import com.langlez.wave.domain.WaveSessionRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
 import io.mockk.every
@@ -57,23 +59,22 @@ class WaveServiceTest : BehaviorSpec({
         When("정원이 이미 찼으면") {
             Then("409 로 거부한다") {
                 every { repo.find(roomId) } returns room(maxParticipants = 4)
-                every { sessions.isParticipant(roomId, 9L) } returns false
-                every { sessions.participants(roomId) } returns setOf(1L, 2L, 3L, 4L)
+                every { sessions.joinIfNotFull(roomId, 9L, 4) } returns false
 
                 shouldThrow<LanglezException> { service.join(roomId, 9L) }.status.value() shouldBe 409
-                verify(exactly = 0) { sessions.join(roomId, 9L) }
             }
         }
 
         When("자리가 남아 있으면") {
-            Then("참여자로 등록한다") {
+            Then("정원과 등록을 한 번에 맡긴다") {
                 every { repo.find(roomId) } returns room(maxParticipants = 4)
-                every { sessions.isParticipant(roomId, 9L) } returns false
-                every { sessions.participants(roomId) } returns setOf(1L, 2L)
+                every { sessions.joinIfNotFull(roomId, 9L, 4) } returns true
 
                 service.join(roomId, 9L)
 
-                verify { sessions.join(roomId, 9L) }
+                // 정원을 따로 세어 보고 등록하면 그 사이에 남이 마지막 자리를 가져간다.
+                verify { sessions.joinIfNotFull(roomId, 9L, 4) }
+                verify(exactly = 0) { sessions.participants(roomId) }
             }
         }
 
@@ -200,4 +201,18 @@ class WaveServiceTest : BehaviorSpec({
             }
         }
     }
+
+    Given("입장 진입점은") {
+        When("어노테이션을 보면") {
+            Then("조용히 건너뛰는 @DistributedLock 이 붙어 있지 않다") {
+                // @DistributedLock 기본값은 waitMs=0, retries=0, throwOnFailure=false 다.
+                // 락을 못 잡으면 본문을 통째로 건너뛰고 정상 반환하는데, join 은 Unit 이라
+                // 그 스킵이 204 로 나간다. 사용자는 들어갔다고 믿지만 참여자 집합에 없다.
+                // 정원 원자성은 WaveSessionRepository.joinIfNotFull 이 맡는다.
+                WaveService::class.java.getDeclaredMethod("join", Long::class.java, Long::class.java)
+                    .getAnnotation(DistributedLock::class.java).shouldBeNull()
+            }
+        }
+    }
+
 })
