@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType.IDENTITY
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Instant
@@ -14,8 +15,23 @@ import java.time.temporal.ChronoUnit.MILLIS
 
 @Entity
 @EntityListeners(AuditingEntityListener::class)
-@Table(name = "chat_rooms")
+@Table(
+    name = "chat_rooms",
+    // 같은 두 사람의 방을 두 행으로 만들지 않는다. 실제 DDL 은 V19 가 만들고,
+    // 정규화(member_a < member_b)를 강제하는 CHECK 도 그쪽에 있다 — JPA 로는 표현할 수 없다.
+    uniqueConstraints = [UniqueConstraint(name = "UNQ_CHAT_ROOM_PAIR", columnNames = ["member_a", "member_b"])],
+)
 class ChatRoom(
+    /**
+     * 방을 이루는 두 회원. **항상 오름차순으로 담는다** — [between] 이 정렬해 준다.
+     *
+     * 유니크 제약(UNQ_CHAT_ROOM_PAIR)이 (a,b) 와 (b,a) 를 같은 값으로 보게 하려면 정규화가 필요한데,
+     * 그걸 호출자마다 하게 두면 한 곳만 빼먹어도 같은 두 사람의 방이 두 개 생긴다.
+     * 아래 `init` 이 그 실수를 즉시 막고, DB CHECK(member_a < member_b) 가 다시 확인한다.
+     */
+    @Column(name = "member_a", nullable = false) val memberA: Long,
+    @Column(name = "member_b", nullable = false) val memberB: Long,
+
     @Id @GeneratedValue(strategy = IDENTITY)
     val id: Long = 0,
 
@@ -25,6 +41,11 @@ class ChatRoom(
 
     @CreatedDate @Column(name = "created_at") val createdAt: Instant = Instant.now(),
 ) {
+    init {
+        // DB 에서 읽어 올릴 때는 JPA 용 no-arg 생성자를 타므로 이 검사가 돌지 않는다. 새로 만들 때만이다.
+        require(memberA < memberB) { "chat.room.pair" }
+    }
+
     fun onMessage(preview: String, at: Instant) {
         lastMessagePreview = preview.take(200)
         lastMessageAt = at
@@ -50,4 +71,9 @@ class ChatRoom(
      */
     fun hasNothingNewerThan(at: Instant): Boolean =
         lastMessageAt?.truncatedTo(MILLIS)?.isAfter(at.truncatedTo(MILLIS)) != true
+
+    companion object {
+        /** (a,b) 로 부르든 (b,a) 로 부르든 같은 방이 되도록 정렬해 만든다. 방 생성은 항상 이걸로 한다. */
+        fun between(a: Long, b: Long) = ChatRoom(memberA = minOf(a, b), memberB = maxOf(a, b))
+    }
 }

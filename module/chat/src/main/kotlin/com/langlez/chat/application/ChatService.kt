@@ -13,6 +13,7 @@ import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
 import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
@@ -45,13 +46,30 @@ class ChatService(
      * 차단 판정은 `block-api` 포트라 트랜잭션 밖에서 먼저 끝낸다 — `send` 와 같은 모양이다.
      * 판정과 생성 사이에 상대가 나를 차단하면 빈 방이 하나 생기지만, 그 방으로 보내는 메시지는
      * `send` 가 다시 차단을 보고 막는다. 남는 건 대화가 없는 방 한 개다.
+     *
+     * **조회와 생성을 한 트랜잭션으로 묶지 않는다.** 묶어도 check-then-act 는 그대로다 —
+     * READ COMMITTED 아래 두 요청이 같이 "없다"를 보고 각자 방을 만든다(같은 사용자의 더블탭이면 더 흔하다).
+     * 막는 건 `UNQ_CHAT_ROOM_PAIR`(V19) 뿐이고, 진 쪽은 그 방을 받아야지 500 을 보면 안 된다.
+     * 그런데 충돌을 **같은 트랜잭션 안에서** 잡으면 하이버네이트가 이미 rollback-only 로 표시한 뒤라
+     * 정상 반환해도 커밋에서 `UnexpectedRollbackException` 이 난다(`ReportService.report` 와 같은 함정).
+     * 그래서 `createRoom` 이 자기 트랜잭션(`REQUIRES_NEW`)을 갖게 두고, 재조회는 그 트랜잭션이
+     * 끝난 뒤 새 트랜잭션에서 한다. 여기에 `@Transactional` 을 붙이면 그 함정이 그대로 되살아난다.
      */
     fun getOrCreateRoom(memberId: Long, partnerId: Long): ChatRoom {
         if (memberId == partnerId) throw LanglezException(BAD_REQUEST, "chat.self-room")
         if (blocks.isBlockedBetween(memberId, partnerId)) throw LanglezException(FORBIDDEN, "chat.blocked")
 
         // 있으면 재사용한다. 매번 만들면 같은 상대와 방이 계속 늘어나고 대화가 갈라진다.
-        return tx.execute { repo.findRoomBetween(memberId, partnerId) ?: repo.createRoom(memberId, partnerId) }!!
+        repo.findRoomBetween(memberId, partnerId)?.let { return it }
+
+        return try {
+            repo.createRoom(memberId, partnerId)
+        } catch (e: DataIntegrityViolationException) {
+            // 경쟁 트랜잭션이 같은 방을 먼저 만들었다. 유니크 충돌은 그쪽이 커밋된 뒤에야 나므로
+            // 지금 다시 찾으면 반드시 보인다. 재시도는 하지 않는다 — 몇 번을 넣어도 그 방이 이미 있다.
+            // 회원 쌍이 아닌 다른 제약 위반이면 방이 안 나오므로 감추지 않고 그대로 올린다.
+            repo.findRoomBetween(memberId, partnerId) ?: throw e
+        }
     }
 
     /**
