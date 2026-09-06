@@ -2,6 +2,7 @@ package com.langlez.chat.infrastructure.mongo
 
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
+import org.redisson.api.RAtomicLong
 import org.redisson.api.RedissonClient
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -10,6 +11,7 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 /**
  * 메시지 저장소 어댑터.
@@ -27,17 +29,30 @@ class ChatMessageRepositoryImpl(
     /**
      * 방별 번호표. 레디스 INCR 한 번이라 전송 경로에 왕복이 하나만 붙는다.
      * (Mongo `findAndModify` 로 세면 가장 빈번한 경로에 쓰기가 한 번 더 생긴다.)
+     *
+     * 카운터가 없을 때(레디스가 키를 잃었거나 최초 전송)만 Mongo 의 최대 seq 로 되맞춘다.
+     * 예전에는 `incrementAndGet` 으로 먼저 1 을 뽑은 뒤 그 결과를 보고 되맞췄는데, 그 왕복 사이에
+     * 다른 스레드가 이미 2, 3 을 들고 나가면 `compareAndSet(1L, max+1)` 이 실패해 카운터가
+     * 낮은 값에 영구히 고정됐다(B-02). 그래서 지금은 **되맞추는 동안 아무도 증가시키지 못하게**
+     * 초기화 자체를 락으로 직렬화하고, 초기화가 끝난 뒤에만 모두가 `incrementAndGet` 을 부른다.
+     * 카운터가 이미 있으면(대부분의 호출) 락을 안 타 핫 패스 비용이 그대로다.
      */
     override fun nextSeq(roomId: Long): Long {
         val counter = redisson.getAtomicLong(seqKey(roomId))
-        val next = counter.incrementAndGet()
+        if (!counter.isExists) initSeq(roomId, counter)
+        return counter.incrementAndGet()
+    }
 
-        // 레디스가 키를 잃으면(플러시·강제 축출) 번호가 1 로 되돌아가 새 메시지가 옛 메시지 아래로 정렬된다.
-        // 1 이 나온 순간에만 Mongo 의 최대 seq 로 다시 맞춘다. 방마다 최초 1회뿐이라 비용이 없다.
-        if (next != 1L) return next
-
-        val max = mongo.findFirstByRoomIdOrderBySeqDesc(roomId)?.seq ?: return 1L
-        return (max + 1).also { counter.compareAndSet(1L, it) }
+    /** 방 하나당 최초 1회(또는 카운터 유실 뒤 1회)만 타는 콜드 패스. */
+    private fun initSeq(roomId: Long, counter: RAtomicLong) {
+        val lock = redisson.getLock(seqInitLockKey(roomId))
+        lock.lock(10, TimeUnit.SECONDS)
+        try {
+            // 락을 기다리는 동안 다른 스레드가 이미 초기화를 끝냈을 수 있다.
+            if (!counter.isExists) counter.set(mongo.findFirstByRoomIdOrderBySeqDesc(roomId)?.seq ?: 0L)
+        } finally {
+            if (lock.isHeldByCurrentThread) lock.unlock()
+        }
     }
 
     override fun save(message: ChatMessage): ChatMessage = mongo.save(message)
@@ -85,4 +100,6 @@ class ChatMessageRepositoryImpl(
     }
 
     private fun seqKey(roomId: Long) = "chat:seq:$roomId"
+
+    private fun seqInitLockKey(roomId: Long) = "lock:chat-seq-init:$roomId"
 }
