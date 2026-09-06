@@ -34,9 +34,7 @@ class WaveWebSocketLifecycleTest : BehaviorSpec({
     val sessions = mockk<WaveSessionRepository>(relaxed = true)
     val service = WaveService(repo, sessions, mockk<MessageBroadcaster>(relaxed = true))
 
-    val config = WaveWebSocketConfiguration(service)
-    val subscribeListener = config.waveRoomSubscribeListener()
-    val disconnectListener = config.waveRoomDisconnectListener()
+    val listener = WaveSessionLifecycleListener(service)
 
     afterEach { clearMocks(repo, sessions, answers = false) }
 
@@ -53,12 +51,12 @@ class WaveWebSocketLifecycleTest : BehaviorSpec({
     }
 
     fun subscribe(attributes: MutableMap<String, Any>, destination: String) =
-        subscribeListener.onApplicationEvent(
+        listener.onSubscribe(
             SessionSubscribeEvent(this, message(StompCommand.SUBSCRIBE, attributes, destination), principal)
         )
 
     fun disconnect(attributes: MutableMap<String, Any>, user: UsernamePasswordAuthenticationToken? = principal) =
-        disconnectListener.onApplicationEvent(
+        listener.onDisconnect(
             SessionDisconnectEvent(
                 this,
                 message(StompCommand.DISCONNECT, attributes),
