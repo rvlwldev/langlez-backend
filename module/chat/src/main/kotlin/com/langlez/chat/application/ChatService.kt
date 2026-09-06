@@ -85,10 +85,14 @@ class ChatService(
             // 목록이 느려지면 findRoomSummaries 쿼리 자체에 leftAt 조건을 넣는 쪽으로 올린다.
             .filter { repo.findParticipant(it.room.id, memberId)?.hasLeft() != true }
 
-    /** 참여 여부만 Postgres 에서 확인하고 본문은 Mongo 에서 읽는다. 첨부가 임베드라 조회는 한 번뿐이다. */
-    @Transactional(readOnly = true)
+    /**
+     * 참여 여부만 Postgres 에서 확인하고 본문은 Mongo 에서 읽는다. 첨부가 임베드라 조회는 한 번뿐이다.
+     *
+     * 참여 확인과 본문 조회를 한 트랜잭션에 묶지 않는다 — `send` 와 같은 이유다. Mongo 가 흔들리는
+     * 동안 Postgres 커넥션을 쥐고 있으면 그 시간만큼 풀이 마르고 채팅과 무관한 요청까지 막힌다.
+     */
     fun listMessages(memberId: Long, roomId: Long, size: Int, cursor: Long?): List<ChatMessageView> {
-        participantOrThrow(roomId, memberId)
+        tx.execute { participantOrThrow(roomId, memberId) }
 
         // 나갔던 사람도 이전 대화를 그대로 본다(재입장 정책). 그래서 leftAt 으로 자르지 않는다.
         return messages.findByRoom(roomId, size, cursor).map(ChatMessageView::of)
