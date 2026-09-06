@@ -1,7 +1,9 @@
 package com.langlez.echo.infrastructure
 
+import com.langlez.echo.domain.EchoRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.springframework.beans.factory.annotation.Autowired
@@ -26,6 +28,11 @@ import javax.sql.DataSource
  *
  * JPA 가 아니라 JDBC 로 직접 쏜다. `analyze`/`explain` 은 JPA 트랜잭션 규칙과 안 맞고
  * 여기서 볼 것은 매핑이 아니라 실행 계획이다 (FollowIndexIntegrationTest 와 같은 이유).
+ *
+ * **다만 리터럴 EXPLAIN 만으로는 프로덕션 경로를 증명하지 못한다.** posts/comments 인덱스는
+ * `where deleted_at is null` 부분 인덱스라, 그 조건이 바인드 파라미터로 나가면 플래너가 술어를
+ * 증명하지 못해 generic plan 에서 인덱스를 버린다 (아웃박스 쪽에서 실제로 그 함정을 밟았다 —
+ * `MemberOutBoxIndexIntegrationTest` 참고). 그래서 마지막 스펙이 **서버가 받은 SQL** 을 직접 본다.
  */
 @SpringBootTest(
     properties = [
@@ -43,6 +50,9 @@ class EchoIndexIntegrationTest : BehaviorSpec() {
 
     @Autowired
     lateinit var dataSource: DataSource
+
+    @Autowired
+    lateinit var repo: EchoRepository
 
     companion object {
         /**
@@ -64,6 +74,8 @@ class EchoIndexIntegrationTest : BehaviorSpec() {
             .withDatabaseName("langlez_db")
             .withUsername("admin")
             .withPassword("admin")
+            // 서버가 실제로 받은 SQL 을 봐야 한다. 클라이언트 쪽 로그는 바인드 값을 채워 보여준다.
+            .withCommand("postgres", "-c", "log_statement=all")
             .also { it.start() }
 
         @JvmField
@@ -198,6 +210,30 @@ class EchoIndexIntegrationTest : BehaviorSpec() {
 
                 plan shouldContain "idx_post_hashtag_hashtag"
                 plan shouldNotContain "seq scan on post_hashtags"
+            }
+
+            /**
+             * 부분 인덱스(`where deleted_at is null`)를 QueryDSL 이 리터럴로 내는지 서버 로그로 본다.
+             * 바인드로 나가면 generic plan 에서 인덱스를 잃는다 — V17 이 정확히 그래서 깨졌었다.
+             * `blinded` 를 부분 조건에 넣지 않은 이유도 여기서 드러난다: 그쪽은 실제로 바인드다.
+             */
+            Then("서버가 받은 피드 SQL 에 soft delete 조건이 상수로 박혀 있다") {
+                repo.findPosts(authorIds = listOf(STAR_AUTHOR), size = 20, cursor = null)
+                repo.findComments(postId = STAR_POST, size = 20, cursor = null)
+
+                // 이 스펙이 손으로 쓴 EXPLAIN 도 같은 테이블을 읽으므로 반드시 걷어낸다.
+                // 그걸 세면 "우리가 쓴 리터럴"을 보고 통과하는 거짓 양성이 된다 — 정확히 V17 이 밟은 함정이다.
+                // Hibernate 가 만든 SQL 만 남기려고 별칭(p1_0 / c1_0)을 조건에 넣는다.
+                val statements = postgres.logs.lineSequence()
+                    .filter { it.contains("from posts p1_0") || it.contains("from comments c1_0") }
+                    .filterNot { it.contains("explain ", ignoreCase = true) }
+                    .toList()
+
+                statements.isNotEmpty() shouldBe true
+
+                val sql = statements.joinToString("\n").lowercase()
+                sql shouldContain "deleted_at is null"
+                sql shouldNotContain "deleted_at=?"
             }
         }
     }
