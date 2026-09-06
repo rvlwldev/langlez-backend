@@ -19,6 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
@@ -140,12 +141,16 @@ class ChatServiceActionsTest : BehaviorSpec({
 
         When("보낸 사람이 방의 마지막 메시지를 지우면") {
             Then("방 목록 프리뷰에 원문이 남지 않는다") {
-                val message = ChatMessage(roomId, me, 3L, ChatMessage.Type.TEXT, "010-1234-5678").apply { id = "m7" }
-                val room = ChatRoom(
-                    id = roomId,
-                    lastMessageAt = message.createdAt,
-                    lastMessagePreview = "010-1234-5678",
-                )
+                // 운영과 같은 정밀도로 맞춘다. 삭제 경로의 메시지는 Mongo 를 거쳐 와 밀리초까지만 남고,
+                // 방 메타는 전송 때 인메모리 Instant 가 Postgres timestamp(6) 로 들어가 마이크로초를 갖는다.
+                // 같은 메시지인데 두 값이 다르므로, 단조성 가드를 밀리초로 비교하지 않으면 갱신이 통째로 스킵된다.
+                val sentAt = Instant.now()
+                val message = ChatMessage(
+                    roomId, me, 3L, ChatMessage.Type.TEXT, "010-1234-5678",
+                    createdAt = sentAt.truncatedTo(ChronoUnit.MILLIS),
+                ).apply { id = "m7" }
+                val room = ChatRoom(id = roomId, lastMessageAt = sentAt, lastMessagePreview = "010-1234-5678")
+
                 every { messages.find("m7") } returns message
                 every { messages.save(any()) } answers { firstArg() }
                 every { messages.findByRoom(roomId, 1, null) } returns listOf(message)
@@ -155,6 +160,27 @@ class ChatServiceActionsTest : BehaviorSpec({
 
                 // 대화창은 ChatMessageView 가 가리지만 방 목록은 Postgres 에 박힌 이 값을 그대로 보여준다.
                 room.lastMessagePreview shouldBe ChatMessage.DELETED_PREVIEW
+            }
+        }
+
+        When("마지막 메시지라고 판정한 뒤 상대의 새 메시지가 먼저 커밋되면") {
+            Then("프리뷰와 lastMessageAt 이 역행하지 않는다") {
+                val message = ChatMessage(roomId, me, 3L, ChatMessage.Type.TEXT, "010-1234-5678").apply { id = "m7" }
+                // 판정 시점엔 m7 이 마지막이었지만, 트랜잭션에 들어가기 전 send() 가 먼저 커밋해
+                // 방 메타는 이미 새 메시지로 넘어가 있다.
+                val newerAt = message.createdAt.plusMillis(50)
+                val room = ChatRoom(id = roomId, lastMessageAt = newerAt, lastMessagePreview = "그 뒤에 온 말")
+
+                every { messages.find("m7") } returns message
+                every { messages.save(any()) } answers { firstArg() }
+                every { messages.findByRoom(roomId, 1, null) } returns listOf(message)
+                every { repo.findRoom(roomId) } returns room
+
+                service.deleteMessage(me, "m7")
+
+                // 덮었다면 목록 정렬(last_message_at desc)에서 이 방이 과거로 밀린다.
+                room.lastMessagePreview shouldBe "그 뒤에 온 말"
+                room.lastMessageAt shouldBe newerAt
             }
         }
 

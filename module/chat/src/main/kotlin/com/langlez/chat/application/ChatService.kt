@@ -171,8 +171,8 @@ class ChatService(
      * 대사기(`ChatReconciler`)도 마지막 메시지의 `preview()` 를 쓰므로 두 경로가 같은 값으로 수렴한다.
      *
      * 마지막 메시지 조회(Mongo)는 트랜잭션 밖에서 먼저 끝낸다 — Postgres 커넥션을 쥔 채 Mongo 를
-     * 기다리면 풀이 마른다. 그 대가로 판정과 갱신 사이에 새 메시지가 들어오면 프리뷰가 잠깐 뒤로 간다.
-     * 그때는 `lastMessageAt` 도 함께 뒤로 가 방이 `isBehind` 로 잡히므로 대사기가 다음 주기에 되돌린다.
+     * 기다리면 풀이 마른다. 그 대가로 판정과 갱신 사이에 창이 열리므로,
+     * 트랜잭션 안에서 `hasNothingNewerThan` 으로 한 번 더 막는다.
      */
     fun deleteMessage(memberId: Long, messageId: String) {
         val message = messages.find(messageId) ?: throw LanglezException(NOT_FOUND, "chat.message.not-found")
@@ -188,7 +188,14 @@ class ChatService(
         messages.save(message)
 
         if (messages.findByRoom(message.roomId, 1, null).firstOrNull()?.id == messageId) {
-            tx.execute { repo.findRoom(message.roomId)?.onMessage(message.preview(), message.createdAt) }
+            tx.execute {
+                repo.findRoom(message.roomId)
+                    // 위에서 마지막 메시지인 걸 이미 확인했는데 왜 또 보나 — 그 확인과 여기 사이가 창이다.
+                    // 그 틈에 상대의 새 메시지가 먼저 커밋됐다면 덮어선 안 된다. 덮으면 프리뷰가
+                    // [DELETED] 로 바뀌고 lastMessageAt 이 과거로 역행해 목록에서 방이 뒤로 밀린다.
+                    ?.takeIf { it.hasNothingNewerThan(message.createdAt) }
+                    ?.onMessage(message.preview(), message.createdAt)
+            }
         }
 
         broadcaster.broadcast(topic(message.roomId), ChatMessageView.of(message))
