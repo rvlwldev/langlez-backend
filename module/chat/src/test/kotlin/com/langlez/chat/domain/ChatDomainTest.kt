@@ -15,6 +15,15 @@ class ChatDomainTest : BehaviorSpec({
             m.isDeleted() shouldBe true
         }
     }
+    Given("삭제된 메시지의 프리뷰를 만들면") {
+        val m = ChatMessage(roomId = 1L, senderId = 10L, seq = 1L, type = ChatMessage.Type.TEXT, content = "010-1234-5678")
+        // 방 목록 프리뷰와 푸시 알림이 이 값을 쓴다. 여기서 본문이 새면 대화창을 가려도 소용이 없다.
+        Then("삭제 전에는 본문이지만 삭제 뒤에는 본문이 안 나온다") {
+            m.preview() shouldBe "010-1234-5678"
+            m.delete(requesterId = 10L)
+            m.preview() shouldBe ChatMessage.DELETED_PREVIEW
+        }
+    }
     Given("남이 삭제하려 하면") {
         val m = ChatMessage(roomId = 1L, senderId = 10L, seq = 1L, type = ChatMessage.Type.TEXT, content = "hi")
         Then("거부된다") { shouldThrow<IllegalArgumentException> { m.delete(requesterId = 99L) } }
