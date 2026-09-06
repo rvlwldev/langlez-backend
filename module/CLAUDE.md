@@ -307,7 +307,7 @@ internal class MemberOutBoxScheduler(repo: MemberOutBoxRepository) : OutBoxProce
 `infra/redis` 의 Redisson 기반 AOP 어노테이션. 옵션은 `prefix`, `keys`(SpEL 배열), `leaseSecs`(0 이하면 자동 갱신), `waitMs`·`retries`(획득 재시도), `transactional`(락 획득 후 트랜잭션 시작), `throwOnFailure`(기본 `false` — 실패 시 조용히 스킵). 락 키는 파라미터에 `@LockKey` 를 붙이거나 `keys` 에 SpEL 을 준다.
 
 ```kotlin
-@DistributedLock(prefix = "lock:profile-image:", leaseSecs = 5, retries = 20, waitMs = 100, transactional = true)
+@DistributedLock(prefix = "lock:profile-image:", retries = 20, waitMs = 100, transactional = true, throwOnFailure = true)
 fun confirmAdditionalImage(@LockKey memberId: Long, fileUrl: String): ProfileImage
 
 @DistributedLock(prefix = "lock:wave-join:", keys = ["#roomId"])
