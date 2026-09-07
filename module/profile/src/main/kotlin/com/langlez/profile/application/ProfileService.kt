@@ -111,19 +111,29 @@ class ProfileService(
      *
      * 그 확인은 S3 왕복이라 트랜잭션 밖에서 먼저 끝낸다. 인자 자리에 두면 `@Transactional` 이
      * 열린 뒤에 평가돼 DB 커넥션을 쥔 채 S3 를 기다린다.
+     *
+     * 대표 사진도 새 행을 추가하므로 `confirmAdditionalImage` 와 같은 락·정원 검사를 탄다.
      */
     fun confirmRepresentImage(memberId: Long, key: String): ProfileImage {
         val url = storage.attach(key, memberId)
 
-        return tx.execute { replaceRepresentImage(memberId, url) }!!
+        return runUnderLock { profileImageLocker.confirmRepresentImage(memberId, url) }
     }
 
     fun confirmAdditionalImage(memberId: Long, key: String): ProfileImage {
         // 지역변수로 뽑아 attach 가 락 진입보다 먼저 끝난다는 순서를 코드에 드러낸다.
         val url = storage.attach(key, memberId)
 
-        return profileImageLocker.confirmAdditionalImage(memberId, url)
+        return runUnderLock { profileImageLocker.confirmAdditionalImage(memberId, url) }
     }
+
+    /** 락 획득 실패는 `IllegalStateException` 으로 올라온다 (`throwOnFailure = true`). 500 이 아니라 409 로 돌려준다. */
+    private fun runUnderLock(action: () -> ProfileImage): ProfileImage =
+        try {
+            action()
+        } catch (e: IllegalStateException) {
+            throw LanglezException(409, "profile.image.confirm-timeout", e)
+        }
 
     @Transactional
     fun changeRepresentImage(memberId: Long, fileUrl: String): ProfileImage {
@@ -168,15 +178,6 @@ class ProfileService(
     /** handle → 회원 id 변환은 member 소유라 포트로 묻는다. 트랜잭션 밖에서만 부른다. */
     private fun memberIdOrThrow(username: String): Long =
         members.findIdByHandle(username) ?: throw LanglezException(404, "profile.not-found")
-
-    private fun replaceRepresentImage(memberId: Long, newUrl: String): ProfileImage {
-        repo.findRepresentImage(memberId)?.apply {
-            this.represent = false
-            repo.saveImage(this)
-        }
-        val sequence = repo.countImages(memberId) + 1
-        return repo.saveImage(ProfileImage(memberId, newUrl, sequence, 0L, true))
-    }
 
     companion object {
         private const val IMAGE_DIRECTORY = "profiles"
