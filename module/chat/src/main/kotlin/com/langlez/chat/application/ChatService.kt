@@ -4,6 +4,7 @@ import com.langlez.attachment.contract.Storage
 import com.langlez.block.contract.BlockReader
 import com.langlez.chat.contract.ChatUserReportedEvent
 import com.langlez.chat.domain.ChatMessage
+import com.langlez.chat.domain.SeqLockTimeoutException
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
@@ -17,6 +18,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
+import org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -124,11 +126,19 @@ class ChatService(
         // storage.attach 는 S3 확인이 걸린 블로킹 I/O 다. DB 커넥션을 쥔 채 기다리지 않도록 먼저 끝낸다.
         val urls = keys.map { storage.attach(it) }
 
+        // nextSeq 의 초기화 락 대기가 시간 안에 안 끝나면(락 보유 스레드가 죽었거나 Mongo 응답 없음)
+        // IllegalStateException 이 온다 — 503 으로 변환해 클라이언트가 재시도하게 한다.
+        val seq = try {
+            messages.nextSeq(roomId)
+        } catch (e: SeqLockTimeoutException) {
+            throw LanglezException(SERVICE_UNAVAILABLE, e.message, e)
+        }
+
         val message = messages.save(
             ChatMessage(
                 roomId = roomId,
                 senderId = memberId,
-                seq = messages.nextSeq(roomId),
+                seq = seq,
                 type = type,
                 content = content,
                 files = urls.mapIndexed { i, url -> ChatMessage.Attachment(url, i) },

@@ -2,9 +2,12 @@ package com.langlez.chat.infrastructure.mongo
 
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
+import com.langlez.chat.domain.SeqLockTimeoutException
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.redisson.api.RedissonClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -15,8 +18,10 @@ import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * B-02: 레디스 카운터가 없는 상태에서 여러 스레드가 동시에 `nextSeq` 를 불러도
@@ -117,6 +122,50 @@ class ChatMessageRepositoryConcurrencyIntegrationTest : BehaviorSpec() {
 
             Then("1부터 빈틈없이 이어진다") {
                 seqs.sorted() shouldBe (1L..threadCount.toLong()).toList()
+            }
+        }
+
+        /**
+         * `tryLock(waitTime, unit)` 대신 `lock(leaseTime, unit)` 을 잘못 쓰면 waitTime 이 무제한이 되고
+         * (그러면서 watchdog 도 꺼진다). 이 테스트는 락을 다른 스레드가 쥐고 절대 안 놓는 상태에서
+         * `nextSeq` 를 불러 **무한 블로킹이 아니라 waitTime(10초) 안에 예외로 끝나는지**를 직접 잰다.
+         * 시간이 지나야 드러나는 결함이라 `Thread.sleep()` 없이 `CountDownLatch.await(timeout)` 으로 재는
+         * 것 자체가 검증 방법이다 — 무제한 대기 버그라면 이 latch 가 정해진 시간 안에 안 풀린다.
+         */
+        Given("초기화 락을 다른 스레드가 이미 쥐고 절대 풀지 않으면") {
+            val roomId = 3003L
+            // ChatMessageRepositoryImpl.seqInitLockKey 와 같은 포맷. private 이라 리터럴로 맞춘다.
+            val lock = redisson.getLock("lock:chat-seq-init:$roomId")
+            lock.lock() // 인자 없는 lock() 은 watchdog 이 살아 있어 자동 만료로 안 풀린다.
+
+            val error = AtomicReference<Throwable?>()
+            val done = CountDownLatch(1)
+            val start = System.currentTimeMillis()
+
+            Thread {
+                try {
+                    repo.nextSeq(roomId)
+                } catch (e: Throwable) {
+                    error.set(e)
+                } finally {
+                    done.countDown()
+                }
+            }.apply { isDaemon = true }.start()
+
+            // waitTime(10초) + 여유. 무제한 대기 버그면 15초 안에 못 끝난다.
+            val finishedInTime = done.await(15, TimeUnit.SECONDS)
+            val elapsedMs = System.currentTimeMillis() - start
+            lock.unlock()
+
+            Then("무한 블로킹이 아니라 waitTime 안에 예외로 끝난다") {
+                finishedInTime shouldBe true
+                val thrown = error.get()
+                thrown.shouldNotBeNull()
+                thrown.shouldBeInstanceOf<SeqLockTimeoutException>()
+            }
+
+            Then("즉시 실패가 아니라 waitTime(10초) 근처까지 실제로 기다린 뒤 실패한다") {
+                (elapsedMs in 9_000L..14_000L) shouldBe true
             }
         }
     }

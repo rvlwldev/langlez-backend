@@ -2,6 +2,7 @@ package com.langlez.chat.infrastructure.mongo
 
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
+import com.langlez.chat.domain.SeqLockTimeoutException
 import org.redisson.api.RAtomicLong
 import org.redisson.api.RedissonClient
 import org.springframework.data.domain.PageRequest
@@ -43,14 +44,26 @@ class ChatMessageRepositoryImpl(
         return counter.incrementAndGet()
     }
 
-    /** 방 하나당 최초 1회(또는 카운터 유실 뒤 1회)만 타는 콜드 패스. */
+    /**
+     * 방 하나당 최초 1회(또는 카운터 유실 뒤 1회)만 타는 콜드 패스.
+     *
+     * `tryLock(waitTime, unit)` 을 쓴다 — 인자 하나짜리 `lock(leaseTime, unit)` 은 waitTime 이 아니라
+     * **락 점유 유지 시간**이라 무제한 대기 + watchdog 비활성화라는 정반대의 동작이 된다(B-02 수정 리뷰).
+     * `tryLock(waitTime, unit)` 오버로드는 watchdog(기본 TTL 30초, 10초마다 자동 갱신)이 그대로 살아 있어
+     * `initSeq` 가 오래 걸려도(Mongo 지연·페일오버) 락이 조기 만료돼 상호 배제가 깨지는 일이 없다.
+     * 대신 대기 자체는 10초로 막아, 락을 쥔 스레드가 죽었거나 Mongo 가 완전히 응답을 멈춘 최악의
+     * 경우에도 요청 스레드가 무한정 잠기지 않고 실패로 끝난다.
+     */
     private fun initSeq(roomId: Long, counter: RAtomicLong) {
         val lock = redisson.getLock(seqInitLockKey(roomId))
-        lock.lock(10, TimeUnit.SECONDS)
+        if (!lock.tryLock(10, TimeUnit.SECONDS)) throw SeqLockTimeoutException("chat.seq.lock-timeout")
+
         try {
             // 락을 기다리는 동안 다른 스레드가 이미 초기화를 끝냈을 수 있다.
             if (!counter.isExists) counter.set(mongo.findFirstByRoomIdOrderBySeqDesc(roomId)?.seq ?: 0L)
         } finally {
+            // watchdog 이 살아 있는 채로 락이 이미 만료됐을 수 있다 — 그때 unlock() 을 부르면
+            // IllegalMonitorStateException 이 난다.
             if (lock.isHeldByCurrentThread) lock.unlock()
         }
     }
