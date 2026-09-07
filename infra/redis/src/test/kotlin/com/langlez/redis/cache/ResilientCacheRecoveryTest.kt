@@ -1,5 +1,6 @@
 package com.langlez.redis.cache
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -32,7 +33,7 @@ class ResilientCacheRecoveryTest : BehaviorSpec({
 
     Given("레디스 장애 중 로컬에만 값이 쌓였다가 복구되면") {
         val (redisson, keys) = newRedisson()
-        val provider = ResilientCacheProvider(redisson, SimpleMeterRegistry())
+        val provider = ResilientCacheProvider(redisson, SimpleMeterRegistry(), ObjectMapper().findAndRegisterModules())
         val cache = provider.getCache("member")
 
         // 1) 장애 발생 — 헬스체크 실패로 다운 표시

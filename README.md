@@ -373,6 +373,21 @@ OAuth2(Google/Apple) 성공 이후 JWT 발급, `X-Device-Id` 기반 1인 1기기
     → **`OAuth2DeviceIdFilter` 의 기기 id 도 같은 세션에 얹혀 있다.** 다만 이건 원인이 아니라 같은 배를 탄 것뿐이다 — 정확히 같은 상황에서만 함께 깨지고 새로운 실패 모드를 추가하지 않는다.
     → **고치려면 둘을 함께 옮겨야 한다.** 인가 요청 저장소를 Redis 기반 `AuthorizationRequestRepository` 로 바꾸고, 기기 id 도 같은 키(state)에 얹는다. **기기 id 만 Redis 로 옮기는 건 효과가 없다** — 콜백이 `OAuth2SuccessHandler` 에 닿기 전에 인가 요청 조회에서 이미 죽기 때문이다. 저장소 교체는 `common` 의 `WebSecurityConfiguration` 에 `authorizationRequestRepository` 등록이 필요해 auth 모듈 안에서 끝나지 않는다. 그때까지는 **단일 인스턴스이거나 `/oauth2/**`·`/login/oauth2/**` 에 sticky session 이 걸려 있어야 한다.**
 
+24. **`member` 캐시가 값 객체가 아니라 엔티티를 담는다 (`CLAUDE.md` 규약 위반, 부분 해소)**
+    `MemberRepositoryImpl` 의 `member` 캐시는 `Member` 엔티티를 그대로 저장한다. `audit`(LAZY) 은
+    항상 join fetch 로 채운 뒤에만 캐시에 들어가므로 초기화 안 된 프록시 직렬화는 없었고,
+    Redis 폴백(`CaffeineCache`)이 같은 힙 인스턴스를 그대로 돌려줘 호출자의 수정이 다른 요청에
+    새던 진짜 사고는 직렬화 왕복으로 막았다.
+    → **남은 창:** 캐시 TTL(10분) 동안 DB 의 `@Version` 이 앞서가면, 그 낡은 값을 들고
+    `MemberService.updateHandle` 등이 `repo.save()` 를 부를 때 `merge()` 가
+    `ObjectOptimisticLockingFailureException` 을 던진다. 예전엔 이걸 핸들 중복(409)으로
+    오인시켰는데 그 오인은 없앴다 — 지금은 그 예외가 그대로 드러나 500 이 된다(클라이언트에게는
+    거짓 409 보다 낫지만 그 자체로 사용자 경험이 좋진 않다).
+    → **고치려면** `member` 캐시가 엔티티 대신 값 객체를 담고 `find`/`save` 경계에서 변환해야
+    하는데, `MemberRepositoryImpl` 을 쓰는 모든 유스케이스가 "캐시에서 읽은 스냅샷"과 "merge 가능한
+    관리 대상 엔티티"를 구분해야 해서 파급이 크다. `member` 는 이 저장소의 복잡도 핫스팟이라
+    지금은 미룬다.
+
 ### 5.4 정리 대상 (기능 영향 없음)
 
 - **echo 아웃박스 스캐폴딩** — `EchoOutBox`·`EchoOutBoxHistory`·`EchoOutBoxRepository` 와 테이블이 있으나 쓰는 코드도 스케줄러도 없다. `echo-api` 의 DTO 2종도 발행하는 코드가 없다

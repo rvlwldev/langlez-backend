@@ -11,6 +11,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -53,6 +54,18 @@ class MemberServiceTest : BehaviorSpec({
                 updated.handle shouldBe "newhandle"
                 verify(exactly = 0) { tracker.toOffline(any()) }
                 verify(exactly = 0) { tracker.toOnline(any()) }
+            }
+        }
+
+        // 캐시가 낡은 @Version 을 쥐고 있다가 merge 되면 이 예외가 난다. 실제 핸들 중복이
+        // 아니므로 409 "member.handle.duplicated" 로 뭉뚱그리면 안 된다.
+        When("낡은 캐시 값으로 저장해 낙관적 락 충돌이 나면") {
+            every { repo.find("newhandle") } returns null
+            every { repo.find(1L) } returns member()
+            every { repo.save(any()) } throws ObjectOptimisticLockingFailureException(Member::class.java, 1L)
+
+            Then("핸들 중복 409 로 둔갑시키지 않고 그대로 전파한다") {
+                shouldThrow<ObjectOptimisticLockingFailureException> { service.updateHandle(1L, "newhandle") }
             }
         }
     }

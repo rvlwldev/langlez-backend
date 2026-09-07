@@ -1,5 +1,6 @@
 package com.langlez.redis.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.cache.CacheProvider
 import com.langlez.redis.cache.ResilientCacheProvider
 import io.micrometer.core.instrument.MeterRegistry
@@ -11,6 +12,6 @@ import org.springframework.context.annotation.Configuration
 class ResilientCacheConfiguration {
 
     @Bean
-    fun cacheProvider(redisson: RedissonClient, meterRegistry: MeterRegistry): CacheProvider =
-        ResilientCacheProvider(redisson, meterRegistry)
+    fun cacheProvider(redisson: RedissonClient, meterRegistry: MeterRegistry, objectMapper: ObjectMapper): CacheProvider =
+        ResilientCacheProvider(redisson, meterRegistry, objectMapper)
 }

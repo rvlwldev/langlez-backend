@@ -23,4 +23,6 @@ dependencies {
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.springboot)
     testImplementation(libs.bundles.testcontainers)
+    // MemberEntityCacheIsolationTest 가 infra:redis 의 CaffeineCache 를 직접 구성해 검증한다
+    testImplementation(libs.dependency.caffeine)
 }

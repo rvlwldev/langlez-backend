@@ -58,8 +58,14 @@ class MemberService(
             throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
         }
 
-        return runCatching { repo.save(member) }
-            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
+        // DataIntegrityViolationException(유니크 제약 위반)만 중복으로 본다. 캐시가 낡은
+        // @Version 을 쥐고 있어 merge 가 던지는 ObjectOptimisticLockingFailureException 까지
+        // 여기서 삼키면 낙관적 락 충돌이 "핸들 중복"으로 둔갑해 클라이언트를 오도한다.
+        return try {
+            repo.save(member)
+        } catch (e: DataIntegrityViolationException) {
+            throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e)
+        }
             // 온라인 표시는 id로 keying하니 handle이 바뀌어도 옮겨 달 필요가 없다.
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
