@@ -5,6 +5,7 @@ import com.langlez.exception.ExceptionResponse
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.context.NoSuchMessageException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -70,6 +71,21 @@ class GlobalRestControllerAdvice(private val source: MessageSource) {
 
         return ResponseEntity.badRequest()
             .body(ExceptionResponse(HttpStatus.BAD_REQUEST, message))
+    }
+
+    /**
+     * DB 유니크 제약 위반. `em.merge()` 는 지연 플러시라 실제 위반은 커밋 시점(요청 스레드가
+     * 서비스 메서드를 이미 반환한 뒤)에 터져 서비스 계층의 개별 try-catch 를 우회한다.
+     * 어떤 제약이 깨졌는지 여기선 알 수 없어 일반 충돌 메시지만 준다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    fun handleDataIntegrityViolationException(
+        e: DataIntegrityViolationException,
+        locale: Locale,
+    ): ResponseEntity<ExceptionResponse> {
+        logger.warn("Data integrity violation: {}", e.message)
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(ExceptionResponse(HttpStatus.CONFLICT, resolveMessage("common.conflict", locale)))
     }
 
     /** 올바르지 않은 엔드포인트 요청 */

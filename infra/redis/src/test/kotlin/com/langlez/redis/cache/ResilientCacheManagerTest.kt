@@ -1,6 +1,6 @@
 package com.langlez.redis.cache
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.langlez.config.JacksonConfiguration
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -24,7 +24,7 @@ class ResilientCacheManagerTest : BehaviorSpec({
         }
     )
 
-    val provider = ResilientCacheProvider(redissonClient, SimpleMeterRegistry(), ObjectMapper().findAndRegisterModules())
+    val provider = ResilientCacheProvider(redissonClient, SimpleMeterRegistry(), JacksonConfiguration().objectMapper())
 
     afterSpec {
         redissonClient.shutdown()

@@ -8,6 +8,10 @@ plugins {
 dependencies {
     api(project(":core"))
 
+    // GlobalRestControllerAdvice 가 DataIntegrityViolationException(org.springframework.dao) 을
+    // 공통 409 로 변환한다. spring-tx 는 JPA/DB 드라이버 없이 그 예외 계층만 갖는 얇은 아티팩트다.
+    implementation("org.springframework:spring-tx")
+
     // JwtAuthenticationFilter 가 매 요청 계정 상태를 본다. core 에 MemberStatusQuery 가 있던 시절에도
     // common → member 계약 의존은 이미 있었고 core 라는 이름 뒤에 가려져 있었을 뿐이다.
     // api 가 아니라 implementation 이다 — 이 타입을 실제로 쓰는 모듈만 각자 선언하게 둔다.

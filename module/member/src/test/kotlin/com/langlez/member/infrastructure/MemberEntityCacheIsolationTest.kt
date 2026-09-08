@@ -1,7 +1,7 @@
 package com.langlez.member.infrastructure
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
+import com.langlez.config.JacksonConfiguration
 import com.langlez.member.domain.Member
 import com.langlez.redis.cache.CaffeineCache
 import io.kotest.core.spec.style.BehaviorSpec
@@ -19,7 +19,8 @@ import java.time.Instant
  */
 class MemberEntityCacheIsolationTest : BehaviorSpec({
 
-    val mapper = ObjectMapper().findAndRegisterModules()
+    // 운영과 다른 직렬화 프로파일을 검증하지 않도록 실제 빈이 쓰는 것과 같은 설정을 재사용한다.
+    val mapper = JacksonConfiguration().objectMapper()
 
     Given("audit 이 채워진 Member 를 로컬 폴백 캐시에 넣으면") {
         val cache = CaffeineCache(Caffeine.newBuilder().build(), mapper)
@@ -52,6 +53,47 @@ class MemberEntityCacheIsolationTest : BehaviorSpec({
                 val again = cache.get(member.id, Member::class.java)!!
                 again.handle shouldBe "alice"
                 again.audit.lastAccessedAt shouldBe Instant.parse("2026-01-01T00:00:00Z")
+            }
+        }
+    }
+
+    // MemberRepositoryImpl.cacheIfAbsent(read-through 캐시 적재)가 실제로 쓰는 연산이다.
+    // put/get 만 검증하면 find(id)/find(handle)/find(provider,id)/findByEmail/findAll(ids)
+    // 이 채우는 실제 경로가 무검증으로 남는다.
+    Given("audit 이 채워진 Member 를 putIfAbsent(read-through 적재)로 넣으면") {
+        val cache = CaffeineCache(Caffeine.newBuilder().build(), mapper)
+
+        val member = Member(
+            id = 2L,
+            email = "u2@test.com",
+            handle = "bob",
+            provider = Member.Provider.GOOGLE,
+            providerId = "p2",
+        )
+        member.updateAccessedAt(Instant.parse("2026-01-01T00:00:00Z"))
+        cache.putIfAbsent(member.id, member)
+
+        When("꺼낸 값을 수정하면") {
+            val found = cache.get(member.id, Member::class.java)!!
+            found.handle = "mutated"
+
+            Then("캐시에서 다시 꺼내면 원래 값이다") {
+                cache.get(member.id, Member::class.java)!!.handle shouldBe "bob"
+            }
+        }
+
+        When("같은 id 로 다른 값을 putIfAbsent 하면") {
+            val stale = Member(
+                id = 2L,
+                email = "u2@test.com",
+                handle = "stale-overwrite",
+                provider = Member.Provider.GOOGLE,
+                providerId = "p2",
+            )
+            cache.putIfAbsent(member.id, stale)
+
+            Then("먼저 채워둔 값이 보존된다") {
+                cache.get(member.id, Member::class.java)!!.handle shouldBe "bob"
             }
         }
     }

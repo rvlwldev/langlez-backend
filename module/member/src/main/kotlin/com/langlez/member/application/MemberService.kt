@@ -58,14 +58,13 @@ class MemberService(
             throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
         }
 
-        // DataIntegrityViolationException(유니크 제약 위반)만 중복으로 본다. 캐시가 낡은
-        // @Version 을 쥐고 있어 merge 가 던지는 ObjectOptimisticLockingFailureException 까지
-        // 여기서 삼키면 낙관적 락 충돌이 "핸들 중복"으로 둔갑해 클라이언트를 오도한다.
-        return try {
-            repo.save(member)
-        } catch (e: DataIntegrityViolationException) {
-            throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e)
-        }
+        // repo.save 는 em.merge() 라 즉시 플러시하지 않는다. 실제 UPDATE 는 이 메서드가 반환된
+        // 뒤 @Transactional 프록시가 커밋할 때 나가므로, 두 트랜잭션이 위 사전조회를 나란히
+        // 통과해 유니크 제약을 어기면 그 예외는 여기가 아니라 메서드 밖(커밋 시점)에서 터진다.
+        // 그래서 여기서 잡지 않는다 — 커밋 시점 위반은 GlobalRestControllerAdvice 가
+        // DataIntegrityViolationException 을 공통 409(common.conflict)로 받는다. 구체적인
+        // "핸들 중복" 메시지는 못 주지만, 어떤 제약이 깨졌는지 여기선 알 수 없다.
+        return repo.save(member)
             // 온라인 표시는 id로 keying하니 handle이 바뀌어도 옮겨 달 필요가 없다.
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }
