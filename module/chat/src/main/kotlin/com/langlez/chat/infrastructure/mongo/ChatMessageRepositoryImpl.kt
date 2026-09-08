@@ -28,15 +28,15 @@ class ChatMessageRepositoryImpl(
 ) : ChatMessageRepository {
 
     /**
-     * 방별 번호표. 레디스 INCR 한 번이라 전송 경로에 왕복이 하나만 붙는다.
-     * (Mongo `findAndModify` 로 세면 가장 빈번한 경로에 쓰기가 한 번 더 생긴다.)
+     * 방별 번호표. `isExists` 확인 후 `incrementAndGet` 이라 정상 경로도 레디스 왕복이 2회(EXISTS + INCR)다.
+     * (예전엔 `INCR` 한 번뿐이었다. Lua 로 한 번에 묶으면 1회로 되돌릴 수 있지만 이번 스코프는 아니다.)
      *
      * 카운터가 없을 때(레디스가 키를 잃었거나 최초 전송)만 Mongo 의 최대 seq 로 되맞춘다.
      * 예전에는 `incrementAndGet` 으로 먼저 1 을 뽑은 뒤 그 결과를 보고 되맞췄는데, 그 왕복 사이에
      * 다른 스레드가 이미 2, 3 을 들고 나가면 `compareAndSet(1L, max+1)` 이 실패해 카운터가
      * 낮은 값에 영구히 고정됐다(B-02). 그래서 지금은 **되맞추는 동안 아무도 증가시키지 못하게**
      * 초기화 자체를 락으로 직렬화하고, 초기화가 끝난 뒤에만 모두가 `incrementAndGet` 을 부른다.
-     * 카운터가 이미 있으면(대부분의 호출) 락을 안 타 핫 패스 비용이 그대로다.
+     * 카운터가 이미 있어도(대부분의 호출) `isExists` 확인은 여전히 거친다 — 락은 안 타지만 왕복은 준다.
      */
     override fun nextSeq(roomId: Long): Long {
         val counter = redisson.getAtomicLong(seqKey(roomId))

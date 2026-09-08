@@ -8,6 +8,7 @@ import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.domain.ChatRoomSummary
+import com.langlez.chat.domain.SeqLockTimeoutException
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
 import io.kotest.assertions.throwables.shouldThrow
@@ -214,6 +215,25 @@ class ChatServiceTest : BehaviorSpec({
                 }
                 ex.status.value() shouldBe 403
                 ex.message shouldBe "chat.blocked"
+            }
+        }
+
+        // Spring @Repository 예외 변환 우회 목적의 SeqLockTimeoutException(도메인 예외)이
+        // ChatService 를 거치며 실제로 503 LanglezException 으로 바뀌는지 본다. 저장소 수준
+        // 테스트(ChatMessageRepositoryConcurrencyIntegrationTest)는 예외가 던져지는 것까지만
+        // 보고 이 변환은 안 본다 — 이 catch 블록을 지워도 그 테스트는 그대로 초록불이다.
+        When("nextSeq 초기화 락이 시간 안에 안 풀리면") {
+            Then("503 LanglezException(chat.seq.lock-timeout) 으로 변환된다") {
+                every { repo.findParticipants(roomId) } returns bothParticipants()
+                every { blocks.isBlockedBetween(me, partner) } returns false
+                every { messages.nextSeq(roomId) } throws SeqLockTimeoutException("chat.seq.lock-timeout")
+
+                val ex = shouldThrow<LanglezException> {
+                    service.send(me, roomId, ChatMessage.Type.TEXT, "hi", emptyList())
+                }
+                ex.status.value() shouldBe 503
+                ex.message shouldBe "chat.seq.lock-timeout"
+                verify(exactly = 0) { messages.save(any()) }
             }
         }
 

@@ -142,7 +142,7 @@ class ChatMessageRepositoryConcurrencyIntegrationTest : BehaviorSpec() {
             val done = CountDownLatch(1)
             val start = System.currentTimeMillis()
 
-            Thread {
+            val worker = Thread {
                 try {
                     repo.nextSeq(roomId)
                 } catch (e: Throwable) {
@@ -150,12 +150,26 @@ class ChatMessageRepositoryConcurrencyIntegrationTest : BehaviorSpec() {
                 } finally {
                     done.countDown()
                 }
-            }.apply { isDaemon = true }.start()
+            }.apply { isDaemon = true }
+            worker.start()
 
-            // waitTime(10초) + 여유. 무제한 대기 버그면 15초 안에 못 끝난다.
+            // latch 타임아웃(15초)과 아래 시간 단언의 상한을 반드시 맞춘다 — 여기가 더 짧으면
+            // finishedInTime 은 true 인데 CI 의 GC/컨테이너 경합으로 elapsedMs 만 넘쳐 단언이 깨진다.
             val finishedInTime = done.await(15, TimeUnit.SECONDS)
             val elapsedMs = System.currentTimeMillis() - start
-            lock.unlock()
+
+            try {
+                if (!finishedInTime) {
+                    // 무제한 대기 버그로 워커가 아직 락을 기다리는 중이다. 여기서 lock.unlock() 을
+                    // 먼저 부르면 이 워커가 락을 낚아채 initSeq(Mongo 조회 + Redis 세팅)를 실행하고,
+                    // 메인은 이미 단언 실패로 빠진 뒤라 그 부수 효과가 후속 테스트 도중 비동기로
+                    // Redis/Mongo 를 건드린다. interrupt 로 먼저 떼어낸 뒤에만 락을 놓는다.
+                    worker.interrupt()
+                    worker.join(5_000)
+                }
+            } finally {
+                lock.unlock()
+            }
 
             Then("무한 블로킹이 아니라 waitTime 안에 예외로 끝난다") {
                 finishedInTime shouldBe true
@@ -165,7 +179,7 @@ class ChatMessageRepositoryConcurrencyIntegrationTest : BehaviorSpec() {
             }
 
             Then("즉시 실패가 아니라 waitTime(10초) 근처까지 실제로 기다린 뒤 실패한다") {
-                (elapsedMs in 9_000L..14_000L) shouldBe true
+                (elapsedMs in 9_000L..15_000L) shouldBe true
             }
         }
     }
