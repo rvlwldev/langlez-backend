@@ -45,8 +45,7 @@ class ProfileRepositoryImplTest : BehaviorSpec({
         redissonClient.keys.flushall()
     }
 
-    // handle → 회원 id 변환은 application(ProfileService·VisitCountSyncScheduler)으로 올라갔다.
-    // 저장소는 이제 id 만 받는다. 없는 handle 을 건너뛰는 동작은 VisitCountSyncSchedulerTest 가 본다.
+    // 방문자 수 카운터는 불변 memberId 로 식별한다.
 
     Given("ProfileRepository의 방문자 수 Flush 기능 검증") {
 
@@ -57,20 +56,36 @@ class ProfileRepositoryImplTest : BehaviorSpec({
             }
         }
 
+        When("방문 데이터를 추가하고 getVisitCountDelta를 호출하면") {
+            Then("해당 회원의 방문자 수 delta가 반환된다") {
+                repository.increaseVisitCount(100L, 1L)
+                repository.increaseVisitCount(101L, 1L)
+                repository.increaseVisitCount(100L, 1L) // 중복 방문
+
+                repository.getVisitCountDelta(1L) shouldBe 2L
+            }
+        }
+
         When("방문 데이터를 추가하고 beginVisitCountFlush 후 commitVisitCountFlush를 호출하면") {
             Then("방문 카운트가 반환되고 commit 후에는 키가 삭제된다") {
-                repository.increaseVisitCount(100L, "userA")
-                repository.increaseVisitCount(101L, "userA")
-                repository.increaseVisitCount(200L, "userB")
+                repository.increaseVisitCount(100L, 1L)
+                repository.increaseVisitCount(101L, 1L)
+                repository.increaseVisitCount(200L, 2L)
+
+                // Redis 키가 profile:visit:$memberId, profile:visit:dirty 로 생성되는지 검증
+                val dirtyIds = redissonClient.getSet<Any>("profile:visit:dirty").readAll().map { (it as Number).toLong() }.toSet()
+                dirtyIds shouldBe setOf(1L, 2L)
+                redissonClient.getHyperLogLog<Long>("profile:visit:1").count() shouldBe 2L
+                redissonClient.getHyperLogLog<Long>("profile:visit:2").count() shouldBe 1L
 
                 val counts = repository.beginVisitCountFlush()
 
                 counts.size shouldBe 2
-                counts["userA"] shouldBe 2L
-                counts["userB"] shouldBe 1L
+                counts[1L] shouldBe 2L
+                counts[2L] shouldBe 1L
 
                 repository.commitVisitCountFlush(counts.keys)
-                
+
                 // 다시 flush 했을 때 비어있어야 함
                 repository.beginVisitCountFlush().shouldBeEmpty()
             }
@@ -78,38 +93,38 @@ class ProfileRepositoryImplTest : BehaviorSpec({
 
         When("beginVisitCountFlush 도중 새로 방문이 추가되면 (PFADD)") {
             Then("1차 flush에는 기존 방문만 잡히고 2차 flush에는 새로 추가된 방문이 유실 없이 잡힌다") {
-                repository.increaseVisitCount(100L, "userA")
+                repository.increaseVisitCount(100L, 1L)
                 val firstFlush = repository.beginVisitCountFlush()
-                
-                // 1차 flush 이후 원래 키 이름으로 새로 방문 추가
-                repository.increaseVisitCount(101L, "userA")
-                repository.increaseVisitCount(102L, "userA")
 
-                firstFlush["userA"] shouldBe 1L
+                // 1차 flush 이후 원래 키 이름으로 새로 방문 추가
+                repository.increaseVisitCount(101L, 1L)
+                repository.increaseVisitCount(102L, 1L)
+
+                firstFlush[1L] shouldBe 1L
 
                 // 1차 flush 커밋 완료
                 repository.commitVisitCountFlush(firstFlush.keys)
 
                 // 2차 flush 수행
                 val secondFlush = repository.beginVisitCountFlush()
-                secondFlush["userA"] shouldBe 2L
-                
+                secondFlush[1L] shouldBe 2L
+
                 repository.commitVisitCountFlush(secondFlush.keys)
             }
         }
 
         When("commitVisitCountFlush를 호출하지 않고 다시 beginVisitCountFlush를 호출하면 (DB 커밋 실패 시나리오)") {
             Then("방문 카운트가 유실되지 않고 그대로 다시 읽힌다") {
-                repository.increaseVisitCount(100L, "userA")
-                repository.increaseVisitCount(101L, "userA")
+                repository.increaseVisitCount(100L, 1L)
+                repository.increaseVisitCount(101L, 1L)
 
                 val firstFlush = repository.beginVisitCountFlush()
-                
+
                 // RENAME이 되어서 :flushing 접미사가 붙어있는 상태
                 // DB 커밋 실패로 commit을 안 하고 다시 beginVisitCountFlush 호출
                 val secondFlush = repository.beginVisitCountFlush()
 
-                secondFlush["userA"] shouldBe 2L
+                secondFlush[1L] shouldBe 2L
 
                 // 최종 commit 호출로 정상 삭제된다
                 repository.commitVisitCountFlush(secondFlush.keys)
