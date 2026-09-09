@@ -21,6 +21,7 @@ interface ChatRepository {
      * DB 에서 단일 UPDATE 로 더해야 값이 정확하다.
      */
     fun increaseUnread(roomId: Long, memberId: Long)
+    fun rejoinParticipant(roomId: Long, memberId: Long)
 
     /** 마지막 메시지 최신순. 나간 방도 상대가 보내면 재등장하므로 leftAt 필터 안 함 */
     fun findRoomSummaries(memberId: Long, size: Int, cursor: Instant?): List<ChatRoomSummary>

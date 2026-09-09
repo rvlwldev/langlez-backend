@@ -78,6 +78,11 @@ class ChatRepositoryImpl(
         participants.increaseUnread(roomId, memberId)
     }
 
+    @Transactional
+    override fun rejoinParticipant(roomId: Long, memberId: Long) {
+        participants.rejoin(roomId, memberId)
+    }
+
     /**
      * 방 + 상대 id + 안 읽은 수를 한 쿼리로 가져온다.
      * 안 읽은 수는 내 참여자 행의 카운터를 그대로 읽는다 — 메시지가 Mongo 에 있어 세는 건 불가능하고,

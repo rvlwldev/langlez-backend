@@ -16,4 +16,8 @@ interface ChatRoomMemberJpaRepository : JpaRepository<ChatRoomMember, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update ChatRoomMember m set m.unreadCount = m.unreadCount + 1 where m.roomId = :roomId and m.memberId = :memberId")
     fun increaseUnread(roomId: Long, memberId: Long)
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update ChatRoomMember m set m.leftAt = null where m.roomId = :roomId and m.memberId = :memberId")
+    fun rejoin(roomId: Long, memberId: Long)
 }

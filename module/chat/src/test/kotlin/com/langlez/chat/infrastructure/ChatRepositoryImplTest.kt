@@ -161,5 +161,22 @@ class ChatRepositoryImplTest : BehaviorSpec() {
                 }
             }
         }
+
+        Given("나간 방의 참여자를 재입장시킬 때") {
+            val (a, b) = 1021L to 1022L
+            val room = repo.createRoom(a, b)
+            repo.saveParticipant(repo.findParticipant(room.id, b)!!.apply { leave(now()) })
+            repo.increaseUnread(room.id, b)
+
+            When("rejoinParticipant 를 호출하면") {
+                repo.rejoinParticipant(room.id, b)
+
+                Then("leftAt 이 null 이 되고 증가된 unreadCount 가 보존된다") {
+                    val participant = repo.findParticipant(room.id, b)!!
+                    participant.leftAt shouldBe null
+                    participant.unreadCount shouldBe 1L
+                }
+            }
+        }
     }
 }
