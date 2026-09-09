@@ -19,7 +19,7 @@ class ChatSubscriptionAuthorizer(private val repo: ChatRepository) : Subscriptio
     override fun authorize(destination: String, memberId: Long): Boolean {
         val roomId = ROOM_TOPIC_PATTERN.matchEntire(destination)?.groupValues?.get(1)?.toLongOrNull() ?: return false
 
-        return repo.findParticipant(roomId, memberId) != null
+        return repo.findParticipant(roomId, memberId)?.hasLeft() == false
     }
 
     companion object {
