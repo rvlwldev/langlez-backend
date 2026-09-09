@@ -13,6 +13,7 @@ import com.langlez.exception.LanglezException
 import com.langlez.follow.contract.FollowReader
 import java.time.Instant
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.CONFLICT
 import org.springframework.http.HttpStatus.FORBIDDEN
@@ -129,14 +130,18 @@ class EchoService(
         val post = findPostOrThrow(postId)
         if (isBlocked(memberId, post.authorId)) throw LanglezException(FORBIDDEN, "echo.blocked")
 
-        tx.execute {
-            // 유니크 제약이 최종 방어선이지만, 제약 위반은 트랜잭션을 통째로 망가뜨린다. 먼저 확인해서 409 로 돌려준다.
-            if (repo.isLiked(postId, memberId)) throw LanglezException(CONFLICT, "echo.like.duplicated")
+        try {
+            tx.execute {
+                // 유니크 제약이 최종 방어선이지만, 제약 위반은 트랜잭션을 통째로 망가뜨린다. 먼저 확인해서 409 로 돌려준다.
+                if (repo.isLiked(postId, memberId)) throw LanglezException(CONFLICT, "echo.like.duplicated")
 
-            repo.addLike(postId, memberId)
+                repo.addLike(postId, memberId)
 
-            // 자기 글에 자기가 누른 건 알릴 이유가 없다.
-            if (post.authorId != memberId) publisher.publishEvent(EchoPostLikedEvent(postId, post.authorId, memberId))
+                // 자기 글에 자기가 누른 건 알릴 이유가 없다.
+                if (post.authorId != memberId) publisher.publishEvent(EchoPostLikedEvent(postId, post.authorId, memberId))
+            }
+        } catch (e: DataIntegrityViolationException) {
+            throw LanglezException(CONFLICT, "echo.like.duplicated")
         }
     }
 

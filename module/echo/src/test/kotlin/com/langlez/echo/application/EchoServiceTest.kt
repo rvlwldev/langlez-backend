@@ -24,6 +24,8 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.http.HttpStatus.CONFLICT
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -229,6 +231,19 @@ class EchoServiceTest : BehaviorSpec({
 
                 verify { repo.addLike(10L, me) }
                 verify { publisher.publishEvent(EchoPostLikedEvent(10L, other, me)) }
+            }
+        }
+
+        When("동시 좋아요 요청으로 유니크 제약 위반(DataIntegrityViolationException)이 발생하면") {
+            Then("409(echo.like.duplicated) 예외를 던진다") {
+                every { repo.findPost(10L) } returns post(authorId = other)
+                every { blocks.isBlockedBetween(me, other) } returns false
+                every { repo.isLiked(10L, me) } returns false
+                every { repo.addLike(10L, me) } throws DataIntegrityViolationException("duplicate like")
+
+                val ex = shouldThrow<LanglezException> { service.like(me, 10L) }
+                ex.status shouldBe CONFLICT
+                ex.message shouldBe "echo.like.duplicated"
             }
         }
     }
