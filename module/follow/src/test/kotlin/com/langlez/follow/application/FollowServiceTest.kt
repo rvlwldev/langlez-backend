@@ -7,6 +7,7 @@ import com.langlez.follow.domain.Follow
 import com.langlez.follow.domain.FollowRepository
 import com.langlez.follow.domain.FollowRepository.Edge
 import com.langlez.member.contract.MemberReader
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
@@ -16,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -119,6 +121,17 @@ class FollowServiceTest : BehaviorSpec({
 
                 verify(exactly = 0) { repo.save(any<Follow>()) }
                 verify(exactly = 0) { publisher.publishEvent(any<Any>()) }
+            }
+        }
+
+        When("동시 팔로우 요청으로 유니크 제약 위반(DataIntegrityViolationException)이 발생하면") {
+            Then("예외 없이 멱등하게 성공한다") {
+                every { members.findProfileInfo(2L) } returns member(2L)
+                every { blocks.isBlockedBetween(1L, 2L) } returns false
+                every { repo.find(1L, 2L) } returns null
+                every { repo.save(any<Follow>()) } throws DataIntegrityViolationException("UNQ_MEMBER_FOLLOW")
+
+                shouldNotThrowAny { service.follow(1L, 2L) }
             }
         }
 
