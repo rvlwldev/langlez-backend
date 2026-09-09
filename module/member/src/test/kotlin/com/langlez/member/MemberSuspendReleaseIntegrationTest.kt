@@ -1,5 +1,6 @@
 package com.langlez.member
 
+import com.langlez.member.application.MemberService
 import com.langlez.member.application.MemberSuspendReleaseScheduler
 import com.langlez.member.application.MemberSuspender
 import com.langlez.member.domain.Member
@@ -52,6 +53,9 @@ class MemberSuspendReleaseIntegrationTest : BehaviorSpec() {
 
     @Autowired
     lateinit var suspender: MemberSuspender
+
+    @Autowired
+    lateinit var memberService: MemberService
 
     // 스케줄러가 internal 이라 프로퍼티도 internal 이어야 한다.
     @Autowired
@@ -234,6 +238,19 @@ class MemberSuspendReleaseIntegrationTest : BehaviorSpec() {
                 scheduler.releaseExpiredBefore(Instant.now().plus(3_650, DAYS))
 
                 statusOf(member.id) shouldBe Member.Status.SUSPENDED
+            }
+        }
+
+        Given("정지 이력이 있는 회원을 memberService.unsuspendMember 로 해제하면") {
+            val member = newMember("unsuspend-history", Member.Status.SUSPENDED)
+            openHistory(member.id, Instant.now().minus(1, DAYS))
+            openHistory(member.id, releaseAt = null)
+
+            memberService.unsuspendMember(member.id)
+
+            Then("회원 상태가 ACTIVE 가 되고 열린 정지 이력이 모두 닫힌다") {
+                statusOf(member.id) shouldBe Member.Status.ACTIVE
+                suspendRepo.findOpen(member.id).shouldBeEmpty()
             }
         }
     }

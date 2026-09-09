@@ -17,4 +17,7 @@ interface MemberSuspendHistoryRepository {
      * `releaseAt` 이 null 인 무기한 정지는 걸리지 않는다 — 기간 없는 정지는 사람이 풀어야 한다.
      */
     fun findExpired(now: Instant, size: Int): List<MemberSuspendHistory>
+
+    /** 아직 닫히지 않은 활성 정지 이력을 닫는다. */
+    fun releaseActive(memberId: Long)
 }

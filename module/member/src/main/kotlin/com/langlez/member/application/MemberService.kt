@@ -7,6 +7,7 @@ import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberSuspendHistoryRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -25,6 +26,7 @@ class MemberService(
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
     private val tx: TransactionTemplate,
+    private val suspendRepo: MemberSuspendHistoryRepository,
 ) {
 
     @Retryable(maxAttempts = 3, backoff = Backoff(100), retryFor = [DataIntegrityViolationException::class])
@@ -160,6 +162,21 @@ class MemberService(
     fun updateFcmToken(id: Long, token: String) {
         findOrThrow(id).apply { fcm = token }
             .also(repo::save)
+    }
+
+    /** 어드민 정지 해제. 정지 이력도 해제 처리한다. */
+    @Transactional
+    fun unsuspendMember(id: Long) {
+        val member = findOrThrow(id)
+
+        try {
+            member.unsuspend()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
+        }
+
+        repo.save(member)
+        suspendRepo.releaseActive(member.id)
     }
 
     @Transactional
