@@ -1,9 +1,11 @@
 package com.langlez.redis.distributedLock
 
+import com.langlez.exception.LanglezException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
@@ -21,7 +23,7 @@ class RedisLockService(private val redissonClient: RedissonClient) {
      * @param unit 시간 단위
      * @param action 실행할 작업
      * @return 작업 결과
-     * @throws IllegalStateException 락 획득 실패 시 발생 (throwOnFailure = true 일 때)
+     * @throws LanglezException 락 획득 실패 시 발생 (throwOnFailure = true 일 때)
      *
      * 주의: `throwOnFailure = false` 면 락 미획득 시 `null` 을 돌려준다.
      * 이 값이 non-null 반환 타입의 메서드로 흘러가면 호출부에서 NPE 가 난다.
@@ -52,7 +54,7 @@ class RedisLockService(private val redissonClient: RedissonClient) {
         if (!acquired) {
             if (throwOnFailure) {
                 logger.error("Lock acquisition failed: $key")
-                throw IllegalStateException("Lock acquisition failed for key: $key")
+                throw LanglezException(HttpStatus.CONFLICT, "common.conflict")
             } else {
                 logger.debug("Lock already acquired by another node. Skipping execution: $key")
                 return null
