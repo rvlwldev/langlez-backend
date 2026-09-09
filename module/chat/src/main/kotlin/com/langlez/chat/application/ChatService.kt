@@ -9,6 +9,7 @@ import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoom
 import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.domain.ChatRoomSummary
+import com.langlez.chat.domain.SeqLockTimeoutException
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
 import java.time.Instant
@@ -17,6 +18,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
+import org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -85,10 +87,14 @@ class ChatService(
             // 목록이 느려지면 findRoomSummaries 쿼리 자체에 leftAt 조건을 넣는 쪽으로 올린다.
             .filter { repo.findParticipant(it.room.id, memberId)?.hasLeft() != true }
 
-    /** 참여 여부만 Postgres 에서 확인하고 본문은 Mongo 에서 읽는다. 첨부가 임베드라 조회는 한 번뿐이다. */
-    @Transactional(readOnly = true)
+    /**
+     * 참여 여부만 Postgres 에서 확인하고 본문은 Mongo 에서 읽는다. 첨부가 임베드라 조회는 한 번뿐이다.
+     *
+     * 참여 확인과 본문 조회를 한 트랜잭션에 묶지 않는다 — `send` 와 같은 이유다. Mongo 가 흔들리는
+     * 동안 Postgres 커넥션을 쥐고 있으면 그 시간만큼 풀이 마르고 채팅과 무관한 요청까지 막힌다.
+     */
     fun listMessages(memberId: Long, roomId: Long, size: Int, cursor: Long?): List<ChatMessageView> {
-        participantOrThrow(roomId, memberId)
+        tx.execute { participantOrThrow(roomId, memberId) }
 
         // 나갔던 사람도 이전 대화를 그대로 본다(재입장 정책). 그래서 leftAt 으로 자르지 않는다.
         return messages.findByRoom(roomId, size, cursor).map(ChatMessageView::of)
@@ -120,11 +126,22 @@ class ChatService(
         // storage.attach 는 S3 확인이 걸린 블로킹 I/O 다. DB 커넥션을 쥔 채 기다리지 않도록 먼저 끝낸다.
         val urls = keys.map { storage.attach(it) }
 
+        // nextSeq 의 초기화 락 대기가 시간 안에 안 끝나면(락 보유 스레드가 죽었거나 Mongo 응답 없음)
+        // SeqLockTimeoutException 이 온다 — 503 으로 변환해 클라이언트가 재시도하게 한다.
+        // IllegalStateException 이 아니라 이 전용 타입인 이유: 저장소가 `@Repository` 라 Spring 이
+        // IllegalStateException 을 InvalidDataAccessApiUsageException 으로 가로채 바꿔 버리면
+        // 이 catch 가 통째로 안 잡고 지나간다. SeqLockTimeoutException 정의를 되돌리지 마라.
+        val seq = try {
+            messages.nextSeq(roomId)
+        } catch (e: SeqLockTimeoutException) {
+            throw LanglezException(SERVICE_UNAVAILABLE, e.message, e)
+        }
+
         val message = messages.save(
             ChatMessage(
                 roomId = roomId,
                 senderId = memberId,
-                seq = messages.nextSeq(roomId),
+                seq = seq,
                 type = type,
                 content = content,
                 files = urls.mapIndexed { i, url -> ChatMessage.Attachment(url, i) },
