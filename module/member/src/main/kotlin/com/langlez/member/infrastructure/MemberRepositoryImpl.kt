@@ -8,6 +8,8 @@ import com.langlez.member.domain.MemberRepository
 import com.langlez.member.infrastructure.jpa.MemberJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import com.langlez.member.domain.QMember.Companion.member as QMember
 
 /**
@@ -107,6 +109,19 @@ class MemberRepositoryImpl(
         // cascade/orphanRemoval 이 돌지 않고 member_audits 고아 행이 남는다.
         jpa.deleteAll(members)
         members.forEach(::evictCaches)
+    }
+
+    /**
+     * 온라인 트래커 동기화 전용.
+     * 엔티티 전체 merge 와 캐시 갱신/퇴출(updateCaches)을 우회해 접근 메타데이터만 DB에 갱신한다.
+     * 주기적 동기화 때 활성 회원의 캐시가 일제히 퇴출되는 캐시 스탬피드를 방지한다.
+     */
+    @Transactional
+    override fun updateAccessInfo(id: Long, accessedAt: Instant?, ip: String?, deviceId: String?) {
+        val member = jpa.findWithAuditById(id) ?: return
+        accessedAt?.let(member::updateAccessedAt)
+        ip?.let { member.audit.lastAccessedIp = it }
+        deviceId?.let { member.audit.lastDeviceId = it }
     }
 
     /** 쓰기 경로 전용. 저장한 값이 최신이므로 무조건 덮어쓴다. */
