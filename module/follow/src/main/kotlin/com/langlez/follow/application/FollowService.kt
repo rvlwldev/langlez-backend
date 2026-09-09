@@ -8,6 +8,7 @@ import com.langlez.follow.domain.FollowRepository
 import com.langlez.follow.domain.FollowRepository.Edge
 import com.langlez.member.contract.MemberReader
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.FORBIDDEN
 import org.springframework.http.HttpStatus.NOT_FOUND
@@ -48,13 +49,17 @@ class FollowService(
         requireMemberExists(targetId)
         if (blocks.isBlockedBetween(memberId, targetId)) throw LanglezException(FORBIDDEN, "social.follow.blocked")
 
-        tx.execute {
-            if (repo.find(memberId, targetId) != null) return@execute
+        try {
+            tx.execute {
+                if (repo.find(memberId, targetId) != null) return@execute
 
-            // 저장 결과의 행 id 를 이벤트에 싣는다. 컨슈머 중복 판정이 이 값으로 갈린다
-            // (언팔로우 후 재팔로우와 카프카 재배달을 구분하는 유일한 값이다).
-            val follow = repo.save(newFollow(memberId, targetId))
-            publisher.publishEvent(MemberFollowedEvent(follow.id, memberId, targetId))
+                // 저장 결과의 행 id 를 이벤트에 싣는다. 컨슈머 중복 판정이 이 값으로 갈린다
+                // (언팔로우 후 재팔로우와 카프카 재배달을 구분하는 유일한 값이다).
+                val follow = repo.save(newFollow(memberId, targetId))
+                publisher.publishEvent(MemberFollowedEvent(follow.id, memberId, targetId))
+            }
+        } catch (e: DataIntegrityViolationException) {
+            // UNQ_MEMBER_FOLLOW 충돌 = 동시 팔로우 요청 경합으로 이미 저장됨. 멱등하게 성공 처리한다.
         }
     }
 
