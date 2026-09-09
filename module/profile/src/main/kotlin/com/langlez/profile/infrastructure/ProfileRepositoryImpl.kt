@@ -42,21 +42,22 @@ class ProfileRepositoryImpl(
 
     override fun saveProfile(profile: Profile): Profile = profileJpa.save(profile)
 
-    override fun increaseVisitCount(visitorId: Long, username: String) {
-        redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").add(visitorId)
-        redisson.getSet<String>(DIRTY_USERNAMES_KEY).add(username)
+    override fun increaseVisitCount(visitorId: Long, memberId: Long) {
+        redisson.getHyperLogLog<Long>("$HLL_PREFIX$memberId").add(visitorId)
+        redisson.getSet<Long>(DIRTY_KEY).add(memberId)
     }
 
-    override fun getVisitCountDelta(username: String): Long =
-        redisson.getHyperLogLog<Long>("$HLL_PREFIX$username").count()
+    override fun getVisitCountDelta(memberId: Long): Long =
+        redisson.getHyperLogLog<Long>("$HLL_PREFIX$memberId").count()
 
-    override fun beginVisitCountFlush(): Map<String, Long> {
-        val usernames = redisson.getSet<String>(DIRTY_USERNAMES_KEY).readAll()
-        if (usernames.isEmpty()) return emptyMap()
+    override fun beginVisitCountFlush(): Map<Long, Long> {
+        val dirtyElements = redisson.getSet<Any>(DIRTY_KEY).readAll()
+        if (dirtyElements.isEmpty()) return emptyMap()
+        val memberIds = dirtyElements.map { (it as Number).toLong() }
 
-        val result = mutableMapOf<String, Long>()
-        for (username in usernames) {
-            val key = "$HLL_PREFIX$username"
+        val result = mutableMapOf<Long, Long>()
+        for (memberId in memberIds) {
+            val key = "$HLL_PREFIX$memberId"
             val flushingKey = "$key$FLUSHING_SUFFIX"
             if (redisson.getBucket<Any>(key).isExists) {
                 if (redisson.getBucket<Any>(flushingKey).isExists) {
@@ -73,21 +74,21 @@ class ProfileRepositoryImpl(
             }
             val count = redisson.getHyperLogLog<Long>(flushingKey).count()
             if (count > 0) {
-                result[username] = count
+                result[memberId] = count
             }
         }
         return result
     }
 
-    override fun commitVisitCountFlush(usernames: Collection<String>) {
-        if (usernames.isEmpty()) return
-        val flushingKeys = usernames.map { "$HLL_PREFIX$it$FLUSHING_SUFFIX" }
+    override fun commitVisitCountFlush(memberIds: Collection<Long>) {
+        if (memberIds.isEmpty()) return
+        val flushingKeys = memberIds.map { "$HLL_PREFIX$it$FLUSHING_SUFFIX" }
         redisson.keys.delete(*flushingKeys.toTypedArray())
-        val dirtySet = redisson.getSet<String>(DIRTY_USERNAMES_KEY)
-        for (username in usernames) {
-            val key = "$HLL_PREFIX$username"
+        val dirtySet = redisson.getSet<Long>(DIRTY_KEY)
+        for (memberId in memberIds) {
+            val key = "$HLL_PREFIX$memberId"
             if (!redisson.getBucket<Any>(key).isExists) {
-                dirtySet.remove(username)
+                dirtySet.remove(memberId)
             }
         }
     }
@@ -102,6 +103,6 @@ class ProfileRepositoryImpl(
     companion object {
         private const val HLL_PREFIX = "profile:visit:"
         private const val FLUSHING_SUFFIX = ":flushing"
-        private const val DIRTY_USERNAMES_KEY = "profile:visit:dirty_usernames"
+        private const val DIRTY_KEY = "profile:visit:dirty"
     }
 }

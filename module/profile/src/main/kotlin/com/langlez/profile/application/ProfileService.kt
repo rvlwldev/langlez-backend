@@ -74,8 +74,8 @@ class ProfileService(
         // 조회 직후 계정이 지워지는 경우만 null 이다.
         val member = members.findProfileInfo(memberId)
             ?: throw LanglezException(404, "profile.not-found")
-        increaseVisitCount(visitorId, username)
-        val visitDelta = getVisitCount(username)
+        increaseVisitCount(visitorId, member.id)
+        val visitDelta = getVisitCount(member.id)
         // 팔로워/팔로잉 수는 follow 소유라 포트로 물어본다. 프로필 화면이 두 숫자를 함께 그려서
         // 여기 실어 보낸다 — 클라이언트가 follow 엔드포인트를 따로 부르면 화면 하나에 요청이 셋이 된다.
         val counts = follows.counts(member.id)
@@ -91,12 +91,12 @@ class ProfileService(
         )
     }
 
-    fun increaseVisitCount(visitorId: Long, username: String) {
-        repo.increaseVisitCount(visitorId, username)
+    fun increaseVisitCount(visitorId: Long, memberId: Long) {
+        repo.increaseVisitCount(visitorId, memberId)
     }
 
-    fun getVisitCount(username: String): Long =
-        repo.getVisitCountDelta(username)
+    fun getVisitCount(memberId: Long): Long =
+        repo.getVisitCountDelta(memberId)
 
     /** key 를 함께 내려줘야 클라이언트가 서명 붙은 PUT URL 대신 key 로 확정할 수 있다. */
     fun generateImageUploadUrl(memberId: Long, filename: String, contentType: String): Storage.PresignedResult {

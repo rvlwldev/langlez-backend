@@ -59,8 +59,8 @@ class ProfileServiceTest : BehaviorSpec({
                 every { members.findIdByHandle("target") } returns 9L
                 every { repo.findProfile(9L) } returns profile(9L)
                 every { members.findProfileInfo(9L) } returns memberInfo(9L, "target")
-                every { repo.increaseVisitCount(1L, "target") } returns Unit
-                every { repo.getVisitCountDelta("target") } returns 2L
+                every { repo.increaseVisitCount(1L, 9L) } returns Unit
+                every { repo.getVisitCountDelta(9L) } returns 2L
                 every { follows.counts(9L) } returns FollowReader.CountInfo(followers = 12L, followings = 3L)
 
                 val detail = service.getProfileDetail(1L, "target", Locale.KOREA)
@@ -274,23 +274,23 @@ class ProfileServiceTest : BehaviorSpec({
     Given("방문자 수 조회 시") {
 
         When("Redis에 저장된 delta가 있으면") {
-            every { repo.getVisitCountDelta("user1") } returns 7L
+            every { repo.getVisitCountDelta(1L) } returns 7L
 
             Then("delta 값을 반환한다") {
-                service.getVisitCount("user1") shouldBe 7L
+                service.getVisitCount(1L) shouldBe 7L
             }
         }
     }
 
     Given("방문자 수 증가 시") {
 
-        When("visitorId와 username으로 increaseVisitCount를 호출하면") {
-            every { repo.increaseVisitCount(2L, "user1") } just runs
+        When("visitorId와 memberId로 increaseVisitCount를 호출하면") {
+            every { repo.increaseVisitCount(2L, 1L) } just runs
 
-            service.increaseVisitCount(2L, "user1")
+            service.increaseVisitCount(2L, 1L)
 
             Then("repo.increaseVisitCount가 호출된다") {
-                verify { repo.increaseVisitCount(2L, "user1") }
+                verify { repo.increaseVisitCount(2L, 1L) }
             }
         }
     }
