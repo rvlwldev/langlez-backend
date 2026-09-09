@@ -10,6 +10,24 @@ import com.querydsl.jpa.impl.JPAQueryFactory
 import org.springframework.stereotype.Repository
 import com.langlez.member.domain.QMember.Companion.member as QMember
 
+/**
+ * `member` 캐시는 값 객체가 아니라 [Member] 엔티티를 그대로 담는다 — 저장소 규약(`CLAUDE.md`
+ * 부록의 "LAZY 연관을 가진 엔티티는 캐시하지 않는다")을 어긴 채로 남겨 둔 것이다.
+ *
+ * `find(handle)`/`find(provider, id)`/`find(id)` 는 전부 `audit` 을 함께 fetch 한 뒤에만
+ * 캐시에 넣으므로(join fetch / `@EntityGraph`), 초기화 안 된 프록시가 직렬화되는 사고는 없다.
+ * 남는 위험은 두 갈래다.
+ * 1. **폴백 캐시가 같은 힙 인스턴스를 공유하는 것** — Redis 는 JSON 코덱이라 매 조회가 새 인스턴스지만,
+ *    Redis 장애 시 붙는 로컬 Caffeine 은 그러지 않았다. `CaffeineCache` 를 직렬화 왕복으로 바꿔 막았다.
+ * 2. **캐시 TTL(10분) 동안 `@Version` 이 낡을 수 있는 것** — 그 값을 들고 `repo.save()` 를 부르면
+ *    `merge()` 가 `ObjectOptimisticLockingFailureException` 을 던진다. 이건 고치지 않았다. 대신
+ *    [com.langlez.member.application.MemberService.updateHandle] 에서 그 예외를
+ *    핸들 중복(409)으로 오인하던 버그만 없앴다 — 실제 원인 그대로 드러난다.
+ *
+ * 값 객체로 갈아타면 2번까지 없앨 수 있지만 [find]·[save] 를 쓰는 모든 유스케이스가 캐시 스냅샷과
+ * 관리 대상 엔티티를 오가야 해서 파급이 크다. 지금은 1번(진짜 힙 손상)만 막고 2번은 README
+ * "알려진 결함" 목록에 남긴다.
+ */
 @Repository
 class MemberRepositoryImpl(
     private val jpa: MemberJpaRepository,

@@ -58,8 +58,13 @@ class MemberService(
             throw LanglezException(HttpStatus.BAD_REQUEST, e.message, e)
         }
 
-        return runCatching { repo.save(member) }
-            .getOrElse { e -> throw LanglezException(HttpStatus.CONFLICT, "member.handle.duplicated", e) }
+        // repo.save 는 em.merge() 라 즉시 플러시하지 않는다. 실제 UPDATE 는 이 메서드가 반환된
+        // 뒤 @Transactional 프록시가 커밋할 때 나가므로, 두 트랜잭션이 위 사전조회를 나란히
+        // 통과해 유니크 제약을 어기면 그 예외는 여기가 아니라 메서드 밖(커밋 시점)에서 터진다.
+        // 그래서 여기서 잡지 않는다 — 커밋 시점 위반은 GlobalRestControllerAdvice 가
+        // DataIntegrityViolationException 을 공통 409(common.conflict)로 받는다. 구체적인
+        // "핸들 중복" 메시지는 못 주지만, 어떤 제약이 깨졌는지 여기선 알 수 없다.
+        return repo.save(member)
             // 온라인 표시는 id로 keying하니 handle이 바뀌어도 옮겨 달 필요가 없다.
             .also { publisher.publishEvent(MemberHandleChangedEvent(id, member.handle)) }
     }

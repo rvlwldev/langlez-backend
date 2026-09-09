@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import org.springframework.context.support.ResourceBundleMessageSource
 import org.springframework.core.MethodParameter
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.validation.MapBindingResult
 import org.springframework.validation.FieldError
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -58,6 +59,22 @@ class GlobalRestControllerAdviceTest : BehaviorSpec({
 
             Then("resolveMessage 의 키 조회 실패 폴백으로 원래 문자열이 그대로 나간다") {
                 response.body!!.message shouldBe "refreshToken: Refresh token cannot be blank"
+            }
+        }
+    }
+
+    // MemberService.updateHandle 처럼 merge() 의 지연 플러시로 유니크 제약 위반이 서비스
+    // try-catch 를 우회해 커밋 시점에 여기로 올라오는 경우의 회귀 테스트다.
+    Given("DB 유니크 제약 위반(DataIntegrityViolationException)이 컨트롤러 밖(커밋 시점)에서 올라오면") {
+        When("응답을 만들면") {
+            val response = advice.handleDataIntegrityViolationException(
+                DataIntegrityViolationException("duplicate key value violates unique constraint"),
+                Locale.KOREAN,
+            )
+
+            Then("500 이 아니라 일반 409 로 변환된다") {
+                response.statusCode.value() shouldBe 409
+                response.body!!.message shouldBe "이미 사용 중인 정보입니다. 다른 값을 입력해 주세요."
             }
         }
     }

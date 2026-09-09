@@ -1,5 +1,6 @@
 package com.langlez.redis.cache
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.langlez.core.cache.Cache
 import com.langlez.core.cache.CacheProvider
@@ -15,6 +16,7 @@ import com.github.benmanes.caffeine.cache.Cache as NativeCache
 class ResilientCacheProvider(
     private val redisson: RedissonClient,
     private val registry: MeterRegistry,
+    private val objectMapper: ObjectMapper,
 ) : CacheProvider {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -30,7 +32,9 @@ class ResilientCacheProvider(
             .expireAfterWrite(5, TimeUnit.MINUTES)
             .maximumSize(10_000)
             .build<Any, Any>()
-        val aggregate = ResilientCache(name, redis, CaffeineCache(local), registry, isRedisAvailable::get) { markRedisDown() }
+        val aggregate = ResilientCache(name, redis, CaffeineCache(local, objectMapper), registry, isRedisAvailable::get) {
+            markRedisDown()
+        }
 
         return CacheAggregate(aggregate, local)
     }
