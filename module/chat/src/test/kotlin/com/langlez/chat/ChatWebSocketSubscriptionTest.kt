@@ -1,6 +1,7 @@
 package com.langlez.chat
 
 import com.langlez.chat.domain.ChatRepository
+import com.langlez.chat.domain.ChatRoomMember
 import com.langlez.chat.infrastructure.ChatSubscriptionAuthorizer
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.SubscriptionAuthorizer
@@ -93,10 +94,19 @@ class ChatWebSocketSubscriptionTest : BehaviorSpec({
 
         When("그 방의 참여자면") {
             Then("통과하고 보는 중으로 기록된다") {
-                every { repo.findParticipant(7L, 1L) } returns mockk()
+                every { repo.findParticipant(7L, 1L) } returns ChatRoomMember(7L, 1L)
 
                 shouldNotThrowAny { subscribe("/topic/chat/room/7", 1L) }
                 verify { tracker.recordViewing(1L, "/topic/chat/room/7") }
+            }
+        }
+
+        When("방을 나간 참여자면") {
+            Then("거부하고 보는 중으로 기록하지 않는다") {
+                every { repo.findParticipant(9L, 3L) } returns ChatRoomMember(9L, 3L).apply { leave() }
+
+                shouldThrow<IllegalArgumentException> { subscribe("/topic/chat/room/9", 3L) }
+                verify(exactly = 0) { tracker.recordViewing(3L, any()) }
             }
         }
 
