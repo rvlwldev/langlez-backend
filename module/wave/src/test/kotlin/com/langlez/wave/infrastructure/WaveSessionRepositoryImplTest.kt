@@ -13,6 +13,8 @@ import org.redisson.Redisson
 import org.redisson.config.Config
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 
 /**
  * 사라지는 채팅의 저장소.
@@ -52,8 +54,63 @@ class WaveSessionRepositoryImplTest : BehaviorSpec({
             chats.last().content shouldBe "메시지 ${overflow - 1}"
         }
 
+        Then("새 메시지를 추가하면 가장 오래된 것이 밀리고 새 메시지가 끝에 유지된다") {
+            sessions.appendChat(roomId, WaveChat(roomId, 1L, "가장 최신 메시지"))
+            val chats = sessions.recentChats(roomId)
+
+            chats shouldHaveSize WaveSessionRepositoryImpl.CAPACITY
+            chats.first().content shouldBe "메시지 6"
+            chats.last().content shouldBe "가장 최신 메시지"
+        }
+
         Then("방이 죽어도 알아서 사라지도록 TTL 이 걸려 있다") {
             redisson.getList<WaveChat>("wave:room:$roomId:chats").remainTimeToLive() shouldBeGreaterThan 0
+        }
+    }
+
+    Given("정원 이하의 채팅이 오가면") {
+        val roomId = 15L
+        val count = 5
+        repeat(count) { sessions.appendChat(roomId, WaveChat(roomId, 1L, "메시지 $it")) }
+
+        Then("메시지가 잘리지 않고 전부 유지된다") {
+            val chats = sessions.recentChats(roomId)
+
+            chats shouldHaveSize count
+            chats.first().content shouldBe "메시지 0"
+            chats.last().content shouldBe "메시지 ${count - 1}"
+        }
+    }
+
+    Given("여러 스레드가 동시에 채팅을 추가하면") {
+        val roomId = 16L
+        val totalMessages = WaveSessionRepositoryImpl.CAPACITY + 50
+        val ready = CountDownLatch(totalMessages)
+        val go = CountDownLatch(1)
+        val done = CountDownLatch(totalMessages)
+
+        Executors.newVirtualThreadPerTaskExecutor().use { pool ->
+            repeat(totalMessages) { i ->
+                pool.submit {
+                    ready.countDown()
+                    go.await()
+                    try {
+                        sessions.appendChat(roomId, WaveChat(roomId, 1L, "동시 메시지 $i"))
+                    } finally {
+                        done.countDown()
+                    }
+                }
+            }
+
+            ready.await()
+            go.countDown()
+            done.await()
+        }
+
+        Then("최신 CAPACITY 개만 유지된다") {
+            val chats = sessions.recentChats(roomId)
+
+            chats shouldHaveSize WaveSessionRepositoryImpl.CAPACITY
         }
     }
 

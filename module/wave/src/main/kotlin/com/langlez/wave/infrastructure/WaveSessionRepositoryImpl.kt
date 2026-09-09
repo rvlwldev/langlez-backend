@@ -72,12 +72,7 @@ class WaveSessionRepositoryImpl(private val redisson: RedissonClient) : WaveSess
     override fun appendChat(roomId: Long, chat: WaveChat) {
         val chats = chats(roomId)
         chats.add(chat)
-
-        // add 와 trim 사이에 몇 개가 더 들어올 수 있다. 다음 전송이 다시 잘라내므로
-        // 상한을 잠깐 몇 개 넘길 뿐이고, 그 정도를 막으려고 락을 걸 이유는 없다.
-        val size = chats.size
-        if (size > CAPACITY) chats.trim(size - CAPACITY, size - 1)
-
+        chats.trim(-CAPACITY, -1)
         chats.expire(TTL)
     }
 
