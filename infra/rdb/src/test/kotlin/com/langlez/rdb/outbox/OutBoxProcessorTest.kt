@@ -8,11 +8,16 @@ import io.mockk.slot
 import io.mockk.verify
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import io.kotest.assertions.nondeterministic.eventually
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @Entity
 @Table(name = "test_outbox")
@@ -74,6 +79,95 @@ class OutBoxProcessorTest : BehaviorSpec({
 
             Then("상태가 COMPLETE 로 저장된다") {
                 outbox.status shouldBe OutBox.Status.COMPLETE
+            }
+        }
+    }
+
+    Given("카프카 전송이 threadTimeout 보다 오래 걸릴 때") {
+        val repo = mockk<OutBoxRepository<TestOutBox>>(relaxed = true)
+        val kafka = mockk<KafkaTemplate<String, String>>(relaxed = true)
+        val outbox = TestOutBox()
+
+        every { repo.fetch(any(), any()) } returns listOf(outbox)
+
+        val interruptedLatch = CountDownLatch(1)
+        val hangingFuture = object : CompletableFuture<SendResult<String, String>>() {
+            override fun get(timeout: Long, unit: TimeUnit): SendResult<String, String> {
+                try {
+                    return super.get(timeout, unit)
+                } catch (e: InterruptedException) {
+                    interruptedLatch.countDown()
+                    throw e
+                }
+            }
+        }
+        every { kafka.send(any<ProducerRecord<String, String>>()) } returns hangingFuture
+
+        val processor = object : OutBoxProcessor<TestOutBox>(repo) {
+            override val threads = 2
+            override val threadTimeout = 1L
+
+            init {
+                val field = OutBoxProcessor::class.java.getDeclaredField("kafka")
+                field.isAccessible = true
+                field.set(this, kafka)
+            }
+        }
+
+        When("send() 를 실행하면") {
+            processor.send()
+
+            Then("워커 태스크가 취소되고 가상 스레드에 인터럽트가 전달된다") {
+                interruptedLatch.await(2, TimeUnit.SECONDS) shouldBe true
+            }
+
+            Then("세마포어 퍼밋이 누수되지 않고 반환된다") {
+                val field = OutBoxProcessor::class.java.getDeclaredField("semaphore\$delegate")
+                field.isAccessible = true
+                val sem = (field.get(processor) as Lazy<*>).value as Semaphore
+                eventually(2.seconds) {
+                    sem.availablePermits() shouldBe 2
+                }
+            }
+        }
+    }
+
+    Given("threads 한도를 초과하여 semaphore.acquire 에서 대기 중인 태스크가 타임아웃될 때") {
+        val repo = mockk<OutBoxRepository<TestOutBox>>(relaxed = true)
+        val kafka = mockk<KafkaTemplate<String, String>>(relaxed = true)
+        val outbox1 = TestOutBox(key = "k1")
+        val outbox2 = TestOutBox(key = "k2")
+
+        every { repo.fetch(any(), any()) } returns listOf(outbox1, outbox2)
+
+        val hangingFuture = object : CompletableFuture<SendResult<String, String>>() {
+            override fun get(timeout: Long, unit: TimeUnit): SendResult<String, String> {
+                return super.get(timeout, unit)
+            }
+        }
+        every { kafka.send(any<ProducerRecord<String, String>>()) } returns hangingFuture
+
+        val processor = object : OutBoxProcessor<TestOutBox>(repo) {
+            override val threads = 1
+            override val threadTimeout = 1L
+
+            init {
+                val field = OutBoxProcessor::class.java.getDeclaredField("kafka")
+                field.isAccessible = true
+                field.set(this, kafka)
+            }
+        }
+
+        When("send() 를 실행하면") {
+            processor.send()
+
+            Then("세마포어 퍼밋이 누수되거나 초과 반환되지 않고 원래 크기(1)로 유지된다") {
+                val field = OutBoxProcessor::class.java.getDeclaredField("semaphore\$delegate")
+                field.isAccessible = true
+                val sem = (field.get(processor) as Lazy<*>).value as Semaphore
+                eventually(2.seconds) {
+                    sem.availablePermits() shouldBe 1
+                }
             }
         }
     }

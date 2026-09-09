@@ -27,10 +27,18 @@ abstract class OutBoxProcessor<T : OutBox>(private val repo: OutBoxRepository<T>
     open fun send() = repo.fetch(chunk, tries)
         .ifEmpty { return }
         .map { outbox -> executor.submit { send(outbox) } }
-        .forEach { runCatching { it.get(threadTimeout, SECONDS) } }
+        .forEach { future ->
+            runCatching { future.get(threadTimeout, SECONDS) }
+                .onFailure { future.cancel(true) }
+        }
 
     private fun send(outbox: T) {
-        semaphore.acquire()
+        try {
+            semaphore.acquire()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return
+        }
 
         try {
             runCatching { outbox.dispatch() }
@@ -42,7 +50,13 @@ abstract class OutBoxProcessor<T : OutBox>(private val repo: OutBoxRepository<T>
 
             runCatching { kafka.send(outbox.record).get(kafkaTimeout, SECONDS) }
                 .onSuccess { outbox.complete() }
-                .onFailure { outbox.fail(tries) }
+                .onFailure {
+                    if (it is InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return
+                    }
+                    outbox.fail(tries)
+                }
 
             repo.save(outbox)
         } finally {
