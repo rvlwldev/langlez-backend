@@ -158,7 +158,7 @@ class ChatService(
             repo.increaseUnread(roomId, partner.memberId)
 
             // 재입장 정책: 나간 상대도 새 메시지가 오면 방이 되살아난다(이전 대화 포함).
-            if (partner.hasLeft()) repo.saveParticipant(partner.apply { rejoin() })
+            if (partner.hasLeft()) repo.rejoinParticipant(roomId, partner.memberId)
         }
 
         // 실시간 전달은 방 메타까지 커밋된 뒤에. 롤백된 상태를 상대 화면에 띄우면 되돌릴 방법이 없다.

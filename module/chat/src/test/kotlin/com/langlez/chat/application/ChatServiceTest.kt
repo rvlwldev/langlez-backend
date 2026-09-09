@@ -344,14 +344,15 @@ class ChatServiceTest : BehaviorSpec({
                 every { repo.findParticipants(roomId) } returns participants
                 every { blocks.isBlockedBetween(me, partner) } returns false
                 every { repo.findRoom(roomId) } returns ChatRoom(memberA = me, memberB = partner, id = roomId)
-                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.rejoinParticipant(any(), any()) } returns Unit
                 every { repo.increaseUnread(any(), any()) } returns Unit
                 every { messages.nextSeq(roomId) } returns 1L
                 every { messages.save(any()) } answers { firstArg<ChatMessage>().apply { id = "m1" } }
 
                 service.send(me, roomId, ChatMessage.Type.TEXT, "돌아와", emptyList())
 
-                verify { repo.saveParticipant(match { it.memberId == partner && it.leftAt == null }) }
+                verify { repo.rejoinParticipant(roomId, partner) }
+                verify(exactly = 0) { repo.saveParticipant(any()) }
             }
         }
     }
