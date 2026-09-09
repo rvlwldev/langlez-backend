@@ -1,5 +1,6 @@
 package com.langlez.kafka.config
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.SerializationException
@@ -15,6 +16,9 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
 import org.springframework.kafka.listener.DefaultErrorHandler
 import org.springframework.kafka.listener.RetryListener
+import org.springframework.kafka.support.serializer.DeserializationException
+import org.springframework.messaging.converter.MessageConversionException
+import org.springframework.messaging.handler.invocation.MethodArgumentResolutionException
 import org.springframework.util.backoff.ExponentialBackOff
 
 /**
@@ -101,7 +105,13 @@ class KafkaConfiguration {
         // consumer 를 넘겨 파티션 유효성(verifyPartition)을 확인한다. 감싸면 그 가드가 꺼진다.
         // 로그는 RetryListener 로 남긴다.
         return DefaultErrorHandler(recoverer, backOff).apply {
-            addNotRetryableExceptions(SerializationException::class.java)
+            addNotRetryableExceptions(
+                SerializationException::class.java,
+                JsonProcessingException::class.java,
+                MessageConversionException::class.java,
+                DeserializationException::class.java,
+                MethodArgumentResolutionException::class.java,
+            )
             setRetryListeners(object : RetryListener {
                 override fun failedDelivery(record: ConsumerRecord<*, *>, ex: Exception, deliveryAttempt: Int) = Unit
 
