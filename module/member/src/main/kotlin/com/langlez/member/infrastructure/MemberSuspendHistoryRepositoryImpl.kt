@@ -39,4 +39,8 @@ class MemberSuspendHistoryRepositoryImpl(
         .orderBy(QHistory.id.asc())
         .limit(size.toLong())
         .fetch()
+
+    override fun releaseActive(memberId: Long) {
+        jpa.releaseActive(memberId)
+    }
 }

@@ -5,6 +5,7 @@ import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberSuspendHistoryRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -27,8 +28,9 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val tx = mockk<TransactionTemplate>()
+    val suspendRepo = mockk<MemberSuspendHistoryRepository>()
 
-    val service = MemberService(repo, creator, tracker, storage, publisher, tx)
+    val service = MemberService(repo, creator, tracker, storage, publisher, tx, suspendRepo)
 
     afterEach { clearMocks(repo, answers = false) }
 

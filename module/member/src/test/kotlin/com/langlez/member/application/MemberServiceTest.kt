@@ -6,6 +6,7 @@ import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
+import com.langlez.member.domain.MemberSuspendHistoryRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -22,14 +23,15 @@ class MemberServiceTest : BehaviorSpec({
     val tracker = mockk<OnlineTracker>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
+    val suspendRepo = mockk<MemberSuspendHistoryRepository>()
 
     // updateProfileUrl 이 TransactionTemplate 으로 읽기+쓰기를 묶는다. 테스트에선 그대로 실행시킨다.
     val tx = mockk<TransactionTemplate>()
     every { tx.execute<Any>(any()) } answers { firstArg<TransactionCallback<Any>>().doInTransaction(mockk(relaxed = true)) }
 
-    val service = MemberService(repo, creator, tracker, storage, publisher, tx)
+    val service = MemberService(repo, creator, tracker, storage, publisher, tx, suspendRepo)
 
-    afterEach { clearMocks(repo, creator, tracker, storage, publisher, answers = false) }
+    afterEach { clearMocks(repo, creator, tracker, storage, publisher, suspendRepo, answers = false) }
 
     fun member(id: Long = 1L, status: Member.Status = Member.Status.ACTIVE) = Member(
         id = id,
@@ -133,6 +135,53 @@ class MemberServiceTest : BehaviorSpec({
             Then("member.imageUrl에 attach 결과 URL이 반영되어 저장된다") {
                 updated.imageUrl shouldBe "https://cdn.langlez.com/key123"
                 verify { repo.save(match { it.imageUrl == "https://cdn.langlez.com/key123" }) }
+            }
+        }
+    }
+
+    Given("회원 정지 해제 시") {
+
+        When("정지된 회원을 정지 해제하면") {
+            val target = member(status = Member.Status.SUSPENDED)
+            every { repo.find(1L) } returns target
+            every { repo.save(any()) } answers { firstArg() }
+            every { suspendRepo.releaseActive(1L) } just Runs
+
+            service.unsuspendMember(1L)
+
+            Then("상태가 ACTIVE로 바뀌어 저장되고 활성 정지 이력이 해제된다") {
+                verify { repo.save(match { it.status == Member.Status.ACTIVE }) }
+                verify { suspendRepo.releaseActive(1L) }
+            }
+        }
+
+        When("정지 상태가 아닌 회원을 정지 해제하려 하면") {
+            every { repo.find(1L) } returns member(status = Member.Status.ACTIVE)
+
+            Then("400 LanglezException이 발생하고 정지 이력을 건드리지 않는다") {
+                val ex = shouldThrow<LanglezException> { service.unsuspendMember(1L) }
+                ex.status.value() shouldBe 400
+                verify(exactly = 0) { suspendRepo.releaseActive(any()) }
+            }
+        }
+
+        When("이미 탈퇴한 회원을 정지 해제하려 하면") {
+            every { repo.find(1L) } returns member(status = Member.Status.WITHDRAWN)
+
+            Then("400 LanglezException이 발생하고 정지 이력을 건드리지 않는다") {
+                val ex = shouldThrow<LanglezException> { service.unsuspendMember(1L) }
+                ex.status.value() shouldBe 400
+                verify(exactly = 0) { suspendRepo.releaseActive(any()) }
+            }
+        }
+
+        When("존재하지 않는 회원을 정지 해제하려 하면") {
+            every { repo.find(999L) } returns null
+
+            Then("404 LanglezException이 발생하고 정지 이력을 건드리지 않는다") {
+                val ex = shouldThrow<LanglezException> { service.unsuspendMember(999L) }
+                ex.status.value() shouldBe 404
+                verify(exactly = 0) { suspendRepo.releaseActive(any()) }
             }
         }
     }
