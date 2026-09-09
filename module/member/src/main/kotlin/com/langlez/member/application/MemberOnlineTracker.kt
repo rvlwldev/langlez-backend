@@ -128,43 +128,48 @@ class MemberOnlineTracker(
      * 접속 정보를 DB 에 반영한다. 접속 시각(핑 ZSET)과 IP/기기(해시)를 **한 번에** 처리한다.
      *
      * 접속마다 DB를 치면 감당이 안 되니 레디스에 모아뒀다가 주기적으로만 내린다.
-     * 둘을 별도 스케줄러로 나누면 같은 `member.audit` 행을 두 트랜잭션이 각자 merge 해
-     * 서로를 덮어쓰고 @Version 이 충돌한다. 그래서 하나의 락, 하나의 조회, 회원당 한 번의 저장으로 묶는다.
-     * 처리한 구간/키는 지워서 레디스가 무한정 늘어나지 않게 한다.
+     * 레디스 읽기/정리는 DB 트랜잭션 밖에서 수행해 커넥션 점유를 방지하고,
+     * DB 저장은 엔티티 전체 merge 와 캐시 퇴출을 유발하는 repo.save() 대신
+     * repo.updateAccessInfo() 로 audit 테이블만 직접 갱신해 캐시 스탬피드를 막는다.
+     * ZSET 정리는 0.0부터 end까지 수행해 스케줄러 지연에 따른 누수를 방지한다.
      */
     @Scheduled(cron = "0 */10 * * * *")
-    @DistributedLock(transactional = true, prefix = "lock:member-access-sync")
+    @DistributedLock(prefix = "lock:member-access-sync")
     fun syncAccessInfo() {
         val end = now()
-        val start = end - Duration.ofMinutes(SYNC_INTERVAL_MINUTES).toMillis()
 
-        val zset = redisson.getScoredSortedSet<Long>(PING_ZSET_KEY)
-        val accessedAtById = zset.entryRange(start, true, end, true)
-            .associate { it.value to Instant.ofEpochMilli(it.score.toLong()) }
+        val zset = redisson.getScoredSortedSet<Any>(PING_ZSET_KEY)
+        val accessedAtById = zset.entryRange(0.0, true, end, true)
+            .associate { (it.value as Number).toLong() to Instant.ofEpochMilli(it.score.toLong()) }
 
-        val dirty = redisson.getSet<Long>(ACCESS_DIRTY_KEY)
-        val dirtyIds = dirty.readAll()
+        val dirty = redisson.getSet<Any>(ACCESS_DIRTY_KEY)
+        val dirtyElements = dirty.readAll()
+        val dirtyIds = dirtyElements.map { (it as Number).toLong() }.toSet()
 
         val targets = accessedAtById.keys + dirtyIds
         if (targets.isEmpty()) return
 
         // 먼저 꺼낸다. 이 사이에 새로 들어온 기록은 다음 주기에 처리된다.
-        if (dirtyIds.isNotEmpty()) dirty.removeAll(dirtyIds)
+        if (dirtyElements.isNotEmpty()) dirty.removeAll(dirtyElements)
 
-        repo.findAll(targets).forEach { member ->
-            accessedAtById[member.id]?.let(member::updateAccessedAt)
-
-            if (member.id in dirtyIds) {
-                val meta = redisson.getMap<String, String>(accessKey(member.id)).readAllMap()
-                meta[FIELD_IP]?.let { member.audit.lastAccessedIp = it }
-                meta[FIELD_DEVICE]?.let { member.audit.lastDeviceId = it }
-                redisson.getMap<String, String>(accessKey(member.id)).delete()
-            }
-
-            repo.save(member)
+        val accessMetaById = dirtyIds.associateWith { id ->
+            val map = redisson.getMap<String, String>(accessKey(id))
+            val meta = map.readAllMap()
+            map.delete()
+            meta
         }
 
-        zset.removeRangeByScore(start, true, end, true)
+        targets.forEach { id ->
+            val meta = accessMetaById[id]
+            repo.updateAccessInfo(
+                id = id,
+                accessedAt = accessedAtById[id],
+                ip = meta?.get(FIELD_IP),
+                deviceId = meta?.get(FIELD_DEVICE),
+            )
+        }
+
+        zset.removeRangeByScore(0.0, true, end, true)
     }
 
     private fun key(id: Long): String = "online:$id"
@@ -181,6 +186,5 @@ class MemberOnlineTracker(
         private const val VIEWING_MEMBER_PREFIX = "viewing:member:"
         private val TTL: Duration = Duration.ofMinutes(1)
         private val VIEWING_TTL: Duration = Duration.ofMinutes(5)
-        private const val SYNC_INTERVAL_MINUTES = 10L
     }
 }

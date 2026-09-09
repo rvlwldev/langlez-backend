@@ -1,5 +1,7 @@
 package com.langlez.member.domain
 
+import java.time.Instant
+
 interface MemberRepository {
     fun save(member: Member): Member
 
@@ -16,4 +18,6 @@ interface MemberRepository {
     fun delete(ids: List<Long>)
     fun delete(member: Member)
     fun delete(members: Collection<Member>)
+
+    fun updateAccessInfo(id: Long, accessedAt: Instant? = null, ip: String? = null, deviceId: String? = null)
 }
