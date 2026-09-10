@@ -152,11 +152,25 @@ class MemberOnlineTracker(
         // 먼저 꺼낸다. 이 사이에 새로 들어온 기록은 다음 주기에 처리된다.
         if (dirtyElements.isNotEmpty()) dirty.removeAll(dirtyElements)
 
-        val accessMetaById = dirtyIds.associateWith { id ->
-            val map = redisson.getMap<String, String>(accessKey(id))
-            val meta = map.readAllMap()
-            map.delete()
-            meta
+        val accessMetaById = mutableMapOf<Long, Map<String, String>>()
+        for (id in dirtyIds) {
+            val key = accessKey(id)
+            val processingKey = "$key:processing"
+            val map = redisson.getMap<String, String>(key)
+            val processingMap = redisson.getMap<String, String>(processingKey)
+
+            try {
+                // 원자적 RENAME: 새 recordAccess 는 원래 키(accessKey)로 다시 생성되므로 유실되지 않는다 (C-13)
+                map.rename(processingKey)
+            } catch (e: Exception) {
+                // RENAME 대상 키가 이미 없거나 처리된 경우 무시
+            }
+
+            val meta = processingMap.readAllMap()
+            if (meta.isNotEmpty()) {
+                processingMap.delete()
+                accessMetaById[id] = meta
+            }
         }
 
         targets.forEach { id ->
