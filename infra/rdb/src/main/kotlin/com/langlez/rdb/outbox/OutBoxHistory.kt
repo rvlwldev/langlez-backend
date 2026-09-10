@@ -18,6 +18,7 @@ abstract class OutBoxHistory(
     @Enumerated(STRING) val status: OutBox.Status,
     val createdAt: Instant,
     val completedAt: Instant?,
+    val failedAt: Instant? = null,
 ) {
     constructor(o: OutBox) : this(
         id = o.id,
@@ -28,6 +29,7 @@ abstract class OutBoxHistory(
         tries = o.tries,
         status = o.status,
         createdAt = o.createdAt,
-        completedAt = o.completedAt
+        completedAt = o.completedAt,
+        failedAt = o.failedAt,
     )
 }
