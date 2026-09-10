@@ -107,9 +107,23 @@ class CloudAttachmentServiceTest : BehaviorSpec({
             every { repo.find(key) } returns attachment
             every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().contentType("image/jpeg").build()
 
-            Then("common.bad-request 400 예외가 발생한다") {
+            Then("다른 sourceId(777L) 로의 연결은 common.bad-request 400 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.attach(key, 777L) }
                 ex.status shouldBe HttpStatus.BAD_REQUEST
+            }
+        }
+
+        When("sourceId 없이 이미 ATTACHED 상태인 첨부를 재시도하면 (C-07)") {
+            val key = "echo/2026-08-03/uuid_retry.jpg"
+            val attachment = Attachment.create(1L, "echo", Attachment.Type.IMAGE, key).apply { attach(null) }
+            every { repo.find(key) } returns attachment
+            every { client.headObject(any<HeadObjectRequest>()) } returns HeadObjectResponse.builder().contentType("image/jpeg").build()
+            every { repo.save(any()) } answers { firstArg() }
+
+            Then("동일 key 로의 재호출은 멱등하게 URL 을 반환한다") {
+                val url = service.attach(key, null)
+                url shouldBe "https://cdn.langlez.com/$key"
+                attachment.status shouldBe Attachment.Status.ATTACHED
             }
         }
     }

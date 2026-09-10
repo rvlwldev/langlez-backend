@@ -82,9 +82,31 @@ class LocalAttachmentServiceTest : BehaviorSpec({
             service.store(key, "image/jpeg", ByteArrayInputStream("data".toByteArray()))
             attachment.attach("1")
 
-            Then("common.bad-request 400 예외가 발생한다") {
+            Then("다른 sourceId 로의 변경은 common.bad-request 400 예외가 발생한다") {
                 val ex = shouldThrow<LanglezException> { service.attach(key, 555L) }
                 ex.status shouldBe HttpStatus.BAD_REQUEST
+            }
+        }
+
+        When("sourceId 없이 이미 ATTACHED 상태인 첨부를 재시도하면 (C-07)") {
+            val key = "echo/2026-08-03/${System.nanoTime()}_retry.jpg"
+            val attachment = Attachment.create(1L, "echo", Attachment.Type.IMAGE, key)
+            every { repo.find(key) } returns attachment
+            every { repo.save(any()) } answers { firstArg() }
+
+            service.store(key, "image/jpeg", ByteArrayInputStream("data".toByteArray()))
+            attachment.attach(null)
+
+            Then("동일 key 로 재호출 시 400 에러 없이 멱등하게 URL 을 반환한다") {
+                val url = service.attach(key, null)
+                url shouldBe "http://localhost:8080/attachments/$key"
+                attachment.status shouldBe Attachment.Status.ATTACHED
+            }
+
+            Then("기존 sourceId 가 null 일 때 새 sourceId 를 넘기면 갱신된다") {
+                val url = service.attach(key, 555L)
+                url shouldBe "http://localhost:8080/attachments/$key"
+                attachment.sourceId shouldBe "555"
             }
         }
     }
