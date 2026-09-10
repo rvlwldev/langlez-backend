@@ -107,12 +107,20 @@ class NotificationService(
 
         // 전송 실패로 컨슈머를 실패시키지 않는다. 죽은 토큰은 재시도해도 같은 결과인데,
         // 그동안 파티션이 막혀 뒤에 쌓인 다른 사람 알림까지 늦어진다.
-        val failed = runCatching { push.sendAll(tokensByMember.values, title, body, data) }
+        val result = runCatching { push.sendAll(tokensByMember.values, title, body, data) }
             .onFailure { logger.warn("FCM 다건 푸시 실패, 알림 이력만 남는다: recipients={}", pushTargets.size, it) }
-            .getOrDefault(emptyList())
+            .getOrDefault(PushSender.PushResult())
 
-        if (failed.isNotEmpty()) {
-            logger.warn("FCM 푸시 일부 실패: {}건 중 {}건", tokensByMember.size, failed.size)
+        if (result.failedTokens.isNotEmpty()) {
+            logger.warn("FCM 푸시 일부 실패: {}건 중 {}건", tokensByMember.size, result.failedTokens.size)
+        }
+
+        if (result.unregisteredTokens.isNotEmpty()) {
+            val deadTokensByMember = tokensByMember.filterValues { it in result.unregisteredTokens }
+            if (deadTokensByMember.isNotEmpty()) {
+                runCatching { tokens.invalidatePushTokens(deadTokensByMember) }
+                    .onFailure { logger.error("FCM 데드 토큰 무효화 실패: {}건", deadTokensByMember.size, it) }
+            }
         }
     }
 

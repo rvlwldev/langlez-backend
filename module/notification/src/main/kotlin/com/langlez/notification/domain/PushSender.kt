@@ -8,6 +8,11 @@ package com.langlez.notification.domain
  * 예외로 묶어 던지면 호출부가 성공분을 가려낼 방법이 없다.
  */
 interface PushSender {
-    /** 실패한 토큰을 돌려준다. 어떻게 처리할지는 호출부(application)가 정한다. */
-    fun sendAll(tokens: Collection<String>, title: String, body: String, data: Map<String, String>): List<String>
+    /** 실패한 토큰 및 UNREGISTERED 된 죽은 토큰 목록을 돌려준다. */
+    fun sendAll(tokens: Collection<String>, title: String, body: String, data: Map<String, String>): PushResult
+
+    data class PushResult(
+        val failedTokens: List<String> = emptyList(),
+        val unregisteredTokens: List<String> = emptyList(),
+    )
 }

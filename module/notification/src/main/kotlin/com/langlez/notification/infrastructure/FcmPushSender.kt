@@ -4,6 +4,7 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.messaging.MessagingErrorCode
 import com.google.firebase.messaging.MulticastMessage
 import com.langlez.notification.domain.PushSender
 import org.slf4j.LoggerFactory
@@ -35,16 +36,19 @@ class FcmPushSender(
         title: String,
         body: String,
         data: Map<String, String>,
-    ): List<String> {
-        if (tokens.isEmpty()) return emptyList()
+    ): PushSender.PushResult {
+        if (tokens.isEmpty()) return PushSender.PushResult()
 
         val fcm = messaging
         if (fcm == null) {
             logger.warn("FCM 자격증명(fcm.credentials)이 없어 푸시를 보내지 못했다. 알림 이력만 남는다.")
-            return emptyList()
+            return PushSender.PushResult()
         }
 
-        return tokens.chunked(MULTICAST_TOKEN_LIMIT).flatMap { chunk ->
+        val failed = mutableListOf<String>()
+        val unregistered = mutableListOf<String>()
+
+        tokens.chunked(MULTICAST_TOKEN_LIMIT).forEach { chunk ->
             val response = fcm.sendEachForMulticast(
                 MulticastMessage.builder()
                     .addAllTokens(chunk)
@@ -54,8 +58,18 @@ class FcmPushSender(
                     .build()
             )
 
-            chunk.filterIndexed { i, _ -> !response.responses[i].isSuccessful }
+            chunk.forEachIndexed { i, token ->
+                val resp = response.responses[i]
+                if (!resp.isSuccessful) {
+                    failed.add(token)
+                    if (resp.exception?.messagingErrorCode == MessagingErrorCode.UNREGISTERED) {
+                        unregistered.add(token)
+                    }
+                }
+            }
         }
+
+        return PushSender.PushResult(failedTokens = failed, unregisteredTokens = unregistered)
     }
 
     private fun initialize(): FirebaseMessaging? {
