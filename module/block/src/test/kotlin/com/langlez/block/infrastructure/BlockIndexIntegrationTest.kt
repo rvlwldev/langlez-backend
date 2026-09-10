@@ -2,6 +2,7 @@ package com.langlez.block.infrastructure
 
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.springframework.beans.factory.annotation.Autowired
@@ -114,12 +115,22 @@ class BlockIndexIntegrationTest : BehaviorSpec() {
              * 양방향 차단 판정은 인자를 뒤집어 부를 뿐 두 컬럼 모두 등치라
              * 어느 방향이든 UNQ_MEMBER_BLOCK 선두 컬럼을 탄다. 여기엔 새 인덱스가 필요 없다.
              */
-            Then("양방향 차단 판정은 기존 유니크 인덱스로 충분하다") {
+            Then("양방향 차단 판정은 인덱스를 탄다") {
                 val plan = explain(
                     "select 1 from member_blocks where blocker_id = $STAR and blocked_id = 600001 limit 1"
                 )
 
-                plan shouldContain "unq_member_block"
+                (plan.contains("unq_member_block") || plan.contains("idx_member_block_blocked_blocker")) shouldBe true
+                plan shouldNotContain "seq scan on member_blocks"
+            }
+
+            Then("blockedAmong 후보자 배치 검사(blocked_id = :viewer and blocker_id in :ids)가 전용 인덱스를 탄다 (C-05)") {
+                val plan = explain(
+                    "select blocker_id, blocked_id from member_blocks " +
+                        "where blocked_id = $STAR and blocker_id in (100001, 100002, 100003)"
+                )
+
+                plan shouldContain "idx_member_block_blocked_blocker"
                 plan shouldNotContain "seq scan on member_blocks"
             }
         }
