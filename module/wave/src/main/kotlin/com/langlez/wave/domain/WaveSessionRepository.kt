@@ -24,6 +24,7 @@ interface WaveSessionRepository {
     fun leave(roomId: Long, memberId: Long)
 
     fun participants(roomId: Long): Set<Long>
+    fun participantCount(roomId: Long): Int
     fun isParticipant(roomId: Long, memberId: Long): Boolean
 
     /** 오래된 것부터 밀어내며 최근 N 개만 남긴다. */

@@ -41,7 +41,7 @@ class WaveController(
         service.listOpenRooms(size.coerceIn(1, MAX_SIZE), cursor)
             // ponytail: 방 하나당 레디스 왕복 1회. 목록이 한 페이지(최대 50)뿐이라 그대로 둔다.
             // 더 커지면 참여자 수를 방 목록과 함께 파이프라인으로 묶는다.
-            .map { WaveRoomResponse(it, sessions.participants(it.id).size) }
+            .map { WaveRoomResponse(it, sessions.participantCount(it.id)) }
 
     @PostMapping("/{roomId}/participants")
     @ResponseStatus(NO_CONTENT)
