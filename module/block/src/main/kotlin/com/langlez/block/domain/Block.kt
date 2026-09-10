@@ -13,8 +13,11 @@ import java.time.Instant
 @Table(
     name = "member_blocks",
     uniqueConstraints = [UniqueConstraint(name = "UNQ_MEMBER_BLOCK", columnNames = ["blocker_id", "blocked_id"])],
-    // 차단 목록도 커서 페이징이다. 양방향 차단 판정은 두 컬럼 등치라 유니크 인덱스로 충분하다.
-    indexes = [Index(name = "IDX_MEMBER_BLOCK_BLOCKER", columnList = "blocker_id, id DESC")]
+    // 차단 목록도 커서 페이징이다. blockedAmong(피드 차단 검사)의 blocked_id 방향 조회를 위한 인덱스도 함께 둔다.
+    indexes = [
+        Index(name = "IDX_MEMBER_BLOCK_BLOCKER", columnList = "blocker_id, id DESC"),
+        Index(name = "IDX_MEMBER_BLOCK_BLOCKED_BLOCKER", columnList = "blocked_id, blocker_id"),
+    ]
 )
 class Block(
     @Id @GeneratedValue(strategy = IDENTITY)
