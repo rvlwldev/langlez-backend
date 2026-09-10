@@ -125,6 +125,7 @@ class WaveSessionRepositoryImplTest : BehaviorSpec({
             Then("대화도 참여자도 남지 않는다") {
                 sessions.recentChats(roomId) shouldHaveSize 0
                 sessions.participants(roomId) shouldHaveSize 0
+                sessions.participantCount(roomId) shouldBe 0
             }
         }
     }
@@ -139,6 +140,7 @@ class WaveSessionRepositoryImplTest : BehaviorSpec({
 
             sessions.participants(roomId) shouldContainExactly setOf(5L, 6L)
             sessions.isParticipant(roomId, 5L) shouldBe true
+            sessions.participantCount(roomId) shouldBe 2
         }
 
         Then("나가면 참여자에서 빠진다") {
@@ -146,6 +148,7 @@ class WaveSessionRepositoryImplTest : BehaviorSpec({
 
             sessions.isParticipant(roomId, 5L) shouldBe false
             sessions.participants(roomId).size shouldBeGreaterThan 0
+            sessions.participantCount(roomId) shouldBe 1
         }
     }
 

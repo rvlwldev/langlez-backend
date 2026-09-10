@@ -66,6 +66,8 @@ class WaveSessionRepositoryImpl(private val redisson: RedissonClient) : WaveSess
     override fun participants(roomId: Long): Set<Long> =
         members(roomId).readAll().mapNotNull(String::toLongOrNull).toSet()
 
+    override fun participantCount(roomId: Long): Int = members(roomId).size
+
     override fun isParticipant(roomId: Long, memberId: Long): Boolean =
         members(roomId).contains(memberId.toString())
 
