@@ -19,6 +19,8 @@ import java.time.Instant
  */
 @Entity
 @EntityListeners(AuditingEntityListener::class)
+// 진행 중인 방 목록 인덱스는 `ended_at is null` 부분 인덱스라 JPA 의 @Index 로 표현할 방법이 없다.
+// 실제 DDL 은 V22 가 만든다 (IDX_WAVE_ROOMS_OPEN on wave_rooms (id desc) where ended_at is null).
 @Table(name = "wave_rooms")
 class WaveRoom(
     @Id @GeneratedValue(strategy = IDENTITY)
