@@ -3,7 +3,10 @@ package com.langlez.notification.infrastructure
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.BatchResponse
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.messaging.FirebaseMessagingException
+import com.google.firebase.messaging.MessagingErrorCode
 import com.google.firebase.messaging.SendResponse
+import com.langlez.notification.domain.PushSender
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
@@ -51,35 +54,50 @@ class FcmPushSenderTest : BehaviorSpec({
                 val tokens = (1..501).map { "token-$it" }
                 every { fcm.sendEachForMulticast(any()) } returnsMany listOf(batchResponse(500), batchResponse(1))
 
-                val failed = sender.sendAll(tokens, "title", "body", emptyMap())
+                val result = sender.sendAll(tokens, "title", "body", emptyMap())
 
                 verify(exactly = 2) { fcm.sendEachForMulticast(any()) }
-                failed shouldBe emptyList()
+                result.failedTokens shouldBe emptyList()
+                result.unregisteredTokens shouldBe emptyList()
             }
         }
 
-        When("일부 토큰이 실패로 응답되면") {
-            Then("실패한 인덱스의 토큰만 돌려준다") {
-                val tokens = listOf("ok-1", "dead-1", "ok-2")
+        When("일부 토큰이 실패로 응답되면 (UNREGISTERED 포함)") {
+            Then("실패 토큰과 UNREGISTERED 죽은 토큰을 구분하여 돌려준다") {
+                val tokens = listOf("ok-1", "dead-1", "other-fail")
+                val exUnregistered = mockk<FirebaseMessagingException>()
+                every { exUnregistered.messagingErrorCode } returns MessagingErrorCode.UNREGISTERED
+                val exOther = mockk<FirebaseMessagingException>()
+                every { exOther.messagingErrorCode } returns MessagingErrorCode.INTERNAL
+
                 val response = mockk<BatchResponse>()
                 every { response.responses } returns listOf(
-                    mockk<SendResponse> { every { isSuccessful } returns true },
-                    mockk<SendResponse> { every { isSuccessful } returns false },
-                    mockk<SendResponse> { every { isSuccessful } returns true },
+                    mockk<SendResponse> {
+                        every { isSuccessful } returns true
+                    },
+                    mockk<SendResponse> {
+                        every { isSuccessful } returns false
+                        every { exception } returns exUnregistered
+                    },
+                    mockk<SendResponse> {
+                        every { isSuccessful } returns false
+                        every { exception } returns exOther
+                    },
                 )
                 every { fcm.sendEachForMulticast(any()) } returns response
 
-                val failed = sender.sendAll(tokens, "title", "body", emptyMap())
+                val result = sender.sendAll(tokens, "title", "body", emptyMap())
 
-                failed shouldBe listOf("dead-1")
+                result.failedTokens shouldBe listOf("dead-1", "other-fail")
+                result.unregisteredTokens shouldBe listOf("dead-1")
             }
         }
 
         When("토큰 목록이 비어 있으면") {
-            Then("FCM 을 부르지 않고 빈 목록을 돌려준다") {
-                val failed = sender.sendAll(emptyList(), "title", "body", emptyMap())
+            Then("FCM 을 부르지 않고 빈 결과를 돌려준다") {
+                val result = sender.sendAll(emptyList(), "title", "body", emptyMap())
 
-                failed shouldBe emptyList()
+                result shouldBe PushSender.PushResult()
                 verify(exactly = 0) { fcm.sendEachForMulticast(any()) }
             }
         }
@@ -89,10 +107,10 @@ class FcmPushSenderTest : BehaviorSpec({
         val sender = FcmPushSender(credentials = "")
 
         When("sendAll 을 호출하면") {
-            Then("경고만 남기고 빈 목록을 돌려준다") {
-                val failed = sender.sendAll(listOf("token"), "title", "body", emptyMap())
+            Then("경고만 남기고 빈 결과를 돌려준다") {
+                val result = sender.sendAll(listOf("token"), "title", "body", emptyMap())
 
-                failed shouldBe emptyList()
+                result shouldBe PushSender.PushResult()
                 verify(exactly = 0) { fcm.sendEachForMulticast(any()) }
             }
         }

@@ -210,4 +210,41 @@ class MemberReaderImplTest : BehaviorSpec({
             }
         }
     }
+
+    Given("죽은 푸시 토큰을 무효화할 때") {
+
+        When("회원의 현재 fcm 토큰과 일치하면") {
+            val alice = member(1L, fcm = "dead-token")
+            every { repo.findAll(setOf(1L)) } returns listOf(alice)
+            every { repo.save(any()) } answers { firstArg() }
+
+            Then("fcm 을 null 로 바꾸고 저장한다") {
+                query.invalidatePushTokens(mapOf(1L to "dead-token"))
+
+                alice.fcm shouldBe null
+                verify(exactly = 1) { repo.save(alice) }
+            }
+        }
+
+        When("그 사이 회원이 새 토큰을 발급받아 토큰이 불일치하면") {
+            val alice = member(1L, fcm = "new-fresh-token")
+            every { repo.findAll(setOf(1L)) } returns listOf(alice)
+
+            Then("새 토큰을 보존하고 저장하지 않는다") {
+                query.invalidatePushTokens(mapOf(1L to "old-dead-token"))
+
+                alice.fcm shouldBe "new-fresh-token"
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+
+        When("빈 맵을 전달하면") {
+            Then("조회나 저장을 전혀 수행하지 않는다") {
+                query.invalidatePushTokens(emptyMap())
+
+                verify(exactly = 0) { repo.findAll(any<Collection<Long>>()) }
+                verify(exactly = 0) { repo.save(any()) }
+            }
+        }
+    }
 })

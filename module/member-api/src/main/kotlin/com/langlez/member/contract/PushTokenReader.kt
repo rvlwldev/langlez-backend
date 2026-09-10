@@ -12,4 +12,10 @@ interface PushTokenReader {
 
     /** 토큰이 없는 회원은 결과 맵에서 뺀다. */
     fun findPushTokens(memberIds: Collection<Long>): Map<Long, String>
+
+    /**
+     * FCM 등에서 UNREGISTERED 로 실패한 죽은 토큰을 비운다 (B-11).
+     * 만약 회원이 그 사이 새 토큰을 발급받았다면(토큰 불일치) 덮어쓰지 않고 보존한다.
+     */
+    fun invalidatePushTokens(tokensByMember: Map<Long, String>)
 }

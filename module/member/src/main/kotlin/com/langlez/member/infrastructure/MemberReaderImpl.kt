@@ -5,6 +5,7 @@ import com.langlez.member.contract.PushTokenReader
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * member 가 다른 모듈에 내주는 조회 포트 구현.
@@ -49,6 +50,19 @@ class MemberReaderImpl(private val repo: MemberRepository) : MemberReader, PushT
         repo.findAll(memberIds)
             .mapNotNull { member -> member.fcm?.takeIf(String::isNotBlank)?.let { member.id to it } }
             .toMap()
+
+    @Transactional
+    override fun invalidatePushTokens(tokensByMember: Map<Long, String>) {
+        if (tokensByMember.isEmpty()) return
+        val members = repo.findAll(tokensByMember.keys)
+        members.forEach { member ->
+            val deadToken = tokensByMember[member.id]
+            if (deadToken != null && member.fcm == deadToken) {
+                member.fcm = null
+                repo.save(member)
+            }
+        }
+    }
 
     private fun Member.toProfileInfo() = MemberReader.ProfileInfo(
         id = id,

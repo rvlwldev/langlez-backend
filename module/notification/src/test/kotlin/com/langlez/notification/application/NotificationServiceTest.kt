@@ -79,7 +79,7 @@ class NotificationServiceTest : BehaviorSpec({
 
                 val tokenArg = slot<Collection<String>>()
                 val data = slot<Map<String, String>>()
-                every { push.sendAll(capture(tokenArg), any(), "안녕", capture(data)) } returns emptyList()
+                every { push.sendAll(capture(tokenArg), any(), "안녕", capture(data)) } returns PushSender.PushResult()
 
                 service.onChatMessage(event())
 
@@ -133,7 +133,7 @@ class NotificationServiceTest : BehaviorSpec({
                 every { tokens.findPushTokens(setOf(2L)) } returns mapOf(2L to "fcm-token")
 
                 val data = slot<Map<String, String>>()
-                every { push.sendAll(any(), any(), any(), capture(data)) } returns emptyList()
+                every { push.sendAll(any(), any(), any(), capture(data)) } returns PushSender.PushResult()
 
                 service.onMemberFollowed(followed)
 
@@ -167,7 +167,7 @@ class NotificationServiceTest : BehaviorSpec({
                 every { tokens.findPushTokens(setOf(1L, 2L, 3L)) } returns mapOf(
                     1L to "token-1", 2L to "token-2", 3L to "token-3",
                 )
-                every { push.sendAll(any(), any(), any(), any()) } returns emptyList()
+                every { push.sendAll(any(), any(), any(), any()) } returns PushSender.PushResult()
 
                 val saved = slot<Collection<Notification>>()
                 every { repo.saveAll(capture(saved)) } answers { firstArg<Collection<Notification>>().toList() }
@@ -185,7 +185,7 @@ class NotificationServiceTest : BehaviorSpec({
                 every { tokens.findPushTokens(setOf(1L, 2L)) } returns mapOf(1L to "token-1")
 
                 val data = slot<Collection<String>>()
-                every { push.sendAll(capture(data), any(), any(), any()) } returns emptyList()
+                every { push.sendAll(capture(data), any(), any(), any()) } returns PushSender.PushResult()
 
                 service.notifyAll(listOf(1L, 2L), "SYSTEM", "title", "body", emptyMap())
 
@@ -198,7 +198,7 @@ class NotificationServiceTest : BehaviorSpec({
         When("중복된 id 가 섞여 있으면") {
             Then("한 번만 처리한다") {
                 every { tokens.findPushTokens(setOf(1L)) } returns mapOf(1L to "token-1")
-                every { push.sendAll(any(), any(), any(), any()) } returns emptyList()
+                every { push.sendAll(any(), any(), any(), any()) } returns PushSender.PushResult()
 
                 val saved = slot<Collection<Notification>>()
                 every { repo.saveAll(capture(saved)) } answers { firstArg<Collection<Notification>>().toList() }
@@ -234,6 +234,41 @@ class NotificationServiceTest : BehaviorSpec({
 
                 saved.captured.size shouldBe 2
                 verify(exactly = 2) { broadcaster.broadcast(any(), any()) }
+            }
+        }
+    }
+
+    Given("FCM 푸시 전송 결과 처리 시") {
+
+        When("UNREGISTERED 로 실패한 토큰이 있으면") {
+            Then("해당 회원의 토큰을 무효화한다 (B-11)") {
+                every { tracker.viewers(any()) } returns emptySet()
+                every { tokens.findPushTokens(setOf(1L, 2L)) } returns mapOf(1L to "valid-token", 2L to "dead-token")
+                every { tokens.invalidatePushTokens(mapOf(2L to "dead-token")) } returns Unit
+                every { push.sendAll(any(), any(), any(), any()) } returns PushSender.PushResult(
+                    failedTokens = listOf("dead-token"),
+                    unregisteredTokens = listOf("dead-token"),
+                )
+
+                service.notifyAll(listOf(1L, 2L), "SYSTEM", "title", "body", emptyMap())
+
+                verify(exactly = 1) { tokens.invalidatePushTokens(mapOf(2L to "dead-token")) }
+            }
+        }
+
+        When("토큰 무효화 호출 중 예외가 발생해도") {
+            Then("발송 흐름 전체를 깨뜨리지 않는다") {
+                every { tracker.viewers(any()) } returns emptySet()
+                every { tokens.findPushTokens(setOf(2L)) } returns mapOf(2L to "dead-token")
+                every { tokens.invalidatePushTokens(any()) } throws RuntimeException("DB error")
+                every { push.sendAll(any(), any(), any(), any()) } returns PushSender.PushResult(
+                    failedTokens = listOf("dead-token"),
+                    unregisteredTokens = listOf("dead-token"),
+                )
+
+                service.notifyAll(listOf(2L), "SYSTEM", "title", "body", emptyMap())
+
+                verify(exactly = 1) { tokens.invalidatePushTokens(any()) }
             }
         }
     }
