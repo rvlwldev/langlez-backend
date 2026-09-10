@@ -46,7 +46,14 @@ class ChatRoom(
         require(memberA < memberB) { "chat.room.pair" }
     }
 
+    /**
+     * 방의 최근 메시지 프리뷰와 시각을 갱신한다.
+     *
+     * 단조성 가드: 동시 전송이나 비동기/대사 처리 순서 역전으로 과거 메시지가 나중에 커밋되더라도
+     * 방 메타가 과거로 역행해 목록 정렬과 프리뷰를 롤백하지 않도록 [hasNothingNewerThan] 으로 방어한다 (B-05).
+     */
     fun onMessage(preview: String, at: Instant) {
+        if (!hasNothingNewerThan(at)) return
         lastMessagePreview = preview.take(200)
         lastMessageAt = at
     }

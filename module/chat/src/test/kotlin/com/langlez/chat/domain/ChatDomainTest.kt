@@ -66,4 +66,31 @@ class ChatDomainTest : BehaviorSpec({
             p.unreadCount shouldBe 0
         }
     }
+    Given("방에 메시지가 도착해 메타를 갱신할 때 (B-05)") {
+        val room = ChatRoom.between(10L, 20L)
+        val t1 = Instant.parse("2026-09-11T10:00:00.000Z")
+        val t2 = Instant.parse("2026-09-11T10:00:05.000Z")
+        val tOlder = Instant.parse("2026-09-11T09:59:50.000Z")
+
+        Then("첫 메시지는 프리뷰와 시각이 정상 반영된다") {
+            room.onMessage("hello", t1)
+            room.lastMessagePreview shouldBe "hello"
+            room.lastMessageAt shouldBe t1
+        }
+        Then("더 최신 메시지가 도착하면 프리뷰와 시각이 갱신된다") {
+            room.onMessage("world", t2)
+            room.lastMessagePreview shouldBe "world"
+            room.lastMessageAt shouldBe t2
+        }
+        Then("동시성/지연으로 인해 과거 메시지가 늦게 도착해도 프리뷰와 시각이 과거로 롤백되지 않는다") {
+            room.onMessage("old message", tOlder)
+            room.lastMessagePreview shouldBe "world"
+            room.lastMessageAt shouldBe t2
+        }
+        Then("같은 시각의 갱신(삭제 프리뷰 등)은 허용된다") {
+            room.onMessage("[삭제된 메시지입니다]", t2)
+            room.lastMessagePreview shouldBe "[삭제된 메시지입니다]"
+            room.lastMessageAt shouldBe t2
+        }
+    }
 })
