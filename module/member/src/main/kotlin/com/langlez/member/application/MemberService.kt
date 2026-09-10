@@ -186,6 +186,9 @@ class MemberService(
             .also { publisher.publishEvent(MemberWithdrawnEvent(id)) }
     }
 
+    fun search(query: String, size: Int, cursor: Long? = null): List<Member> =
+        repo.search(query, size, cursor)
+
     private fun findOrThrow(id: Long) = repo.find(id)
         ?: throw LanglezException(HttpStatus.NOT_FOUND, "member.not-found")
 

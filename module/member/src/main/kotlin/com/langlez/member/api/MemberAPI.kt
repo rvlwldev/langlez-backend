@@ -8,6 +8,7 @@ import com.langlez.member.api.request.MemberUpdatePersonalInfoRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
 import com.langlez.member.api.response.MemberPublicResponse
+import com.langlez.member.api.response.MemberSearchResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -43,6 +44,16 @@ interface MemberAPI {
 
     @Operation(summary = "회원 탈퇴", description = "로그인한 회원 본인을 탈퇴 처리한다.")
     fun withdraw(memberId: Long)
+
+    @Operation(
+        summary = "회원 검색",
+        description = "handle 또는 nickname 부분 일치로 활성 회원을 검색한다. 검색어는 최소 2글자 이상이어야 한다.",
+    )
+    fun search(
+        @Parameter(description = "검색어 (최소 2자)") query: String,
+        @Parameter(description = "가져올 개수") size: Int,
+        @Parameter(description = "커서(직전 페이지 마지막 회원 id)", required = false) cursor: Long?,
+    ): List<MemberSearchResponse>
 
     @Operation(summary = "공개 프로필 조회", description = "handle로 특정 회원의 공개 정보를 조회한다.")
     fun getMember(@Parameter(description = "회원 handle") handle: String): MemberPublicResponse

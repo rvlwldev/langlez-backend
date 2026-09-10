@@ -10,6 +10,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import com.langlez.rdb.search.search
 import com.langlez.member.domain.QMember.Companion.member as QMember
 
 /**
@@ -85,6 +86,22 @@ class MemberRepositoryImpl(
             .orderBy(QMember.id.desc()).limit(size.toLong())
         if (cursor != null) query.where(QMember.id.lt(cursor))
         return query.fetch()
+    }
+
+    override fun search(query: String, size: Int, cursor: Long?): List<Member> {
+        val trimmed = query.trim()
+        val builder = dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin()
+            .where(
+                QMember.status.eq(Member.Status.ACTIVE),
+                QMember.handle.search(trimmed).or(
+                    QMember.nickname.isNotNull.and(QMember.nickname.search(trimmed))
+                )
+            )
+            .orderBy(QMember.id.desc())
+            .limit(size.toLong())
+
+        if (cursor != null) builder.where(QMember.id.lt(cursor))
+        return builder.fetch()
     }
 
     override fun count(): Long = jpa.count()
