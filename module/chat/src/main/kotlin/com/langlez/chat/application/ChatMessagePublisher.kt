@@ -38,9 +38,11 @@ internal class ChatMessagePublisher(
     @DistributedLock(prefix = "lock:chat-message-publish", throwOnFailure = false)
     fun publish() = messages.findUnpublished(CHUNK).forEach { message ->
         // 성공한 것만 표시한다. 실패하면 published 가 false 로 남아 다음 주기에 다시 잡힌다 — 이게 아웃박스 대용의 핵심이다.
-        runCatching { send(message) }
-            .onSuccess { messages.save(message.apply { markPublished() }) }
-            .onFailure { logger.warn("채팅 알림 발행 실패, 다음 주기에 재시도한다: messageId={}", message.id, it) }
+        // 메시지 저장(Mongo) 실패도 격리하여 개별 메시지 장애가 전체 청크 처리를 중단시키지 않는다 (B-17).
+        runCatching {
+            send(message)
+            messages.save(message.apply { markPublished() })
+        }.onFailure { logger.warn("채팅 알림 발행 실패, 다음 주기에 재시도한다: messageId={}", message.id, it) }
     }
 
     /**

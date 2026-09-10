@@ -96,4 +96,26 @@ class ChatMessagePublisherTest : BehaviorSpec({
             }
         }
     }
+
+    Given("한 메시지의 저장(Mongo)이 실패해도 (B-17)") {
+
+        When("발행기가 돌면") {
+            Then("예외가 밖으로 새어 나가지 않고 다음 메시지 처리를 계속 진행한다") {
+                val m1 = message().apply { id = "m1" }
+                val m2 = message().apply { id = "m2" }
+                every { messages.findUnpublished(any()) } returns listOf(m1, m2)
+                every { repo.findParticipants(100L) } returns participants()
+                every { tracker.viewers(any()) } returns emptySet()
+                every { kafka.send(any(), any<String>(), any()) } returns sent()
+                every { messages.save(m1) } throws RuntimeException("Mongo write error")
+                every { messages.save(m2) } answers { firstArg() }
+
+                publisher.publish()
+
+                verify { messages.save(m1) }
+                verify { messages.save(m2) }
+                m2.published shouldBe true
+            }
+        }
+    }
 })
