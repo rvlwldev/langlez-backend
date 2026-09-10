@@ -12,6 +12,7 @@ interface MemberRepository {
 
     fun findAll(ids: Collection<Long>): List<Member>
     fun findAll(size: Int, cursor: Long?): List<Member>
+    fun search(query: String, size: Int, cursor: Long? = null): List<Member>
     fun count(): Long
 
     fun delete(id: Long)

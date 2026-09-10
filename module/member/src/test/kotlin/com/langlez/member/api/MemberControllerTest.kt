@@ -7,6 +7,7 @@ import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import io.kotest.core.spec.style.BehaviorSpec
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
 import io.mockk.every
@@ -100,6 +101,34 @@ class MemberControllerTest : BehaviorSpec({
 
             Then("MemberService.withdrawMember가 호출된다") {
                 verify { service.withdrawMember(1L) }
+            }
+        }
+    }
+
+    Given("회원 검색 요청 시") {
+        When("검색어를 전달하면") {
+            val m1 = member(1L).apply { changeNickname("홍길동"); imageUrl = "https://cdn.test/1.jpg" }
+            every { service.search("길동", 20, null) } returns listOf(m1)
+
+            val responses = controller.search("길동", 20, null)
+
+            Then("서비스 호출 결과를 MemberSearchResponse 로 변환해 반환한다") {
+                responses shouldHaveSize 1
+                responses[0].id shouldBe 1L
+                responses[0].handle shouldBe "user1"
+                responses[0].nickname shouldBe "홍길동"
+                responses[0].imageUrl shouldBe "https://cdn.test/1.jpg"
+                verify { service.search("길동", 20, null) }
+            }
+        }
+
+        When("size가 50을 초과하면") {
+            every { service.search("user", 50, null) } returns emptyList()
+
+            controller.search("user", 100, null)
+
+            Then("최대 50으로 제한되어 서비스에 전달된다") {
+                verify { service.search("user", 50, null) }
             }
         }
     }

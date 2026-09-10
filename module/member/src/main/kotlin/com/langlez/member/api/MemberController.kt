@@ -10,6 +10,7 @@ import com.langlez.member.api.request.MemberUpdatePersonalInfoRequest
 import com.langlez.member.api.response.MemberMeResponse
 import com.langlez.member.api.response.MemberOnlineStatusResponse
 import com.langlez.member.api.response.MemberPublicResponse
+import com.langlez.member.api.response.MemberSearchResponse
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.MemberRepository
 import jakarta.validation.Valid
@@ -82,6 +83,15 @@ class MemberController(private val service: MemberService, private val repo: Mem
     override fun withdraw(@MemberId memberId: Long) {
         service.withdrawMember(memberId)
     }
+
+    // `/search` 는 리터럴이라 `{handle}` 패턴보다 먼저 매칭된다.
+    @GetMapping("/search")
+    override fun search(
+        @RequestParam query: String,
+        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(required = false) cursor: Long?,
+    ): List<MemberSearchResponse> =
+        service.search(query, size.coerceIn(1, 50), cursor).map(::MemberSearchResponse)
 
     @GetMapping("/{handle}")
     override fun getMember(@PathVariable handle: String): MemberPublicResponse {

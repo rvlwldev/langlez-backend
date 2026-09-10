@@ -579,5 +579,77 @@ class MemberIntegrationTest : BehaviorSpec() {
                 }
             }
         }
+
+        // =========================================================================
+        // 7. 회원 검색 유스케이스
+        // =========================================================================
+        Given("회원 검색 시") {
+            val userA = memberService.createMember(
+                email = "search_a@example.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "search_pid_a",
+                providerUsername = "SearchA",
+            ).apply {
+                handle = "alpha_search"
+                changeNickname("알파테스터")
+                verify()
+            }.let(memberRepository::save)
+
+            val userB = memberService.createMember(
+                email = "search_b@example.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "search_pid_b",
+                providerUsername = "SearchB",
+            ).apply {
+                handle = "beta_search"
+                changeNickname("베타테스터")
+                verify()
+            }.let(memberRepository::save)
+
+            val userWithdrawn = memberService.createMember(
+                email = "search_withdrawn@example.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "search_pid_w",
+                providerUsername = "SearchW",
+            ).apply {
+                handle = "gamma_search"
+                changeNickname("감마탈퇴자")
+                verify()
+                withdraw()
+            }.let(memberRepository::save)
+
+            When("handle 의 부분 문자열로 검색하면") {
+                val results = memberRepository.search("alpha", 10)
+                Then("해당 회원이 검색된다") {
+                    results.any { it.id == userA.id } shouldBe true
+                    results.any { it.id == userB.id } shouldBe false
+                }
+            }
+
+            When("nickname 의 부분 문자열로 검색하면") {
+                val results = memberRepository.search("베타", 10)
+                Then("해당 회원이 검색된다") {
+                    results.any { it.id == userB.id } shouldBe true
+                    results.any { it.id == userA.id } shouldBe false
+                }
+            }
+
+            When("공통 검색어(search)로 검색하면") {
+                val results = memberRepository.search("search", 10)
+                Then("ACTIVE 상태인 회원만 검색되고 탈퇴 회원은 제외된다") {
+                    results.any { it.id == userA.id } shouldBe true
+                    results.any { it.id == userB.id } shouldBe true
+                    results.any { it.id == userWithdrawn.id } shouldBe false
+                }
+            }
+
+            When("2글자 미만의 검색어로 검색하면") {
+                Then("400 LanglezException 이 발생한다") {
+                    val ex = shouldThrow<LanglezException> { memberRepository.search("a", 10) }
+                    ex.status.value() shouldBe 400
+                    ex.message shouldBe "validation.search.min-length"
+                }
+            }
+        }
     }
 }
