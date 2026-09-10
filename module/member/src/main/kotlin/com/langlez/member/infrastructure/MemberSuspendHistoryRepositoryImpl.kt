@@ -26,8 +26,8 @@ class MemberSuspendHistoryRepositoryImpl(
 
     /**
      * `IDX_MEMBER_SUSPEND_RELEASED(member_id, is_released)` 는 선두 컬럼이 member_id 라
-     * 이 조회를 못 탄다. 만료 대상은 전체에서 봐도 몇 건 수준이라 인덱스를 새로 걸지 않았다.
-     * 정지가 늘어 이 스캔이 무거워지면 `(is_released, release_at)` 인덱스를 붙인다.
+     * 이 조회를 못 탔다. 닫힌 이력이 누적되어도 풀스캔을 방지하도록
+     * V24 에서 `where is_released = false` 부분 인덱스 `IDX_MEMBER_SUSPEND_EXPIRED(release_at, id)` 를 추가했다.
      */
     override fun findExpired(now: Instant, size: Int): List<MemberSuspendHistory> = dsl.selectFrom(QHistory)
         .where(

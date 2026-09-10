@@ -92,7 +92,10 @@ class MemberRepositoryImpl(
         val trimmed = query.trim()
         val builder = dsl.selectFrom(QMember).leftJoin(QMember.audit).fetchJoin()
             .where(
-                QMember.status.eq(Member.Status.ACTIVE),
+                // AccountStatusPolicy 및 MatchingService 와 동일하게 CREATED 와 ACTIVE 를 모두 검색 대상으로 허용한다.
+                // Member.verify() 의 프로덕션 호출자가 아직 0건이라 실사용 회원이 CREATED 로 머물러 있으므로,
+                // ACTIVE 만 조회하면 실사용자가 검색되지 않는다. 차단/탈퇴 계정(SUSPENDED, WITHDRAWN)만 제외한다.
+                QMember.status.notIn(Member.Status.SUSPENDED, Member.Status.WITHDRAWN),
                 QMember.handle.search(trimmed).or(
                     QMember.nickname.isNotNull.and(QMember.nickname.search(trimmed))
                 )
