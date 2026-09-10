@@ -59,6 +59,12 @@ internal class ChatReconciler(
 
         log.info("채팅방 메타가 메시지보다 뒤처져 있어 다시 맞춘다. roomId=$roomId, seq=${latest.seq}")
 
+        // 트랜잭션 밖에서 참여자 목록을 조회하고, 각 참여자의 안 읽은 수를 Mongo 에서 미리 계산한다.
+        // 트랜잭션 안에서 countUnread(Mongo I/O)를 호출하면 외부 네트워크를 대기하는 동안
+        // Postgres 커넥션이 불필요하게 묶여 풀 고갈(HikariCP starvation)을 유발한다 (A-05).
+        val participants = repo.findParticipants(roomId)
+        val unreadCounts = participants.associate { it.memberId to messages.countUnread(roomId, it.memberId, it.lastReadAt) }
+
         tx.executeWithoutResult {
             // 트랜잭션 안에서 다시 읽어야 영속 상태라 더티 체킹으로 반영된다.
             repo.findRoom(roomId)?.onMessage(latest.preview(), latest.createdAt)
@@ -66,8 +72,9 @@ internal class ChatReconciler(
             // 증가(increaseUnread)가 아니라 다시 세어 설정한다. 얼마나 밀렸는지 알 수 없을뿐더러,
             // 더하는 방식이면 대사가 두 번 돌 때 같은 메시지를 두 번 세게 된다.
             repo.findParticipants(roomId).forEach { participant ->
+                val unread = unreadCounts[participant.memberId] ?: 0
                 participant.apply {
-                    syncUnread(messages.countUnread(roomId, memberId, lastReadAt))
+                    syncUnread(unread)
 
                     // 재입장 정책: 나간 뒤 새 메시지가 오면 방이 되살아난다.
                     // 전송 때 이 갱신이 누락되면 그 사람 목록에서 방이 계속 안 보여
