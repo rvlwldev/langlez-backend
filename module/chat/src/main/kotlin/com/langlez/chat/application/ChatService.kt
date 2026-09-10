@@ -83,9 +83,6 @@ class ChatService(
     @Transactional(readOnly = true)
     fun listRooms(memberId: Long, size: Int, cursor: Instant?): List<ChatRoomSummary> =
         repo.findRoomSummaries(memberId, size, cursor)
-            // ponytail: 페이지 크기만큼 참여자 단건 조회가 붙는다(유니크 인덱스라 건당 비용은 작다).
-            // 목록이 느려지면 findRoomSummaries 쿼리 자체에 leftAt 조건을 넣는 쪽으로 올린다.
-            .filter { repo.findParticipant(it.room.id, memberId)?.hasLeft() != true }
 
     /**
      * 참여 여부만 Postgres 에서 확인하고 본문은 Mongo 에서 읽는다. 첨부가 임베드라 조회는 한 번뿐이다.

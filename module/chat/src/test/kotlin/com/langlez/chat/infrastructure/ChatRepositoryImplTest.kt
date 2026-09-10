@@ -128,9 +128,12 @@ class ChatRepositoryImplTest : BehaviorSpec() {
                 second.map { it.room.id } shouldBe listOf(older.id)
             }
 
-            Then("나간 방도 목록에 남는다 (재입장 정책)") {
+            Then("내가 나간 방은 목록에서 제외된다 (B-12)") {
                 repo.saveParticipant(repo.findParticipant(older.id, me)!!.apply { leave(now()) })
 
+                repo.findRoomSummaries(me, 10, null).map { it.room.id } shouldBe listOf(newer.id)
+
+                repo.rejoinParticipant(older.id, me)
                 repo.findRoomSummaries(me, 10, null).map { it.room.id } shouldBe listOf(newer.id, older.id)
             }
         }

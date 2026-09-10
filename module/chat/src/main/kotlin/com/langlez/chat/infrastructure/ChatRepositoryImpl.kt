@@ -99,7 +99,11 @@ class ChatRepositoryImpl(
             .from(mine)
             .join(QChatRoom).on(QChatRoom.id.eq(mine.roomId))
             .join(partner).on(partner.roomId.eq(mine.roomId), partner.memberId.ne(memberId))
-            .where(mine.memberId.eq(memberId), cursor?.let(QChatRoom.lastMessageAt::lt))
+            .where(
+                mine.memberId.eq(memberId),
+                mine.leftAt.isNull,
+                cursor?.let(QChatRoom.lastMessageAt::lt),
+            )
             .orderBy(QChatRoom.lastMessageAt.desc().nullsLast())
             .limit(size.toLong())
             .fetch()
