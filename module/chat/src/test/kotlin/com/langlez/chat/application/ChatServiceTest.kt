@@ -122,17 +122,15 @@ class ChatServiceTest : BehaviorSpec({
 
     Given("방 목록을 볼 때") {
 
-        When("내가 나간 방이 섞여 있으면") {
-            Then("나간 방은 목록에서 빠진다") {
+        When("내가 나간 방이 있을 때") {
+            Then("저장소에서 나간 방이 걸러진 목록을 그대로 반환하며 findParticipant N+1 조회를 하지 않는다") {
                 val stayed = ChatRoomSummary(ChatRoom(memberA = me, memberB = partner, id = roomId), partner, 3)
-                val left = ChatRoomSummary(ChatRoom(memberA = me, memberB = 3L, id = 200L), 3L, 0)
 
-                every { repo.findRoomSummaries(me, 10, null) } returns listOf(stayed, left)
-                every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
-                every { repo.findParticipant(200L, me) } returns
-                    ChatRoomMember(200L, me).apply { leave(Instant.now()) }
+                every { repo.findRoomSummaries(me, 10, null) } returns listOf(stayed)
 
-                service.listRooms(me, 10, null).map { it.room.id } shouldBe listOf(roomId)
+                val result = service.listRooms(me, 10, null)
+                result.map { it.room.id } shouldBe listOf(roomId)
+                io.mockk.verify(exactly = 0) { repo.findParticipant(any(), any()) }
             }
         }
     }
