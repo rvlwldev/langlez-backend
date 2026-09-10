@@ -606,6 +606,29 @@ class MemberIntegrationTest : BehaviorSpec() {
                 verify()
             }.let(memberRepository::save)
 
+            val userCreated = memberService.createMember(
+                email = "search_created@example.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "search_pid_c",
+                providerUsername = "SearchC",
+            ).apply {
+                handle = "created_search"
+                changeNickname("신규가입자")
+                // verify() 를 호출하지 않아 Status.CREATED 상태 유지
+            }.let(memberRepository::save)
+
+            val userSuspended = memberService.createMember(
+                email = "search_suspended@example.com",
+                providerType = Member.Provider.GOOGLE,
+                providerId = "search_pid_s",
+                providerUsername = "SearchS",
+            ).apply {
+                handle = "suspended_search"
+                changeNickname("정지회원")
+                verify()
+                suspend()
+            }.let(memberRepository::save)
+
             val userWithdrawn = memberService.createMember(
                 email = "search_withdrawn@example.com",
                 providerType = Member.Provider.GOOGLE,
@@ -636,9 +659,11 @@ class MemberIntegrationTest : BehaviorSpec() {
 
             When("공통 검색어(search)로 검색하면") {
                 val results = memberRepository.search("search", 10)
-                Then("ACTIVE 상태인 회원만 검색되고 탈퇴 회원은 제외된다") {
+                Then("ACTIVE 및 CREATED 회원이 검색되고 정지/탈퇴 회원은 제외된다") {
                     results.any { it.id == userA.id } shouldBe true
                     results.any { it.id == userB.id } shouldBe true
+                    results.any { it.id == userCreated.id } shouldBe true
+                    results.any { it.id == userSuspended.id } shouldBe false
                     results.any { it.id == userWithdrawn.id } shouldBe false
                 }
             }
