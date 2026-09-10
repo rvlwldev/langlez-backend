@@ -44,6 +44,11 @@ class Attachment(
     val id: Long = 0
 
     fun attach(sourceId: String? = null) {
+        if (this.status == Status.ATTACHED && (this.sourceId == null || this.sourceId == sourceId)) {
+            if (sourceId != null) this.sourceId = sourceId
+            return
+        }
+
         // IllegalArgumentException 을 LanglezException(400) 으로 바꾸는 건 application 몫이다.
         require(this.status == Status.PENDING) { "common.bad-request" }
 
