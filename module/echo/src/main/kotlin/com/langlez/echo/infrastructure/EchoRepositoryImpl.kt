@@ -95,13 +95,19 @@ class EchoRepositoryImpl(
     @Transactional
     override fun addLike(postId: Long, memberId: Long) {
         likes.save(PostLike(postId = postId, memberId = memberId))
-        posts.increaseLikeCount(postId)
+        dsl.update(QPost)
+            .set(QPost.likeCount, QPost.likeCount.add(1L))
+            .where(QPost.id.eq(postId))
+            .execute()
     }
 
     @Transactional
     override fun removeLike(postId: Long, memberId: Long) {
         likes.deleteByPostIdAndMemberId(postId, memberId)
-        posts.decreaseLikeCount(postId)
+        dsl.update(QPost)
+            .set(QPost.likeCount, QPost.likeCount.subtract(1L))
+            .where(QPost.id.eq(postId), QPost.likeCount.gt(0L))
+            .execute()
     }
 
     override fun save(comment: Comment): Comment = comments.save(comment)
