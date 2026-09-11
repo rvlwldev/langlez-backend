@@ -5,6 +5,7 @@ import com.langlez.member.domain.MemberSuspendHistoryRepository
 import com.langlez.member.infrastructure.jpa.MemberSuspendHistoryJpaRepository
 import com.querydsl.jpa.impl.JPAQueryFactory
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import com.langlez.member.domain.QMemberSuspendHistory.Companion.memberSuspendHistory as QHistory
 
@@ -40,7 +41,11 @@ class MemberSuspendHistoryRepositoryImpl(
         .limit(size.toLong())
         .fetch()
 
+    @Transactional
     override fun releaseActive(memberId: Long) {
-        jpa.releaseActive(memberId)
+        dsl.update(QHistory)
+            .set(QHistory.isReleased, true)
+            .where(QHistory.memberId.eq(memberId), QHistory.isReleased.isFalse)
+            .execute()
     }
 }
