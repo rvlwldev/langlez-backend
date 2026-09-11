@@ -119,11 +119,12 @@ interface MemberRepository {
 7. **QueryDSL Q타입은 별칭 import 한다.** `import com.langlez.member.domain.QMember.Companion.member as QMember`
 8. **컬렉션 인자는 빈 값을 먼저 걷어낸다.** `if (ids.isEmpty()) return emptyList()` — 빈 `IN ()` 쿼리를 막는다. 중복은 `toSet()` 으로 제거.
 9. **일괄 삭제는 조건부로 `deleteAllInBatch`.** `deleteAll` 은 건수만큼 단건 DELETE 라 느리다. 다만 `deleteAllInBatch` 는 **영속성 컨텍스트를 우회하므로 `cascade`/`orphanRemoval` 이 걸린 연관이 있으면 쓰면 안 된다** — 자식 행이 고아로 남는다. (`Member` 는 `audit` 에 `cascade = [ALL], orphanRemoval = true` 가 있어 `deleteAll` 을 쓴다.)
-10. **카운터는 엔티티를 읽어 더하지 않고 DB 에서 더한다.** 좋아요 수, 안 읽은 수처럼 같은 행에 동시 요청이 몰리는 필드는 read-modify-write 로 증가가 유실된다. `@Modifying` JPQL UPDATE 로 원자화하고, 감소에는 0 아래로 못 가게 조건을 건다 (음수가 되면 되돌릴 방법이 없다).
+10. **카운터는 엔티티를 읽어 더하지 않고 DB 에서 더한다.** 좋아요 수, 안 읽은 수처럼 같은 행에 동시 요청이 몰리는 필드는 read-modify-write 로 증가가 유실된다. JPQL 대신 QueryDSL UPDATE(`dsl.update`) 로 원자화하고, 감소에는 0 아래로 못 가게 조건을 건다 (음수가 되면 되돌릴 방법이 없다).
     ```kotlin
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Post p set p.likeCount = p.likeCount - 1 where p.id = :id and p.likeCount > 0")
-    fun decreaseLikeCount(id: Long)
+    dsl.update(QPost)
+        .set(QPost.likeCount, QPost.likeCount.subtract(1L))
+        .where(QPost.id.eq(id), QPost.likeCount.gt(0L))
+        .execute()
     ```
 
 ---
