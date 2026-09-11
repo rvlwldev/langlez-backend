@@ -181,5 +181,37 @@ class ChatRepositoryImplTest : BehaviorSpec() {
                 }
             }
         }
+
+        Given("참여자가 읽음 처리를 할 때") {
+            val (a, b) = 1031L to 1032L
+            val room = repo.createRoom(a, b)
+            repo.increaseUnread(room.id, b)
+            repo.increaseUnread(room.id, b)
+            repo.findParticipant(room.id, b)!!.unreadCount shouldBe 2L
+
+            val readAt = now()
+
+            When("markRead 를 호출하면") {
+                repo.markRead(room.id, b, readAt)
+
+                Then("unreadCount 가 0 이 되고 lastReadAt 이 갱신된다") {
+                    val participant = repo.findParticipant(room.id, b)!!
+                    participant.unreadCount shouldBe 0L
+                    participant.lastReadAt shouldBe readAt
+                }
+            }
+
+            When("과거 시각으로 다시 markRead 를 호출하면") {
+                repo.increaseUnread(room.id, b)
+                val past = readAt.minusSeconds(10)
+                repo.markRead(room.id, b, past)
+
+                Then("더 최신 읽음 시각과 unreadCount 가 덮어써지지 않는다") {
+                    val participant = repo.findParticipant(room.id, b)!!
+                    participant.unreadCount shouldBe 1L
+                    participant.lastReadAt shouldBe readAt
+                }
+            }
+        }
     }
 }

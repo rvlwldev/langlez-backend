@@ -176,9 +176,16 @@ class ChatService(
         return storage.presign(memberId, "chat", type, filename)
     }
 
+    /**
+     * 읽음 처리.
+     *
+     * 참여자 검증(IDOR 방지) 후 원자적 단일 UPDATE(`repo.markRead`)로 읽음 시각과 카운터를 갱신한다.
+     * 엔티티 읽기-쓰기로 병합하면, 조회와 저장 사이에 들어온 새 메시지의 `increaseUnread` 카운트가
+     * 0으로 덮어써지는 경쟁 상태(Lost Update)가 발생하므로 DB 에서 직접 조건부 갱신한다.
+     */
     fun markRead(memberId: Long, roomId: Long, at: Instant = Instant.now()) {
-        participantOrThrow(roomId, memberId).apply { markRead(at) }
-            .also(repo::saveParticipant)
+        participantOrThrow(roomId, memberId)
+        repo.markRead(roomId, memberId, at)
 
         // 저장만 하면 상대는 새로고침해야 읽음을 안다. 실시간으로 밀어준다.
         broadcaster.broadcast(topic(roomId), ChatReadEvent(roomId, memberId, at))

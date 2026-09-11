@@ -51,17 +51,17 @@ class ChatServiceActionsTest : BehaviorSpec({
                 val at = Instant.now()
                 every { repo.findParticipant(roomId, me) } returns
                     ChatRoomMember(roomId, me, unreadCount = 2)
-                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.markRead(roomId, me, at) } returns Unit
 
                 service.markRead(me, roomId, at)
 
-                verify { repo.saveParticipant(match { it.lastReadAt == at && it.unreadCount == 0L }) }
+                verify { repo.markRead(roomId, me, at) }
             }
 
             Then("상대 화면에도 읽음이 즉시 반영되도록 브로드캐스트한다") {
                 val at = Instant.now()
                 every { repo.findParticipant(roomId, me) } returns ChatRoomMember(roomId, me)
-                every { repo.saveParticipant(any()) } answers { firstArg() }
+                every { repo.markRead(roomId, me, at) } returns Unit
 
                 service.markRead(me, roomId, at)
 

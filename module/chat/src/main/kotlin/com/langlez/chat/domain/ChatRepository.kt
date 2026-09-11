@@ -23,6 +23,15 @@ interface ChatRepository {
     fun increaseUnread(roomId: Long, memberId: Long)
     fun rejoinParticipant(roomId: Long, memberId: Long)
 
+    /**
+     * 읽음 처리.
+     *
+     * 엔티티를 읽고 save 로 병합하면, 읽은 시점과 저장 시점 사이에 들어온 새 메시지의
+     * `increaseUnread` 카운트가 덮어써져 0으로 초기화되는 경쟁 상태(Lost Update)가 발생한다.
+     * DB 에서 조건부(lastReadAt is null or lastReadAt < :at) 단일 UPDATE 로 원자적으로 반영한다.
+     */
+    fun markRead(roomId: Long, memberId: Long, at: Instant)
+
     /** 마지막 메시지 최신순. 나간 방도 상대가 보내면 재등장하므로 leftAt 필터 안 함 */
     fun findRoomSummaries(memberId: Long, size: Int, cursor: Instant?): List<ChatRoomSummary>
 }
