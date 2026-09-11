@@ -75,17 +75,34 @@ class ChatRepositoryImpl(
     /** 벌크 UPDATE 라 트랜잭션이 있어야 한다. 호출부가 트랜잭션 안이면 그대로 참여한다. */
     @Transactional
     override fun increaseUnread(roomId: Long, memberId: Long) {
-        participants.increaseUnread(roomId, memberId)
+        val m = QChatRoomMember.chatRoomMember
+        dsl.update(m)
+            .set(m.unreadCount, m.unreadCount.add(1L))
+            .where(m.roomId.eq(roomId), m.memberId.eq(memberId))
+            .execute()
     }
 
     @Transactional
     override fun rejoinParticipant(roomId: Long, memberId: Long) {
-        participants.rejoin(roomId, memberId)
+        val m = QChatRoomMember.chatRoomMember
+        dsl.update(m)
+            .setNull(m.leftAt)
+            .where(m.roomId.eq(roomId), m.memberId.eq(memberId))
+            .execute()
     }
 
     @Transactional
     override fun markRead(roomId: Long, memberId: Long, at: Instant) {
-        participants.markRead(roomId, memberId, at)
+        val m = QChatRoomMember.chatRoomMember
+        dsl.update(m)
+            .set(m.unreadCount, 0L)
+            .set(m.lastReadAt, at)
+            .where(
+                m.roomId.eq(roomId),
+                m.memberId.eq(memberId),
+                m.lastReadAt.isNull.or(m.lastReadAt.lt(at))
+            )
+            .execute()
     }
 
     /**
