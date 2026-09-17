@@ -1,4 +1,4 @@
-package com.langlez.auth.oauth2
+package com.langlez.auth.api.oauth2
 
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.authority.SimpleGrantedAuthority

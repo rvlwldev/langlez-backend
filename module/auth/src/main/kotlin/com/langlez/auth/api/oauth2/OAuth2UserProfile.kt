@@ -1,4 +1,4 @@
-package com.langlez.auth.domain
+package com.langlez.auth.api.oauth2
 
 data class OAuth2UserProfile(
     val provider: String,

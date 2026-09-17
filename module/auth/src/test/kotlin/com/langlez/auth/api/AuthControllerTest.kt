@@ -1,6 +1,6 @@
 package com.langlez.auth.api
 
-import com.langlez.auth.api.AuthRequest.RefreshToken
+import com.langlez.auth.api.request.AuthRequest.RefreshToken
 import com.langlez.auth.application.AccessContext
 import com.langlez.auth.application.AuthService
 import com.langlez.exception.LanglezException

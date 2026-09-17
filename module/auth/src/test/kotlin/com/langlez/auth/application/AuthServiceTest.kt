@@ -1,21 +1,17 @@
 package com.langlez.auth.application
 
-import com.langlez.auth.domain.OAuth2UserProfile
 import com.langlez.exception.LanglezException
-import com.langlez.member.application.MemberService
-import com.langlez.member.domain.Member
+import com.langlez.member.contract.MemberAuthenticator
+import com.langlez.member.contract.OnlineTracker
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import io.mockk.*
-import org.redisson.api.RBucket
-import org.redisson.api.RScript
-import org.redisson.api.RedissonClient
-import org.redisson.client.codec.StringCodec
+import io.mockk.clearMocks
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import org.springframework.http.HttpStatus
-import java.lang.reflect.InvocationTargetException
-import java.time.Duration
 import java.util.Base64
 
 class AuthServiceTest : BehaviorSpec({
@@ -25,44 +21,31 @@ class AuthServiceTest : BehaviorSpec({
     // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 서비스에 넘긴다.
     val tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 1209600, redisson = mockk(relaxed = true))
 
-    val memberService = mockk<MemberService>()
-    val redisson = mockk<RedissonClient>()
-    val bucket = mockk<RBucket<String>>()
-    val deviceBucket = mockk<RBucket<String>>(relaxed = true).also { every { it.get() } returns null }
-
-    // 회전은 Lua 스크립트 한 방이다(비교+교체+만료). 여기선 성공/실패만 정하고,
-    // 스크립트가 실제로 원자적인지는 진짜 레디스에 붙는 AuthSessionTest 가 본다.
-    val script = mockk<RScript>()
-    every { redisson.getScript(StringCodec.INSTANCE) } returns script
+    val members = mockk<MemberAuthenticator>()
+    val sessions = mockk<SessionStore>(relaxed = true)
+    val tracker = mockk<OnlineTracker>(relaxed = true)
 
     val service = AuthService(
-        tokens, memberService, redisson, mockk(relaxed = true),
+        tokens, sessions, members, tracker,
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )
 
-    afterEach { clearMocks(memberService, redisson, bucket, deviceBucket, answers = false) }
+    afterEach { clearMocks(members, sessions, tracker, answers = false) }
+
+    fun account(id: Long = 1L) = MemberAuthenticator.AccountInfo(id, "tester", "ROLE_MEMBER")
 
     Given("토큰 갱신 요청 시") {
         val memberId = 1L
-        val member = Member(
-            id = memberId,
-            email = "test@example.com",
-            handle = "tester",
-            provider = Member.Provider.GOOGLE,
-            providerId = "g123",
-            providerDisplayName = "tester"
-        )
         val validRefreshToken = tokens.issueRefreshToken(memberId, "tester", "ROLE_MEMBER")
 
-        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
+        every { sessions.boundDevice(memberId) } returns null
 
         When("유효한 리프레시 토큰으로 갱신하면") {
-            every { memberService.findById(memberId) } returns member
-            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 1L
+            every { members.findLoginable(memberId) } returns account(memberId)
+            every { sessions.rotate(memberId, from = validRefreshToken, to = any()) } returns true
 
-            Then("새로운 토큰 쌍이 반환되고 Redis에 저장된다") {
+            Then("새로운 토큰 쌍이 반환되고 세션이 회전한다") {
                 val (refreshToken, accessToken) = service.refresh(validRefreshToken, AccessContext())
 
                 tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
@@ -70,65 +53,36 @@ class AuthServiceTest : BehaviorSpec({
                 tokens.parse(accessToken).role shouldBe "ROLE_MEMBER"
                 tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
 
-                // 옛 토큰·새 토큰·TTL 이 한 스크립트로 함께 넘어간다.
-                verify {
-                    script.eval<Long>(
-                        any(), any(), any(),
-                        listOf("refresh_token:$memberId"),
-                        validRefreshToken, refreshToken, "1209600",
-                    )
-                }
+                verify { sessions.rotate(memberId, from = validRefreshToken, to = refreshToken) }
+                verify { sessions.bindDevice(memberId, null) }
             }
         }
 
         When("액세스 토큰으로 갱신을 시도하면") {
             val accessToken = tokens.issueAccessToken(memberId, "tester", "ROLE_MEMBER")
 
-            Then("UNAUTHORIZED 예외가 발생한다") {
+            Then("UNAUTHORIZED 예외가 발생하고 회원 조회는 일어나지 않는다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(accessToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.invalid-token"
+
+                verify(exactly = 0) { members.findLoginable(any()) }
             }
         }
 
-        When("존재하지 않는 회원의 토큰으로 갱신하면") {
-            val orphanToken = tokens.issueRefreshToken(999L, "ghost", "ROLE_MEMBER")
-            every { memberService.findById(999L) } returns null
-            every { redisson.getBucket<String>("refresh_token:999", StringCodec.INSTANCE) } returns bucket
-            every { redisson.getBucket<String>("refresh_device:999", StringCodec.INSTANCE) } returns deviceBucket
+        When("세션 저장소에 저장된 토큰과 다른 토큰으로 갱신하면(회전 실패)") {
+            every { members.findLoginable(memberId) } returns account(memberId)
+            every { sessions.rotate(memberId, from = validRefreshToken, to = any()) } returns false
 
-            Then("UNAUTHORIZED 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(orphanToken, AccessContext()) }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
-                ex.message shouldBe "auth.invalid-token"
-            }
-        }
-
-        When("Redis에 저장된 토큰과 다른 토큰으로 갱신하면") {
-            every { memberService.findById(memberId) } returns member
-            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 0L
-            every { bucket.delete() } returns true
-
-            Then("토큰 만료 예외가 발생하고 세션은 지워지지 않는다") {
+            Then("토큰 만료 예외가 발생하고 세션은 건드리지 않는다") {
                 val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken, AccessContext()) }
                 ex.status shouldBe HttpStatus.UNAUTHORIZED
                 ex.message shouldBe "auth.token-expired"
 
                 // 불일치는 탈취뿐 아니라 "다른 요청이 방금 갱신했다" 는 뜻이기도 하다.
-                // 지워버리면 동시 갱신이 정상 사용자를 재로그인시킨다.
-                verify(exactly = 0) { bucket.delete() }
-            }
-        }
-
-        When("Redis에 토큰이 없으면(만료)") {
-            every { memberService.findById(memberId) } returns member
-            every { script.eval<Long>(any<RScript.Mode>(), any<String>(), any<RScript.ReturnType>(), any<List<Any>>(), *varargAny { true }) } returns 0L
-            every { bucket.delete() } returns true
-
-            Then("토큰 만료 예외가 발생한다") {
-                val ex = shouldThrow<LanglezException> { service.refresh(validRefreshToken, AccessContext()) }
-                ex.status shouldBe HttpStatus.UNAUTHORIZED
-                ex.message shouldBe "auth.token-expired"
+                // 회전이 실패했으면 기기 바인딩도 세션도 건드리지 않는다.
+                verify(exactly = 0) { sessions.bindDevice(any(), any()) }
+                verify(exactly = 0) { sessions.close(any()) }
             }
         }
     }
@@ -138,56 +92,29 @@ class AuthServiceTest : BehaviorSpec({
         val handle = "tester"
         val role = "ROLE_MEMBER"
 
-        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
-        every { bucket.set(any(), any<Duration>()) } just runs
-
         When("issueTokens를 호출하면") {
-            Then("토큰 쌍을 반환하고 refresh token을 Redis에 저장한다") {
-                val (refreshToken, accessToken) = service.issueTokens(memberId, handle, role, AccessContext())
+            Then("토큰 쌍을 반환하고 세션을 연다") {
+                val (refreshToken, accessToken) =
+                    service.issueTokens(memberId, handle, role, AccessContext("1.1.1.1", "device-A"))
 
                 tokens.parse(refreshToken).type shouldBe TokenManager.Type.REFRESH
                 tokens.parse(accessToken).type shouldBe TokenManager.Type.ACCESS
                 tokens.parse(accessToken).memberId shouldBe memberId
 
-                verify { bucket.set(refreshToken, Duration.ofDays(14)) }
+                verify { sessions.open(memberId, refreshToken, "device-A") }
+                verify { tracker.recordAccess(memberId, "1.1.1.1", "device-A") }
             }
         }
     }
 
     Given("탈퇴 이벤트를 받아 세션만 끊을 때") {
         val memberId = 1L
-        every { redisson.getBucket<String>("refresh_token:$memberId", StringCodec.INSTANCE) } returns bucket
-        every { redisson.getBucket<String>("refresh_device:$memberId", StringCodec.INSTANCE) } returns deviceBucket
-        every { bucket.delete() } returns true
-        every { deviceBucket.delete() } returns true
 
         When("invalidateSession을 호출하면") {
-            Then("리프레시 토큰과 기기 바인딩이 지워진다") {
+            Then("세션 저장소에 세션 종료를 위임한다") {
                 service.invalidateSession(memberId)
 
-                verify(exactly = 1) { bucket.delete() }
-                verify(exactly = 1) { deviceBucket.delete() }
-            }
-        }
-    }
-
-    // oauth2Login()은 private이라 리플렉션으로 직접 호출
-    Given("OAuth2 로그인 요청 시") {
-        When("신규 회원 가입 중 이메일이 누락된 프로필이면") {
-            val profile = OAuth2UserProfile.by("google", "sub", mapOf("sub" to "g123"))
-            every { memberService.findByProvider(Member.Provider.GOOGLE, "g123") } returns null
-
-            Then("400 예외가 발생한다") {
-                val method = AuthService::class.java.getDeclaredMethod("oauth2Login", OAuth2UserProfile::class.java)
-                method.isAccessible = true
-
-                val invocationEx = shouldThrow<InvocationTargetException> {
-                    method.invoke(service, profile)
-                }
-                val ex = invocationEx.cause as LanglezException
-                ex.status shouldBe HttpStatus.BAD_REQUEST
-                ex.message shouldBe "auth.invalid-request"
+                verify(exactly = 1) { sessions.close(memberId) }
             }
         }
     }

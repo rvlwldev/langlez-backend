@@ -1,4 +1,4 @@
-package com.langlez.auth.domain
+package com.langlez.auth.api.oauth2
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
