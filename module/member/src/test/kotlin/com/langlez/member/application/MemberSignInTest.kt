@@ -154,8 +154,20 @@ class MemberSignInTest : BehaviorSpec({
         When("회원이 정지 상태면") {
             every { service.findById(2L) } returns member(2L, Member.Status.SUSPENDED)
 
-            Then("null 을 반환한다") {
-                signIn.findLoginable(2L).shouldBeNull()
+            Then("403 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { signIn.findLoginable(2L) }
+                ex.status shouldBe HttpStatus.FORBIDDEN
+                ex.message shouldBe "member.suspended"
+            }
+        }
+
+        When("회원이 탈퇴 상태면") {
+            every { service.findById(3L) } returns member(3L, Member.Status.WITHDRAWN)
+
+            Then("403 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { signIn.findLoginable(3L) }
+                ex.status shouldBe HttpStatus.FORBIDDEN
+                ex.message shouldBe "member.withdrawn"
             }
         }
     }

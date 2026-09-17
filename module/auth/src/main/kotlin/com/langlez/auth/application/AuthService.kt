@@ -5,7 +5,6 @@ import com.langlez.member.contract.MemberAuthenticator
 import com.langlez.member.contract.OnlineTracker
 import com.langlez.security.TokenManager
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import java.time.Duration
 
@@ -42,7 +41,8 @@ class AuthService(
         if (info.type != TokenManager.Type.REFRESH) throw LanglezException(401, "auth.invalid-token")
 
         val id = info.memberId
-        val account = members.findLoginable(id) ?: throw LanglezException(HttpStatus.FORBIDDEN, "auth.forbidden")
+        // findLoginable 은 회원 부재일 때만 null 이다. 정지·탈퇴는 예외로 사유를 그대로 던진다.
+        val account = members.findLoginable(id) ?: throw LanglezException(401, "auth.invalid-token")
 
         // 1인 1기기: 세션에 묶인 기기와 다르면 다른 기기에서 로그인해 밀려난 것이다.
         //

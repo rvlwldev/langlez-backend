@@ -9,6 +9,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import org.springframework.http.HttpStatus
 import java.util.Base64
 
 /** 정지·탈퇴했거나 더 이상 존재하지 않는 회원이 계속 서비스를 쓰지 못하게 막는다. */
@@ -34,15 +35,25 @@ class AuthServiceStatusTest : BehaviorSpec({
     every { sessions.boundDevice(memberId) } returns null
     every { sessions.rotate(memberId, from = refreshToken, to = any()) } returns true
 
-    // findLoginable 은 회원이 없거나(오프-탈퇴 데이터는 지우지 않으므로 이론상만 있는 경우) 정지·탈퇴
-    // 상태면 구분 없이 null 을 준다. AuthService 입장에선 "로그인 불가"라는 사실만 중요하다.
-    Given("로그인 불가 상태의 회원이 토큰 갱신을 시도하면") {
-        every { members.findLoginable(memberId) } returns null
+    // findLoginable 은 회원이 없으면만 null 이다. 정지·탈퇴는 예외로 사유를 그대로 전파한다 —
+    // MemberReader.findStatus 와 같은 이유로, 정지/탈퇴는 사용자에게 다른 문구를 내야 한다.
+    Given("정지된 회원이 토큰 갱신을 시도하면") {
+        every { members.findLoginable(memberId) } throws LanglezException(HttpStatus.FORBIDDEN, "member.suspended")
 
-        Then("403 으로 거부된다") {
+        Then("403 member.suspended 로 거부된다") {
             val ex = shouldThrow<LanglezException> { service.refresh(refreshToken, AccessContext()) }
             ex.status.value() shouldBe 403
-            ex.message shouldBe "auth.forbidden"
+            ex.message shouldBe "member.suspended"
+        }
+    }
+
+    Given("탈퇴한 회원이 토큰 갱신을 시도하면") {
+        every { members.findLoginable(memberId) } throws LanglezException(HttpStatus.FORBIDDEN, "member.withdrawn")
+
+        Then("403 member.withdrawn 으로 거부된다") {
+            val ex = shouldThrow<LanglezException> { service.refresh(refreshToken, AccessContext()) }
+            ex.status.value() shouldBe 403
+            ex.message shouldBe "member.withdrawn"
         }
     }
 

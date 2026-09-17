@@ -23,11 +23,22 @@ interface MemberAuthenticator {
 
     /**
      * 소셜 로그인 진입. 없으면 만들고 있으면 찾는다.
-     * 정지·탈퇴 회원과 이메일이 다른 계정에 이미 쓰인 경우는 구현이 거부한다.
+     *
+     * 정지·탈퇴 회원은 `LanglezException(FORBIDDEN, e.message, e)` 를 던져 거부한다 — 사유
+     * (`member.suspended`/`member.withdrawn`)를 boolean 이나 null 로 뭉개면 사용자에게 다른
+     * 문구를 낼 수 없다([MemberReader.findStatus] 의 KDoc 과 같은 이유). 이메일이 다른 계정에
+     * 이미 쓰인 경우도 구현이 거부한다.
      */
     fun authenticate(provider: String, providerId: String, email: String?, displayName: String?): AccountInfo
 
-    /** 리프레시용. 없거나 로그인 불가 상태면 null */
+    /**
+     * 리프레시용.
+     *
+     * **`null` 은 회원 부재만 뜻한다.** 정지·탈퇴는 `null` 이 아니라 [authenticate] 와 같은 규약으로
+     * `LanglezException(FORBIDDEN, e.message, e)` 를 던진다 — 사유를 잃으면 안 되기 때문이다
+     * ([MemberReader.findStatus] 의 KDoc 과 같은 이유). 회원 부재와 비활성 상태를 함께 `null` 로
+     * 합치면 호출자가 401(재로그인 유도)과 403(정지/탈퇴 안내)을 구분할 방법이 없어진다.
+     */
     fun findLoginable(memberId: Long): AccountInfo?
 
     data class AccountInfo(val id: Long, val handle: String, val role: String)

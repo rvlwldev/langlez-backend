@@ -70,6 +70,17 @@ class AuthServiceTest : BehaviorSpec({
             }
         }
 
+        When("존재하지 않는 회원의 토큰으로 갱신하면") {
+            val orphanToken = tokens.issueRefreshToken(999L, "ghost", "ROLE_MEMBER")
+            every { members.findLoginable(999L) } returns null
+
+            Then("UNAUTHORIZED 예외가 발생한다") {
+                val ex = shouldThrow<LanglezException> { service.refresh(orphanToken, AccessContext()) }
+                ex.status shouldBe HttpStatus.UNAUTHORIZED
+                ex.message shouldBe "auth.invalid-token"
+            }
+        }
+
         When("세션 저장소에 저장된 토큰과 다른 토큰으로 갱신하면(회전 실패)") {
             every { members.findLoginable(memberId) } returns account(memberId)
             every { sessions.rotate(memberId, from = validRefreshToken, to = any()) } returns false

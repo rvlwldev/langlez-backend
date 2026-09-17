@@ -14,7 +14,7 @@ class RedisSessionStore(
     @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTtlSecs: Long,
 ) : SessionStore {
 
-    private val refreshTokenTtl: Duration get() = Duration.ofSeconds(refreshTokenTtlSecs)
+    private val refreshTokenTtl: Duration = Duration.ofSeconds(refreshTokenTtlSecs)
 
     override fun open(memberId: Long, refreshToken: String, deviceId: String?) {
         refreshTokenBucket(memberId).set(refreshToken, refreshTokenTtl)

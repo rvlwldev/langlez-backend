@@ -53,9 +53,14 @@ class MemberSignIn(
     override fun findLoginable(memberId: Long): AccountInfo? {
         val member = service.findById(memberId) ?: return null
 
-        return runCatching { member.requireActive() }
-            .map { member.toAccountInfo() }
-            .getOrNull()
+        // 정지/탈퇴 사유를 잃으면 안 된다 — authenticate 와 같은 규약.
+        try {
+            member.requireActive()
+        } catch (e: IllegalArgumentException) {
+            throw LanglezException(HttpStatus.FORBIDDEN, e.message, e)
+        }
+
+        return member.toAccountInfo()
     }
 
     private fun Member.toAccountInfo() = AccountInfo(id, handle, role.authority)
