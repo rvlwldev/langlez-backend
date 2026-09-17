@@ -1,6 +1,6 @@
 package com.langlez.member.contract
 
-interface OnlineTracker {
+interface MemberOnlineTracker {
     fun toOnline(id: Long)
     fun toOffline(id: Long)
     fun countOnline(): Long

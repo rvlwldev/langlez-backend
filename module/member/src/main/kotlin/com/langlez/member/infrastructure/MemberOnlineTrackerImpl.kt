@@ -1,6 +1,6 @@
-package com.langlez.member.application
+package com.langlez.member.infrastructure
 
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
 import org.redisson.api.RedissonClient
@@ -10,10 +10,10 @@ import java.time.Duration
 import java.time.Instant
 
 @Component
-class MemberOnlineTracker(
+class MemberOnlineTrackerImpl(
     private val redisson: RedissonClient,
     private val repo: MemberRepository,
-) : OnlineTracker {
+) : MemberOnlineTracker {
 
     override fun toOnline(id: Long) {
         redisson.getBucket<String>(key(id)).set("1", TTL)

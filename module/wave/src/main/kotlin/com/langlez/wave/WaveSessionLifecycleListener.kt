@@ -39,7 +39,7 @@ import org.springframework.web.socket.messaging.SessionSubscribeEvent
  * 거기에 [WaveService] 를 주입하면 `SimpMessagingTemplate` → 브로커 설정 → 이 configurer →
  * `WaveService` → `MessageBroadcaster` → `SimpMessagingTemplate` 로 순환이 닫혀
  * **컨텍스트가 아예 안 뜬다.** chat 의 같은 자리(`viewingCleanupListener`)가 괜찮은 건
- * 그쪽이 브로커에서 파생되지 않는 `OnlineTracker` 만 잡기 때문이다.
+ * 그쪽이 브로커에서 파생되지 않는 `MemberOnlineTracker` 만 잡기 때문이다.
  */
 @Component
 class WaveSessionLifecycleListener(private val service: WaveService) {

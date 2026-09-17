@@ -16,7 +16,7 @@ interface MatchingReader {
      * 랭킹 순 추천 회원 id. 언어를 등록하지 않았거나 후보가 없으면 빈 목록이다 — 예외가 아니다.
      *
      * 순서는 캐시된 것이라 최대 10분까지 고정이다. 접속 상태는 그 순서에 이미 반영돼 있지만
-     * 호출 시점의 실시간 값은 아니다. 실시간 접속 표시가 필요하면 `OnlineTracker` 를 따로 본다.
+     * 호출 시점의 실시간 값은 아니다. 실시간 접속 표시가 필요하면 `MemberOnlineTracker` 를 따로 본다.
      */
     fun recommendedIds(memberId: Long, limit: Int): List<Long>
 }

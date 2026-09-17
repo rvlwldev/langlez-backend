@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.core.MessageBroadcaster
 import com.langlez.exception.LanglezException
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import com.langlez.notification.domain.Notification
 import com.langlez.notification.domain.NotificationMuteRepository
@@ -28,7 +28,7 @@ import java.time.LocalTime
 class NotificationServiceTest : BehaviorSpec({
 
     val repo = mockk<NotificationRepository>()
-    val tracker = mockk<OnlineTracker>()
+    val tracker = mockk<MemberOnlineTracker>()
     val broadcaster = mockk<MessageBroadcaster>(relaxed = true)
     val tokens = mockk<PushTokenReader>()
     val push = mockk<PushSender>(relaxed = true)

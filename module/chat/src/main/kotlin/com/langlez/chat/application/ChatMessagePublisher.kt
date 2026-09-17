@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.redis.distributedLock.DistributedLock
 import org.slf4j.LoggerFactory
@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 internal class ChatMessagePublisher(
     private val messages: ChatMessageRepository,
     private val repo: ChatRepository,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val kafka: KafkaTemplate<String, String>,
     private val mapper: ObjectMapper,
 ) {

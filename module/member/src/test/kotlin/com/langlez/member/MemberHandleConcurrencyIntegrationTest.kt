@@ -1,6 +1,6 @@
 package com.langlez.member
 
-import com.langlez.member.application.MemberOnlineTracker
+import com.langlez.member.infrastructure.MemberOnlineTrackerImpl
 import com.langlez.member.application.MemberService
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
@@ -62,7 +62,7 @@ class MemberHandleConcurrencyTestConfig {
 
     @Bean
     @Primary
-    fun memberOnlineTracker(): MemberOnlineTracker = mockk(relaxed = true)
+    fun memberOnlineTracker(): MemberOnlineTrackerImpl = mockk(relaxed = true)
 
     @Bean
     @Primary

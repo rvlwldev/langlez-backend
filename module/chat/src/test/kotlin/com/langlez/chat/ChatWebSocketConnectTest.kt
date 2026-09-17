@@ -4,7 +4,7 @@ import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.SubscriptionAuthorizer
 import com.langlez.member.contract.MemberReader
 import com.langlez.member.contract.MemberReader.Status
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
@@ -38,7 +38,7 @@ private class ExposedConnectRegistration : ChannelRegistration() {
 class ChatWebSocketConnectTest : BehaviorSpec({
 
     val members = mockk<MemberReader>()
-    val tracker = mockk<OnlineTracker>(relaxed = true)
+    val tracker = mockk<MemberOnlineTracker>(relaxed = true)
     val sessions = mockk<WebSocketSessionRegistry>(relaxed = true)
     val channel = mockk<MessageChannel>()
 

@@ -3,7 +3,7 @@ package com.langlez.notification
 import com.langlez.core.MessageBroadcaster
 import com.langlez.core.MessageDeduplicator
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import io.mockk.mockk
 import org.mockito.Mockito
@@ -41,7 +41,7 @@ class TestNotificationApplication {
     fun messageDeduplicator(): MessageDeduplicator = mockk(relaxed = true)
 
     @Bean
-    fun onlineTracker(): OnlineTracker = mockk(relaxed = true)
+    fun onlineTracker(): MemberOnlineTracker = mockk(relaxed = true)
 
     @Bean
     fun messageBroadcaster(): MessageBroadcaster = mockk(relaxed = true)

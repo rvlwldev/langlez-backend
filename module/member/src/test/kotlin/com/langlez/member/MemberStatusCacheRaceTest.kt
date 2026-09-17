@@ -4,7 +4,7 @@ import com.langlez.member.contract.MemberReader
 import com.langlez.core.cache.Cache
 import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
-import com.langlez.member.application.MemberOnlineTracker
+import com.langlez.member.infrastructure.MemberOnlineTrackerImpl
 import com.langlez.member.application.MemberService
 import com.langlez.member.application.MemberSuspender
 import com.langlez.member.domain.Member
@@ -70,7 +70,7 @@ class MemberStatusCacheRaceTestConfig {
 
     @Bean
     @Primary
-    fun memberOnlineTracker(): MemberOnlineTracker = mockk(relaxed = true)
+    fun memberOnlineTracker(): MemberOnlineTrackerImpl = mockk(relaxed = true)
 
     @Bean
     @Primary

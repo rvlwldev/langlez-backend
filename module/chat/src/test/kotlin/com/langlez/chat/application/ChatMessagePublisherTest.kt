@@ -5,7 +5,7 @@ import com.langlez.chat.domain.ChatMessage
 import com.langlez.chat.domain.ChatMessageRepository
 import com.langlez.chat.domain.ChatRepository
 import com.langlez.chat.domain.ChatRoomMember
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -22,7 +22,7 @@ class ChatMessagePublisherTest : BehaviorSpec({
 
     val messages = mockk<ChatMessageRepository>()
     val repo = mockk<ChatRepository>()
-    val tracker = mockk<OnlineTracker>()
+    val tracker = mockk<MemberOnlineTracker>()
     val kafka = mockk<KafkaTemplate<String, String>>()
 
     val publisher = ChatMessagePublisher(messages, repo, tracker, kafka, ObjectMapper())

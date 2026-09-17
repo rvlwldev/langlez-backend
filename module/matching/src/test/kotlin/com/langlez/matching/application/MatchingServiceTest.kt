@@ -9,7 +9,7 @@ import com.langlez.lang.contract.LanguageReader.LanguageInfo
 import com.langlez.lang.contract.LanguageReader.Level
 import com.langlez.lang.contract.LanguageReader.Role
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
@@ -32,7 +32,7 @@ class MatchingServiceTest : BehaviorSpec({
     val members = mockk<MemberReader>()
     val blocks = mockk<BlockReader>()
     val follows = mockk<FollowReader>()
-    val tracker = mockk<OnlineTracker>()
+    val tracker = mockk<MemberOnlineTracker>()
 
     val messages = StaticMessageSource().apply {
         addMessage("lang.required", Locale.KOREAN, "먼저 모국어와 배우는 언어를 등록해 주세요.")

@@ -1,4 +1,4 @@
-package com.langlez.member.application
+package com.langlez.member.infrastructure
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -32,7 +32,7 @@ class MemberOnlineTrackerAccessSyncTest : BehaviorSpec({
     )
 
     val repo = mockk<MemberRepository>(relaxed = true)
-    val tracker = MemberOnlineTracker(redisson, repo)
+    val tracker = MemberOnlineTrackerImpl(redisson, repo)
 
     afterSpec {
         redisson.shutdown()

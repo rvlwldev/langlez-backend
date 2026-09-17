@@ -1,4 +1,4 @@
-package com.langlez.member.application
+package com.langlez.member.infrastructure
 
 import com.langlez.core.cache.CacheProvider
 import com.langlez.core.cache.get
@@ -51,7 +51,7 @@ class MemberAccessSyncIntegrationTest : BehaviorSpec() {
     lateinit var jpa: MemberJpaRepository
 
     @Autowired
-    lateinit var tracker: MemberOnlineTracker
+    lateinit var tracker: MemberOnlineTrackerImpl
 
     @Autowired
     lateinit var caches: CacheProvider

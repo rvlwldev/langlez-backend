@@ -92,7 +92,7 @@ class WaveSessionRepositoryImpl(private val redisson: RedissonClient) : WaveSess
      *
      * 공용 코덱(JsonJacksonCodec)은 final 타입에 타입 정보를 안 붙이고 디코딩은 Object 로 해서,
      * 작은 수가 Integer 로 되돌아온다. 그러면 `Set<Long>` 인 척하는 Integer 집합이 되어
-     * `contains(1L)` 이 조용히 false 가 된다. (MemberOnlineTracker 와 같은 이유)
+     * `contains(1L)` 이 조용히 false 가 된다. (MemberOnlineTrackerImpl 과 같은 이유)
      *
      * 문자열로 담는 것만으로는 부족하다. 공용 코덱은 문자열도 JSON 으로 감싸(`5` → `"5"`) 저장하는데,
      * [joinIfNotFullScript] 는 레디스가 받은 인자를 그대로 SADD 하므로 두 경로의 바이트가 어긋난다.

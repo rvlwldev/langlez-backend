@@ -1,6 +1,6 @@
 package com.langlez.member.application
 
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.domain.Member
@@ -24,7 +24,7 @@ class MemberPersonalInfoUpdateTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val creator = mockk<MemberCreator>()
-    val tracker = mockk<OnlineTracker>()
+    val tracker = mockk<MemberOnlineTracker>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val tx = mockk<TransactionTemplate>()

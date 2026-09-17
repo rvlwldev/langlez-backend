@@ -11,7 +11,7 @@ import com.langlez.matching.api.response.MatchingMemberResponse
 import com.langlez.matching.api.response.MatchingMembersResponse
 import com.langlez.matching.contract.MatchingReader
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import org.springframework.context.MessageSource
 import org.springframework.stereotype.Service
 import java.util.Locale
@@ -38,7 +38,7 @@ class MatchingService(
     private val members: MemberReader,
     private val blocks: BlockReader,
     private val follows: FollowReader,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val scorer: MatchScorer,
     private val messages: MessageSource,
     caches: CacheProvider,
