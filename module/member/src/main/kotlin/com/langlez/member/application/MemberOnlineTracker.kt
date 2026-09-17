@@ -110,11 +110,9 @@ class MemberOnlineTracker(
     private fun topicsOf(memberId: Long) = redisson.getSet<String>("$VIEWING_MEMBER_PREFIX$memberId")
 
     /**
-     * OnlineTracker 인터페이스엔 없는 member 전용 부가기능.
-     * 로그인·토큰 갱신 때 마지막 접속 IP/기기를 남긴다. 최신 값만 덮어쓰므로
-     * 같은 회원이 여러 번 접속해도 DB 쓰기는 아래 동기화에서 1회다.
+     * 최신 값만 덮어쓰므로 같은 회원이 여러 번 접속해도 DB 쓰기는 아래 동기화에서 1회다.
      */
-    fun recordAccess(id: Long, ip: String?, deviceId: String?) {
+    override fun recordAccess(id: Long, ip: String?, deviceId: String?) {
         if (ip == null && deviceId == null) return
 
         val map = redisson.getMap<String, String>(accessKey(id))

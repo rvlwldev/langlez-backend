@@ -1,4 +1,4 @@
-package com.langlez.auth.api
+package com.langlez.auth.api.request
 
 import jakarta.validation.constraints.NotBlank
 

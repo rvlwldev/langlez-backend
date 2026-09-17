@@ -16,4 +16,7 @@ interface OnlineTracker {
     fun clearViewing(memberId: Long, topic: String)
     fun clearAllViewing(memberId: Long)
     fun viewers(topic: String): Set<Long>
+
+    /** 로그인·토큰 갱신 때 마지막 접속 IP/기기를 남긴다. auth 가 세션 발급·회전마다 부른다. */
+    fun recordAccess(memberId: Long, ip: String?, deviceId: String?)
 }

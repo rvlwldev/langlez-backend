@@ -1,8 +1,8 @@
 package com.langlez.auth.application
 
+import com.langlez.auth.infrastructure.RedisSessionStore
 import com.langlez.exception.LanglezException
-import com.langlez.member.application.MemberService
-import com.langlez.member.domain.Member
+import com.langlez.member.contract.MemberAuthenticator
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
@@ -20,15 +20,16 @@ import org.testcontainers.containers.GenericContainer
 import java.util.Base64
 
 /**
- * 리프레시 토큰 회전(rotation)이 정상 사용자를 스스로 잘라내지 않는지 본다.
+ * 리프레시 토큰 회전(rotation)이 정상 사용자를 스스로 잘라내지 않는지, `AuthService` 의 정책이
+ * 진짜 Redis 위에서도 성립하는지 본다.
  *
  * 회전은 매 갱신마다 저장된 토큰을 새 토큰으로 덮는다. 그래서 "저장값과 다르다" 는 탈취뿐 아니라
  * **다른 요청이 방금 갱신했다** 는 뜻이기도 하다. 불일치를 세션 삭제로 처리하면 앱이 포그라운드로
  * 복귀하며 같은 토큰으로 두 번 갱신하는 것만으로 재로그인을 강요당한다.
  *
  * **진짜 레디스에 붙인다.** 회전은 Lua 스크립트 한 방(비교+교체+만료)이라 대역으로는 검증이 안 된다.
- * 대역은 내가 짠 비교 로직을 확인할 뿐이고, 정작 확인해야 할 것은 스크립트가 실제로 원자적이며
- * 교체 후 TTL 이 남아 있는가다.
+ * CAS/TTL/동시성 자체의 세부 검증은 `RedisSessionStoreTest` 가 한다 — 여기서는 `AuthService` 가
+ * 그 위에서 정책대로 동작하는지를 본다.
  */
 class AuthSessionTest : BehaviorSpec({
 
@@ -51,19 +52,13 @@ class AuthSessionTest : BehaviorSpec({
     // TokenManager 는 구체 클래스라 대역으로 갈지 않는다. 진짜 토큰을 발급해 서비스에 넘긴다.
     val tokens = TokenManager(secret, accessTokenTTL = 3600, refreshTokenTTL = 1209600, redisson = mockk(relaxed = true))
 
-    val memberService = mockk<MemberService>()
+    val members = mockk<MemberAuthenticator>()
+    every { members.findLoginable(1L) } returns MemberAuthenticator.AccountInfo(1L, "tester", "ROLE_MEMBER")
 
-    every { memberService.findById(1L) } returns Member(
-        id = 1L,
-        email = "t@test.com",
-        handle = "tester",
-        status = Member.Status.ACTIVE,
-        provider = Member.Provider.GOOGLE,
-        providerId = "p1",
-    )
+    val sessions = RedisSessionStore(redisson, refreshTokenTtlSecs = 1209600)
 
     val service = AuthService(
-        tokens, memberService, redisson, mockk(relaxed = true),
+        tokens, sessions, members, mockk(relaxed = true),
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )

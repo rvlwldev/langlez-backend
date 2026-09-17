@@ -1,4 +1,4 @@
-package com.langlez.auth.oauth2
+package com.langlez.auth.api.oauth2
 
 import com.langlez.auth.api.AuthController
 import com.langlez.auth.application.AuthService
