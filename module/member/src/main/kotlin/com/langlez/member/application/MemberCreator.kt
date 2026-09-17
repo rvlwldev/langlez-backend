@@ -1,7 +1,7 @@
 package com.langlez.member.application
 
 import com.langlez.member.contract.MemberCreatedEvent
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import org.springframework.context.ApplicationEventPublisher
@@ -11,7 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate
 @Component
 class MemberCreator(
     private val repo: MemberRepository,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val publisher: ApplicationEventPublisher,
     private val tx: TransactionTemplate,
 ) {

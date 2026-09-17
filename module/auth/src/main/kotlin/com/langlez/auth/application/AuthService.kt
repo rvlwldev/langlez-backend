@@ -2,7 +2,7 @@ package com.langlez.auth.application
 
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberAuthenticator
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.security.TokenManager
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -13,7 +13,7 @@ class AuthService(
     private val tokens: TokenManager,
     private val sessions: SessionStore,
     private val members: MemberAuthenticator,
-    private val onlineTracker: OnlineTracker,
+    private val onlineTracker: MemberOnlineTracker,
     @param:Value($$"${jwt.access-token-ttl-secs}") private val accessTokenTtlSecs: Long,
     @param:Value($$"${jwt.refresh-token-ttl-secs}") private val refreshTokenTtlSecs: Long,
 ) {

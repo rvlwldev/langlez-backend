@@ -2,7 +2,7 @@ package com.langlez.chat
 
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.security.AccountStatusPolicy
 import com.langlez.security.TokenManager
 import org.springframework.context.ApplicationListener
@@ -50,7 +50,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
 class ChatWebSocketConfiguration(
     private val tokens: TokenManager,
     private val members: MemberReader,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val gate: WebSocketSubscriptionGate,
     private val sessions: WebSocketSessionRegistry,
 ) : WebSocketMessageBrokerConfigurer {

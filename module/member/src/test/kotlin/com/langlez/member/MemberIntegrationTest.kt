@@ -6,7 +6,7 @@ import com.langlez.member.contract.MemberCreatedEvent
 import com.langlez.member.contract.MemberHandleChangedEvent
 import com.langlez.member.contract.MemberWithdrawnEvent
 import com.langlez.exception.LanglezException
-import com.langlez.member.application.MemberOnlineTracker
+import com.langlez.member.infrastructure.MemberOnlineTrackerImpl
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.application.MemberService
 import com.langlez.member.application.MemberSuspender
@@ -41,7 +41,7 @@ import java.time.temporal.ChronoUnit
 class MemberIntegrationTestConfig {
     @Bean
     @Primary
-    fun memberOnlineTracker(): MemberOnlineTracker = mockk(relaxed = true)
+    fun memberOnlineTracker(): MemberOnlineTrackerImpl = mockk(relaxed = true)
 }
 
 @SpringBootTest(
@@ -73,7 +73,7 @@ class MemberIntegrationTest : BehaviorSpec() {
     lateinit var outboxJpaRepository: MemberOutBoxRepository
 
     @Autowired
-    lateinit var memberOnlineTracker: MemberOnlineTracker
+    lateinit var memberOnlineTracker: MemberOnlineTrackerImpl
 
     @Autowired
     lateinit var objectMapper: ObjectMapper

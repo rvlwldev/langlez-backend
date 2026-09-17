@@ -1,13 +1,13 @@
 package com.langlez.member.api
 
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.mockk
 import io.mockk.verify
 
 class MemberPingControllerTest : BehaviorSpec({
 
-    val tracker = mockk<OnlineTracker>(relaxed = true)
+    val tracker = mockk<MemberOnlineTracker>(relaxed = true)
     val controller = MemberPingController(tracker)
 
     Given("앱이 살아 있다는 핑이 오면") {

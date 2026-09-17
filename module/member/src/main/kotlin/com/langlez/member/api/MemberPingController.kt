@@ -1,7 +1,7 @@
 package com.langlez.member.api
 
 import com.langlez.annotation.MemberId
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @RequestMapping("/api/v1/members")
-class MemberPingController(private val tracker: OnlineTracker) {
+class MemberPingController(private val tracker: MemberOnlineTracker) {
 
     @PostMapping("/me/ping")
     @ResponseStatus(HttpStatus.NO_CONTENT)

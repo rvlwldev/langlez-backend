@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional
  * member 가 다른 모듈에 내주는 조회 포트 구현.
  *
  * 계정 정보·상태·푸시 토큰이 전부 `MemberRepository.find` 하나를 읽어 매핑하는 것뿐이라
- * 포트별로 어댑터를 나누지 않고 한 클래스가 다 구현한다. (`MemberOnlineTracker` 는 예외다 —
+ * 포트별로 어댑터를 나누지 않고 한 클래스가 다 구현한다. (`MemberOnlineTrackerImpl` 은 예외다 —
  * 레디스 버킷/ZSET 을 직접 다루고 스케줄러로 DB 동기화까지 해서 성격이 다르다.)
  *
  * 상태 조회는 `JwtAuthenticationFilter` 가 매 요청 부른다. `MemberRepository.find` 는 2단계 캐시를 타고

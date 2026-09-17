@@ -2,7 +2,7 @@ package com.langlez.auth.application
 
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberAuthenticator
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -24,7 +24,7 @@ class AuthServiceStatusTest : BehaviorSpec({
     val sessions = mockk<SessionStore>(relaxed = true)
 
     val service = AuthService(
-        tokens, sessions, members, mockk<OnlineTracker>(relaxed = true),
+        tokens, sessions, members, mockk<MemberOnlineTracker>(relaxed = true),
         accessTokenTtlSecs = 3600,
         refreshTokenTtlSecs = 1209600,
     )

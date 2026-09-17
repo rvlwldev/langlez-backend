@@ -1,4 +1,4 @@
-package com.langlez.member.application
+package com.langlez.member.infrastructure
 
 import com.langlez.member.domain.MemberRepository
 import com.langlez.redis.distributedLock.DistributedLock
@@ -21,7 +21,7 @@ class MemberAccessSyncTest : BehaviorSpec({
     Given("한 회원이 10분 안에 핑도 보내고 로그인도 했으면") {
         val redisson = mockk<RedissonClient>(relaxed = true)
         val repo = mockk<MemberRepository>(relaxed = true)
-        val tracker = MemberOnlineTracker(redisson, repo)
+        val tracker = MemberOnlineTrackerImpl(redisson, repo)
 
         val pingAt = Instant.now().truncatedTo(ChronoUnit.MILLIS)
 
@@ -41,7 +41,7 @@ class MemberAccessSyncTest : BehaviorSpec({
         tracker.syncAccessInfo()
 
         Then("분산 락은 DB 트랜잭션 없이 획득한다") {
-            val method = MemberOnlineTracker::class.java.getDeclaredMethod("syncAccessInfo")
+            val method = MemberOnlineTrackerImpl::class.java.getDeclaredMethod("syncAccessInfo")
             val lock = method.getAnnotation(DistributedLock::class.java)
             lock.transactional shouldBe false
         }
@@ -72,7 +72,7 @@ class MemberAccessSyncTest : BehaviorSpec({
     Given("스케줄러 지연 등으로 10분보다 오래된 핑이 ZSET 에 남아있을 때") {
         val redisson = mockk<RedissonClient>(relaxed = true)
         val repo = mockk<MemberRepository>(relaxed = true)
-        val tracker = MemberOnlineTracker(redisson, repo)
+        val tracker = MemberOnlineTrackerImpl(redisson, repo)
 
         val delayedPingAt = Instant.now().minus(Duration.ofMinutes(25)).truncatedTo(ChronoUnit.MILLIS)
 

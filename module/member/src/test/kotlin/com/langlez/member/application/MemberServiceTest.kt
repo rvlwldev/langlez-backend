@@ -3,7 +3,7 @@ package com.langlez.member.application
 import com.langlez.attachment.contract.Storage
 import com.langlez.exception.LanglezException
 import com.langlez.member.contract.MemberWithdrawnEvent
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.member.domain.MemberSuspendHistoryRepository
@@ -20,7 +20,7 @@ class MemberServiceTest : BehaviorSpec({
 
     val repo = mockk<MemberRepository>()
     val creator = mockk<MemberCreator>()
-    val tracker = mockk<OnlineTracker>()
+    val tracker = mockk<MemberOnlineTracker>()
     val storage = mockk<Storage>()
     val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val suspendRepo = mockk<MemberSuspendHistoryRepository>()

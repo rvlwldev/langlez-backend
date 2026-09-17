@@ -6,7 +6,7 @@ import com.langlez.chat.infrastructure.ChatSubscriptionAuthorizer
 import com.langlez.config.WebSocketSubscriptionGate
 import com.langlez.core.SubscriptionAuthorizer
 import com.langlez.member.contract.MemberReader
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.security.TokenManager
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
@@ -33,7 +33,7 @@ private class ExposedRegistration : ChannelRegistration() {
 class ChatWebSocketSubscriptionTest : BehaviorSpec({
 
     val repo = mockk<ChatRepository>()
-    val tracker = mockk<OnlineTracker>(relaxed = true)
+    val tracker = mockk<MemberOnlineTracker>(relaxed = true)
     val channel = mockk<MessageChannel>()
 
     // 게이트는 등록된 인가자를 ObjectProvider 로 받는다. chat 컨텍스트엔 chat 인가자만 있다.

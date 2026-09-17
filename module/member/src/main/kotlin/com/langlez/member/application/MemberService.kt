@@ -1,6 +1,6 @@
 package com.langlez.member.application
 
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.attachment.contract.Storage
 import com.langlez.member.contract.MemberHandleChangedEvent
 import com.langlez.member.contract.MemberWithdrawnEvent
@@ -22,7 +22,7 @@ import java.time.LocalDate
 class MemberService(
     private val repo: MemberRepository,
     private val creator: MemberCreator,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val storage: Storage,
     private val publisher: ApplicationEventPublisher,
     private val tx: TransactionTemplate,

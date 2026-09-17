@@ -2,7 +2,7 @@ package com.langlez.chat
 
 import com.langlez.core.MessageBroadcaster
 import com.langlez.member.contract.MemberSuspendedEvent
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.domain.Member
 import com.langlez.member.domain.MemberRepository
 import com.langlez.security.TokenManager
@@ -72,7 +72,7 @@ class ChatWebSocketIntegrationTest : BehaviorSpec() {
     lateinit var chatRepository: com.langlez.chat.domain.ChatRepository
 
     @Autowired
-    lateinit var tracker: OnlineTracker
+    lateinit var tracker: MemberOnlineTracker
 
     // CONNECT 가 계정 상태를 보므로 접속하는 회원은 실제 행이 있어야 한다.
     @Autowired

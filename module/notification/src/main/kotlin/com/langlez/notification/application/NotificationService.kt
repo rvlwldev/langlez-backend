@@ -3,7 +3,7 @@ package com.langlez.notification.application
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.langlez.core.MessageBroadcaster
 import com.langlez.notification.contract.Notificator
-import com.langlez.member.contract.OnlineTracker
+import com.langlez.member.contract.MemberOnlineTracker
 import com.langlez.member.contract.PushTokenReader
 import com.langlez.chat.contract.ChatMessageSentEvent
 import com.langlez.follow.contract.MemberFollowedEvent
@@ -33,7 +33,7 @@ import java.time.ZoneId
 @Service
 class NotificationService(
     private val repo: NotificationRepository,
-    private val tracker: OnlineTracker,
+    private val tracker: MemberOnlineTracker,
     private val broadcaster: MessageBroadcaster,
     private val tokens: PushTokenReader,
     private val push: PushSender,
