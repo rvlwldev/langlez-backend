@@ -1,0 +1,17 @@
+# Orca 저장소 훅. 새 워크트리를 만들 때 Orca 가 setup 을 실행한다.
+scripts:
+  # 워크트리마다 graft 그래프를 새로 만든다.
+  #
+  # 그래프(/graft/)는 git 에 올리지 않는다. 15MB 짜리 파생물이고, 저장소 전체를 담은 단일 파일
+  # (wiring.json)이라 병렬 PR 마다 충돌한다. 505개 파일 기준 콜드 빌드가 약 12초라 새로 만드는 쪽이 싸다.
+  #
+  # graft MCP 는 ~/.claude.json 에 사용자 범위로 등록돼 있고, `graft mcp` 는 가장 가까운 상위
+  # graft/ 를 찾는다. 워크트리에 graft/ 가 없으면 워커의 graft 도구는 쓸 그래프가 없다.
+  #
+  # 실패해도 워크트리 생성을 막지 않는다. 그래프 없이도 구현은 된다.
+  setup: |
+    if ! command -v graft >/dev/null 2>&1; then
+      echo "[setup] graft 가 설치돼 있지 않아 그래프 빌드를 건너뛴다"
+      exit 0
+    fi
+    graft build "${ORCA_WORKTREE_PATH:-.}" || echo "[setup] graft build 실패 — 그래프 없이 진행한다"

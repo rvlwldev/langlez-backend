@@ -63,3 +63,6 @@ attachments/
 # Local secrets — 절대 커밋하지 마세요
 **/application-local.yml
 .omo/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
