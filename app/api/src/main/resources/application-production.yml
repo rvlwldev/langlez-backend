@@ -43,6 +43,32 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
 
+  kafka:
+    # 이 줄이 없으면 application.yml 의 `localhost:9092,9094,9096` 이 프로필 병합으로 상속돼
+    # 운영이 로컬 브로커를 본다. 아웃박스가 PENDING 으로만 쌓이고 모듈 간 이벤트가 조용히 멈춘다.
+    #
+    # 기본값을 두지 않는다. 변수를 빼뜨리면 기동이 실패한다 (실측:
+    # `ConfigException: Invalid url in bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS}`).
+    # 조용히 도는 것보다 못 뜨는 게 낫다.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+    # 아래는 application.yml 에서 상속되는 값이지만 다시 적는다.
+    # 아웃박스의 정합성에 직결되는 설정이라 운영 파일만 읽어도 보이게 둔다.
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all              # 모든 ISR 확인. 아웃박스가 이 ack 를 보고 COMPLETE 를 찍는다
+      properties:
+        enable.idempotence: true   # 아웃박스 재발행 시 브로커단 중복 제거
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false    # 핸들러 성공 후 커밋 (at-least-once)
+    listener:
+      ack-mode: record       # 레코드 1건 처리마다 커밋. BATCH 면 배치 도중 죽었을 때 처리분까지 재배달된다
+      concurrency: 3         # 오토컨피그 기본값(1)로 폴백하면 파티션을 늘려도 처리량이 안 는다
+
   jpa:
     hibernate:
       # none 이면 스키마가 어긋나도 런타임에야 터진다. validate 로 기동 시점에 잡는다.
