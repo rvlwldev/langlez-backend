@@ -27,7 +27,6 @@ dependencies {
 
     // jackson
     api(libs.dependency.kotlin.jackson)
-    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     // security + jwt
     api(libs.dependency.springboot.security)
