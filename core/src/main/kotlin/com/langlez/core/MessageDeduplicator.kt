@@ -1,7 +1,7 @@
 package com.langlez.core
 
 /**
- * 카프카 메시지 중복 처리 방지.
+ * 카프카 메시지 중복 처리 방지. *
  *
  * 카프카는 at-least-once 다. 컨슈머 예외로 인한 재시도(`DefaultErrorHandler` 가 seek 후 재호출),
  * 리밸런싱, 오프셋 커밋 실패, 아웃박스의 발행 재시도가 전부 같은 레코드를 다시 흘린다.
