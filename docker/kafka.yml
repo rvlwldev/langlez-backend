@@ -1,0 +1,99 @@
+name: langlez
+
+networks:
+  langlez-net:
+    driver: bridge
+
+# KRaft 3노드 클러스터. 각 노드가 broker + controller 를 겸한다.
+#
+# 리스너가 둘인 이유: 컨테이너끼리는 서비스명(kafka1:19092)으로 붙고, 호스트의 앱은
+# localhost:909x 로 붙는다. 광고 주소가 하나뿐이면 둘 중 하나는 반드시 실패한다.
+x-kafka-common: &kafka-common
+  image: apache/kafka:latest   # 4.x 계열
+  networks:
+    - langlez-net
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 1G
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+  # 노드가 3개이므로 내부 토픽도 3중화한다. 1로 두면 브로커 한 대만 죽어도
+  # 컨슈머 그룹 오프셋을 잃는다.
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  # NewTopic 빈 없이 auto-create 되는 일반 사용자 토픽의 기본값. 브로커 기본값(각 1)에
+  # 맡기면 복제본 1개짜리가 생겨 3노드 구성의 장애 허용 이점이 사라진다.
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_NUM_PARTITIONS: 3
+
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  CLUSTER_ID: langlez-kraft-cluster
+  # 컨테이너 제한 1G 안에서 JVM 힙을 잡는다. 나머지는 페이지 캐시와 네이티브 버퍼 몫.
+  KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+
+services:
+  kafka1:
+    <<: *kafka-common
+    container_name: langlez-kafka1
+    ports:
+      - "9092:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://localhost:9092
+    volumes:
+      - ./volume/kafka/1:/var/lib/kafka/data
+
+  kafka2:
+    <<: *kafka-common
+    container_name: langlez-kafka2
+    ports:
+      - "9094:9094"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,EXTERNAL://localhost:9094
+    volumes:
+      - ./volume/kafka/2:/var/lib/kafka/data
+
+  kafka3:
+    <<: *kafka-common
+    container_name: langlez-kafka3
+    ports:
+      - "9096:9096"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9096,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,EXTERNAL://localhost:9096
+    volumes:
+      - ./volume/kafka/3:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: langlez-kafka-ui
+    ports:
+      - "8081:8080"
+    environment:
+      # 컨테이너끼리는 INTERNAL 리스너로 붙는다. EXTERNAL(localhost:909x)은 호스트 전용.
+      KAFKA_CLUSTERS_0_NAME: langlez
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092,kafka2:19092,kafka3:19092
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    networks:
+      - langlez-net

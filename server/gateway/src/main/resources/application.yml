@@ -1,0 +1,27 @@
+server:
+  port: 8000
+
+gateway:
+  # 모든 요청을 넘겨 줄 기존 멀티모듈 서버(server/worktree 의 legacy 브랜치). 환경 변수로 바꾼다
+  legacy-uri: ${LEGACY_URI:http://localhost:8080}
+
+spring:
+  application:
+    name: langlez-gateway
+  config:
+    # config-server 가 없어도 기동한다(optional). 있으면 그 값이 이 파일의 값을 덮어쓴다
+    import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}"
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # 받은 Host 를 그대로 넘긴다. 안 그러면 백엔드가 자기 주소(8080)로 OAuth2 redirect-uri({baseUrl}) 를 만들어
+          # 로그인 뒤에 게이트웨이를 건너뛰고 직접 연결된다
+          default-filters:
+            - PreserveHostHeader
+          routes:
+            # REST 와 STOMP 웹소켓(/ws/chat, /ws/wave)을 포함해 모든 경로를 그대로 넘긴다
+            - id: legacy
+              uri: ${gateway.legacy-uri}
+              predicates:
+                - Path=/**
