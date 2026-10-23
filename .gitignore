@@ -11,3 +11,6 @@
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# graft 검색용 로컬 파일 (graft가 자동 생성)
+.ignore
