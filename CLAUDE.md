@@ -24,9 +24,13 @@ SUPABASE_URL=https://<project-ref>.supabase.co ./gradlew :app:bootRun       # �
 - 앱은 `SUPABASE_URL` 환경변수가 없으면 기동에 실패한다 (`langlez.auth.supabase-url`에 기본값이 없다).
 - 루트 `build.gradle.kts`의 `bootRun`은 JVM 시스템 프로퍼티 중 `spring.*`만 앱에 넘긴다.
 
-## 작업은 git worktree와 PR로
+## langlez 하네스 (`/code`)
 
-작은 작업이라도 모든 변경은 새 브랜치와 worktree에서 하고, PR로 `main`에 merge한다. 계획부터 merge까지의 흐름은 langlez 하네스의 `/code` 스킬(`.claude/skills/code/`)에 있다.
+worktree, PR, 서브에이전트 구현, 리뷰, merge로 이어지는 흐름은 `.claude/skills/code/`에 있다. 사용자가 `/code`를 부른 세션에서만 이 흐름을 따른다. 부르지 않았으면 하네스를 쓰지 않고, 서브에이전트 없이 `api/` 루트에서 직접 작업한다.
+
+## git worktree
+
+worktree를 쓸 때(`/code` 세션이나 사용자가 요청한 병렬 작업)는 아래를 따른다.
 
 - 경로는 `worktree/<브랜치명>`이다. `worktree/` 아래 폴더 이름이 곧 브랜치 이름이다. 브랜치명에 `/`가 있으면 그대로 하위 폴더가 된다 (`feat/chat` → `worktree/feat/chat`).
 - 기준 브랜치는 따로 말이 없으면 `main`이다.
@@ -35,7 +39,7 @@ SUPABASE_URL=https://<project-ref>.supabase.co ./gradlew :app:bootRun       # �
 git worktree add -b <브랜치명> worktree/<브랜치명> main
 ```
 
-- `api/` 루트의 작업 트리는 `main`에 두고 거기서 파일을 고치지 않는다. PR이 merge되면 루트에서 `git pull --ff-only`로 따라간다.
+- `api/` 루트의 작업 트리는 `main`에 둔다. PR이 merge되면 루트에서 `git pull --ff-only`로 따라간다.
 - 작업은 만든 worktree 안에서 한다. Gradle도 그 안의 `server/`에서 실행한다 (`worktree/<브랜치명>/server`).
 - `worktree/`는 `.gitignore` 대상이다. worktree 안의 변경은 그 브랜치에 커밋한다.
 - Claude Code가 기본 위치에 worktree를 만드는 기능(`isolation: "worktree"`, `EnterWorktree` 등)은 쓰지 않고 위 명령으로 직접 만든다.
