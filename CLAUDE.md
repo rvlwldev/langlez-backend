@@ -26,7 +26,7 @@ SUPABASE_URL=https://<project-ref>.supabase.co ./gradlew :app:bootRun       # �
 
 ## 작업은 git worktree와 PR로
 
-작은 작업이라도 모든 변경은 새 브랜치와 worktree에서 하고, PR로 `main`에 merge한다. 계획부터 merge까지의 흐름은 `/langlez-mode` 스킬(`.claude/skills/langlez-mode/`)에 있다.
+작은 작업이라도 모든 변경은 새 브랜치와 worktree에서 하고, PR로 `main`에 merge한다. 계획부터 merge까지의 흐름은 langlez 하네스의 `/code` 스킬(`.claude/skills/code/`)에 있다.
 
 - 경로는 `worktree/<브랜치명>`이다. `worktree/` 아래 폴더 이름이 곧 브랜치 이름이다. 브랜치명에 `/`가 있으면 그대로 하위 폴더가 된다 (`feat/chat` → `worktree/feat/chat`).
 - 기준 브랜치는 따로 말이 없으면 `main`이다.

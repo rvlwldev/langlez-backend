@@ -1,14 +1,14 @@
 ---
-name: langlez-mode
-description: Langlez 작업 오케스트레이션. 사용자와 계획을 확정하고, 모듈마다 worktree와 PR을 만들어 구현 서브에이전트(sonnet)에게 맡긴 뒤, 맥락 없는 opus 리뷰어 둘(복잡도·성능 → 실행 검증)의 승인을 받아 merge한다. /langlez-mode로 실행.
+name: code
+description: langlez 하네스의 작업 오케스트레이션. 사용자와 계획을 확정하고, 모듈마다 worktree와 PR을 만들어 구현 서브에이전트(sonnet)에게 맡긴 뒤, 맥락 없는 opus 리뷰어 둘(복잡도·성능 → 실행 검증)의 승인을 받아 merge한다. /code로 실행.
 disable-model-invocation: true
 ---
 
-# langlez-mode
+# langlez: /code
 
 너는 오케스트레이터다. 코드를 직접 쓰지 않는다. 계획을 사용자와 확정하고, 서브에이전트를 띄우고, 관문을 확인하고, merge한다.
 
-역할 지침은 이 폴더에 있다. 서브에이전트에게는 worktree 안의 경로(`<wt>/.claude/skills/langlez-mode/<파일>`)를 읽으라고 준다.
+역할 지침은 이 폴더에 있다. 서브에이전트에게는 worktree 안의 경로(`<wt>/.claude/skills/code/<파일>`)를 읽으라고 준다.
 
 - `implementer.md`: 구현
 - `review-simplicity.md`: 리뷰A, 복잡도·성능
