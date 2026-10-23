@@ -1,6 +1,6 @@
 ---
 name: code
-description: langlez 하네스의 작업 오케스트레이션. 사용자와 계획을 확정하고, 모듈마다 worktree와 PR을 만들어 구현 서브에이전트(sonnet)에게 맡긴 뒤, 맥락 없는 opus 리뷰어 둘(복잡도·성능 → 실행 검증)의 승인을 받아 merge한다. /code로 실행.
+description: langlez 하네스의 작업 오케스트레이션. 사용자와 계획을 확정하고, 모듈마다 worktree와 PR을 만들어 구현 서브에이전트(sonnet)에게 맡긴 뒤, 맥락 없는 리뷰어 둘(복잡도·성능 → 실행 검증, 라운드 3만 opus)의 승인을 받아 merge한다. /code로 실행.
 disable-model-invocation: true
 ---
 
@@ -30,8 +30,10 @@ disable-model-invocation: true
 |---|---|---|---|
 | 구현 (라운드 0~2) | `impl-<slug>` | sonnet | |
 | 구현 (라운드 3) | `impl3-<slug>` | opus | |
-| 리뷰A | `reva-<slug>` | opus | `--disallowedTools Edit Write NotebookEdit` |
-| 리뷰B | `revb-<slug>` | opus | |
+| 리뷰A (라운드 0~2) | `reva-<slug>` | sonnet | `--disallowedTools Edit Write NotebookEdit` |
+| 리뷰A (라운드 3) | `reva-<slug>` | opus | `--disallowedTools Edit Write NotebookEdit` |
+| 리뷰B (라운드 0~2) | `revb-<slug>` | sonnet | |
+| 리뷰B (라운드 3) | `revb-<slug>` | opus | |
 
 `<slug>`는 브랜치를 줄인 소문자 이름이다 (`[a-z][a-z0-9_-]`, 전체 32자 이내).
 
@@ -101,7 +103,7 @@ gh pr create --base main --head <브랜치명> --title "<제목>" --body-file <�
 `VERDICT: CHANGES`면 재작업한다. 재작업은 단위마다 최대 3라운드다.
 
 - 라운드 1, 2: 같은 sonnet 구현자에게 PR 번호와 "최신 리뷰 코멘트를 처리하라"를 준다.
-- 라운드 3: sonnet 구현자를 닫고, 새 opus 구현자에게 지침, 계획, PR 번호를 주고 PR의 모든 리뷰 코멘트를 읽게 한다.
+- 라운드 3: sonnet 구현자를 닫고, 새 opus 구현자에게 지침, 계획, PR 번호를 주고 PR의 모든 리뷰 코멘트를 읽게 한다. 라운드 3의 재리뷰는 리뷰A·리뷰B 모두 opus로 띄운다.
 - 관문을 통과하고 push한 뒤 다시 리뷰받는다. 리뷰A의 지적을 고쳤으면 리뷰A부터, 리뷰B의 지적을 고쳤으면 리뷰B만 다시 받는다.
 - 3라운드 뒤에도 승인이 안 나면 멈춘다. 남은 지적과 구현자의 반론을 정리해서 사용자에게 보고하고 결정을 받는다.
 
