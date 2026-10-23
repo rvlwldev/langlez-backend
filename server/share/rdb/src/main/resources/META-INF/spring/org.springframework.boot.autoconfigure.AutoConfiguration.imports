@@ -1,0 +1,2 @@
+com.langlez.rdb.config.RdbAutoConfiguration
+com.langlez.rdb.config.FlywayLocationAutoConfiguration

@@ -1,4 +1,4 @@
-rootProject.name = "langlez-api-master"
+rootProject.name = "langlez-api"
 
 pluginManagement {
     repositories {
@@ -8,17 +8,9 @@ pluginManagement {
     }
 }
 
-fun includeModules(parentDir: String) {
-    val dir = File(rootDir, parentDir)
-    if (dir.exists() && dir.isDirectory) {
-        dir.listFiles()
-            ?.filter { it.isDirectory && File(it, "build.gradle.kts").exists() }
-            ?.forEach { include("$parentDir:${it.name}") }
-    }
-}
-
-include("gateway")
-include("config-server")
-include("core")
-include("common")
-includeModules("infra")
+include("app")
+include("share:auth")
+include("share:kafka")
+include("share:redis")
+include("share:mongodb")
+include("share:rdb")
