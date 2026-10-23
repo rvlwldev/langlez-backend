@@ -81,5 +81,3 @@ worktree/ git worktree 모음
 - 의존을 피하려고 인터페이스를 만들지 않는다. 분산락과 캐시는 `share:redis`에 구현째로 있고, 쓰는 모듈이 `share:redis`를 직접 의존한다.
 - 테스트는 Kotest `BehaviorSpec`(Given/When/Then)과 Kotest matcher로 쓴다. 스프링 컨텍스트가 필요하면 `SpringExtension`을 쓰고 JUnit `@Test`는 쓰지 않는다.
 - `share/*` 모듈은 Testcontainers로 자기 기능을 검증하는 테스트를 자기 모듈 안에 둔다.
-
-@~/.claude/pstack-models.md
