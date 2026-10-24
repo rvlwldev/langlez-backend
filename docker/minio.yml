@@ -1,0 +1,31 @@
+name: langlez
+
+networks:
+  langlez-net:
+    driver: bridge
+
+services:
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:c47b1779bfd12cdf5a4fcd3bd50671b8d66465fdae45271babc2fb467958b712
+    container_name: langlez-minio
+    command: [ "server", "/data", "--console-address", ":9001" ]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: langlez
+      MINIO_ROOT_PASSWORD: langlez-local
+    volumes:
+      - ./volume/minio:/data
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $${status} == *' 200 '* ]]" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - langlez-net

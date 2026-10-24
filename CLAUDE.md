@@ -22,6 +22,7 @@ LANGLEZ_LOGGER_LOKI_PUSHURL=http://localhost:3100/loki/api/v1/push ...       # �
 
 - 테스트는 Testcontainers(Postgres, Mongo, Redis, Kafka)를 띄우므로 Docker가 떠 있어야 한다.
 - 앱을 로컬에서 띄우려면 인프라가 필요하다: `docker/start.sh` (docker/ 아래 compose 전부, 모니터링 포함). 이미 떠 있어도 다시 실행해도 된다. `application.yml` 기본값이 이 compose의 포트·계정에 맞춰져 있다.
+- 로컬 MinIO(S3 호환, 운영은 Cloudflare R2): API `http://localhost:9000`, 콘솔 `http://localhost:9001` (`langlez` / `langlez-local`). `start.sh`가 버킷 `langlez-attachments`를 만들고 익명 `s3:GetObject`만 허용한다(R2 공개 버킷처럼 익명 list·PUT은 403, 정책은 `docker/config/minio/public-read.json`). 공식 이미지는 더 못 받아서 Chainguard 이미지를 digest로 고정해 쓴다.
 - 앱은 `SUPABASE_URL` 환경변수가 없으면 기동에 실패한다 (`langlez.auth.supabase-url`에 기본값이 없다).
 - 루트 `build.gradle.kts`의 `bootRun`은 JVM 시스템 프로퍼티 중 `spring.*`만 앱에 넘긴다.
 
