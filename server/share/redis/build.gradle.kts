@@ -17,6 +17,4 @@ dependencies {
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.testcontainers)
-
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

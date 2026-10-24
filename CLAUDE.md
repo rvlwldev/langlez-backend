@@ -93,6 +93,7 @@ worktree/ git worktree 모음
 - 서비스 모듈(`member` 같은 도메인 모듈)끼리는 서로 의존하지 않는다. 서비스 모듈은 `share/*`만 의존한다.
 - `share/*` 모듈은 각자 자동설정(`AutoConfiguration.imports`)으로 스스로 완결되고, 소비 모듈이 의존만 추가하면 뜬다.
 - 의존을 피하려고 인터페이스를 만들지 않는다. 분산락과 캐시는 `share:redis`에 구현째로 있고, 쓰는 모듈이 `share:redis`를 직접 의존한다.
-- 테스트는 Kotest `BehaviorSpec`(Given/When/Then)과 Kotest matcher로 쓴다. 스프링 컨텍스트가 필요하면 `SpringExtension`을 쓰고 JUnit `@Test`는 쓰지 않는다.
+- 테스트는 Kotest `BehaviorSpec`(Given/When/Then)과 Kotest matcher, MockK, Testcontainers, 스프링 테스트(`spring-test`, `spring-boot-test`, `SpringExtension`)만으로 쓴다. 컨테이너는 코드에서 직접 시작하고, 비동기 대기는 Kotest `eventually`를 쓴다.
+- JUnit Jupiter(`@Test`), Mockito, AssertJ, Hamcrest, Awaitility, JSONassert, XMLUnit, Testcontainers의 JUnit 연동(`@Testcontainers`, `@Container`)은 쓰지 않는다. 루트 `build.gradle.kts`가 이들을 테스트 의존에서 제외하므로 import하면 컴파일이 안 된다. JUnit Platform(launcher, engine)은 Kotest가 그 위에서 돌아서 남아 있다.
 - `share/*` 모듈은 Testcontainers로 자기 기능을 검증하는 테스트를 자기 모듈 안에 둔다.
 - Flyway 마이그레이션은 모듈의 `src/main/resources/migration/`에 두고, 모듈 간 버전 충돌을 피하려고 날짜 버전을 쓴다 (`V2026_10_24_1__create_attachments.sql`).

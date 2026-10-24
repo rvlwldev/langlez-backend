@@ -96,10 +96,8 @@ test-springboot = { module = "org.springframework.boot:spring-boot-starter-test"
 test-springboot-security = { module = "org.springframework.security:spring-security-test" }
 test-springboot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers", version.ref = "spring-boot" }
 test-testcontainers = { module = "org.testcontainers:testcontainers" }
-test-testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 test-testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
 test-testcontainers-mongodb = { module = "org.testcontainers:testcontainers-mongodb" }
-test-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis-junit", version = "1.6.4" }
 test-testcontainers-kafka = { module = "org.testcontainers:testcontainers-kafka" }
 test-testcontainers-minio = { module = "org.testcontainers:testcontainers-minio" }
 test-restassured = { module = "io.rest-assured:rest-assured", version = "5.3.2" }
@@ -112,4 +110,3 @@ dependency-aspectj-runtime = { module = "org.aspectj:aspectjrt", version = "1.9.
 kotlin = ["dependency-kotlin-reflect", "dependency-kotlin-jackson", "dependency-kotlin-coroutine"]
 test-kotest = ["test-kotest-assertions", "test-kotest-runner"]
 jjwt = ["dependency-jjwt", "dependency-jjwt-impl", "dependency-jjwt-jackson"]
-testcontainers = ["test-testcontainers", "test-testcontainers-junit", "test-testcontainers-postgresql", "test-testcontainers-mongodb", "test-testcontainers-redis"]

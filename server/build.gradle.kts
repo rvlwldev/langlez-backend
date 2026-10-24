@@ -72,6 +72,18 @@ subprojects {
         dependencies {
             "testImplementation"(rootProject.libs.bundles.test.kotest)
             "testImplementation"(rootProject.libs.test.mockk)
+            "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+        }
+
+        configurations.named("testImplementation") {
+            exclude(group = "org.junit.jupiter")
+            exclude(group = "org.mockito")
+            exclude(group = "org.assertj")
+            exclude(group = "org.hamcrest")
+            exclude(group = "org.awaitility")
+            exclude(group = "org.skyscreamer")
+            exclude(group = "org.xmlunit")
+            exclude(group = "org.testcontainers", module = "testcontainers-junit-jupiter")
         }
     }
 }

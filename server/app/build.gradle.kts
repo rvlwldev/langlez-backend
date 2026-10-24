@@ -32,10 +32,7 @@ dependencies {
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.testcontainers)
-    testImplementation(libs.test.testcontainers.junit)
     testImplementation(libs.test.testcontainers.postgresql)
     testImplementation(libs.test.testcontainers.mongodb)
     testImplementation(libs.test.testcontainers.kafka)
-
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

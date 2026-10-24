@@ -17,8 +17,5 @@ dependencies {
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.kotest.spring)
     testImplementation(libs.test.testcontainers)
-    testImplementation(libs.test.testcontainers.junit)
     testImplementation(libs.test.testcontainers.postgresql)
-
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
