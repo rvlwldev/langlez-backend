@@ -455,7 +455,7 @@ class AttachmentTest : BehaviorSpec() {
             val stagingKey = ticket["key"].asString()
 
             upload(ticket, original) shouldBe 200
-            val verifiedEtag = storage.head(stagingKey).shouldNotBeNull().etag
+            val verifiedEtag = storage.read(stagingKey).shouldNotBeNull().etag
             upload(ticket, jpeg(original.size)) shouldBe 200
 
             When("검증 때의 ETag 를 조건으로 복사하면") {
@@ -465,7 +465,7 @@ class AttachmentTest : BehaviorSpec() {
                     }
 
                     failure.statusCode.value() shouldBe 409
-                    storage.head(stagingKey.removePrefix("staging/")).shouldBeNull()
+                    storage.read(stagingKey.removePrefix("staging/")).shouldBeNull()
                 }
             }
         }

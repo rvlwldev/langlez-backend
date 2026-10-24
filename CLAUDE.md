@@ -82,6 +82,7 @@ worktree/ git worktree 모음
 - **actuator는 관리 포트(`app`은 9091)에만 있다.** 인증 필터는 관리 포트에도 걸리므로 `app`의 `public-paths`에 liveness, readiness, `/actuator/prometheus`를 넣어 연다. 서비스 포트(8080)에는 actuator가 없어서 밖에서는 보이지 않는다. 배포할 때 관리 포트를 외부에 열지 않고, Prometheus는 내부망으로 긁는다.
 - **Jackson 버전은 루트 `build.gradle.kts`가 정한다.** `jackson-bom.version`(3.x)과 `jackson-2-bom.version`(2.x, Jackson 3가 쓰는 `jackson-annotations` 포함)을 version catalog 값으로 덮어써서 모든 모듈이 같은 버전을 쓴다. Jackson은 `tools.jackson.databind.json.JsonMapper` 빈을 주입받아 쓴다 (`com.fasterxml.jackson.databind.ObjectMapper`는 Jackson 2라 빈이 없다).
 - **`share:logger`**: `langlez.logger.loki.push-url`이 있을 때만 루트 로거에 Loki appender를 붙인다. 라벨은 `service`(=`spring.application.name`)와 `level`이고, 본문은 MDC(`traceId` 등)를 담은 JSON이다. 빈이 만들어지기 전의 기동 로그는 보내지 않고, 종료할 때 남은 로그는 보낸다. Grafana Cloud면 `username`/`password`를 함께 준다.
+- **`attachment`**: 업로드는 `staging/` 접두사로 받고, 완료 확인 때 검증된 파일만 최종 key로 복사한다. 운영 버킷(R2)에는 `staging/` 접두사를 1일 뒤 만료시키는 수명주기 규칙을 건다. 최종 key 파일은 지우지 않는다.
 - **Boot 4 프로퍼티·패키지 이름**이 3.x와 다르다: Mongo URI는 `spring.mongodb.uri`, 자동설정 클래스는 `org.springframework.boot.<모듈>.autoconfigure.*`.
 - **새 실행 서비스를 추가할 때**: `settings.gradle.kts`에 include하고, 루트 `build.gradle.kts`의 `bootJar` 조건(`project.path != ":app"`이면 비활성화)에 그 경로를 포함시켜야 jar가 만들어진다. 아직 Dockerfile과 Railway 배포 설정은 없다.
 

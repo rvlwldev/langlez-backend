@@ -12,7 +12,7 @@ import java.time.Duration
 
 data class UploadTicket(val key: String, val url: String, val headers: Map<String, String>)
 
-data class StoredObject(val contentType: String, val size: Long, val etag: String)
+class StoredObject(val contentType: String, val size: Long, val etag: String, val head: ByteArray)
 
 @Component
 class ObjectStorage(
@@ -36,20 +36,25 @@ class ObjectStorage(
         )
     }
 
-    fun head(key: String): StoredObject? =
+    fun read(key: String): StoredObject? =
         try {
-            val response = s3Client.headObject { it.bucket(properties.bucket).key(key) }
-            StoredObject(response.contentType().orEmpty(), response.contentLength(), response.eTag())
-        } catch (e: S3Exception) {
-            if (e.statusCode() == 404) null else throw e
-        }
-
-    fun readHead(key: String, etag: String): ByteArray =
-        whenChanged {
-            s3Client.getObject(
-                { it.bucket(properties.bucket).key(key).ifMatch(etag).range("bytes=0-${SIGNATURE_BYTES - 1}") },
+            val bytes = s3Client.getObject(
+                { it.bucket(properties.bucket).key(key).range("bytes=0-${SIGNATURE_BYTES - 1}") },
                 ResponseTransformer.toBytes(),
-            ).asByteArray()
+            )
+            val response = bytes.response()
+            StoredObject(
+                contentType = response.contentType().orEmpty(),
+                size = response.contentRange()?.substringAfter('/')?.toLongOrNull() ?: response.contentLength(),
+                etag = response.eTag(),
+                head = bytes.asByteArray(),
+            )
+        } catch (e: S3Exception) {
+            when (e.statusCode()) {
+                404 -> null
+                416 -> StoredObject("", 0, "", ByteArray(0))
+                else -> throw e
+            }
         }
 
     fun copy(sourceKey: String, destinationKey: String, etag: String) {

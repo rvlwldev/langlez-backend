@@ -14,4 +14,8 @@ data class AttachmentProperties(
     val sources: List<String> = listOf("PROFILE"),
 ) {
     fun publicUrl(objectKey: String): String = "${publicBaseUrl.trimEnd('/')}/$objectKey"
+
+    override fun toString(): String =
+        "AttachmentProperties(endpoint=$endpoint, region=$region, bucket=$bucket, publicBaseUrl=$publicBaseUrl, " +
+            "pathStyle=$pathStyle, sources=$sources)"
 }

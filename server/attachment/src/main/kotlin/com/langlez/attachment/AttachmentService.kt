@@ -76,13 +76,13 @@ class AttachmentService(
     }
 
     private fun verify(attachment: Attachment): String {
-        val stored = storage.head(attachment.stagingKey()) ?: notFound("업로드되지 않은 파일이 있습니다")
+        val stored = storage.read(attachment.stagingKey()) ?: notFound("업로드되지 않은 파일이 있습니다")
         val storedContentType = stored.contentType.substringBefore(';').trim()
         if (!storedContentType.equals(attachment.contentType, ignoreCase = true)) badRequest("contentType 이 발급 때와 다릅니다")
         if (stored.size != attachment.sizeBytes) badRequest("파일 크기가 발급 때와 다릅니다")
 
         val format = ContentFormat.find(attachment.contentType) ?: badRequest("지원하지 않는 contentType 입니다")
-        if (!format.signature.matches(storage.readHead(attachment.stagingKey(), stored.etag))) badRequest("파일 내용이 contentType 과 맞지 않습니다")
+        if (!format.signature.matches(stored.head)) badRequest("파일 내용이 contentType 과 맞지 않습니다")
         return stored.etag
     }
 }
