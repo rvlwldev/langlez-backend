@@ -24,6 +24,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
+import tools.jackson.databind.json.JsonMapper
 import java.net.ServerSocket
 import java.time.LocalDateTime
 
@@ -39,6 +40,9 @@ class CacheProviderTest : BehaviorSpec() {
 
     @Autowired
     lateinit var redisson: RedissonClient
+
+    @Autowired
+    lateinit var jsonMapper: JsonMapper
 
     companion object {
         @JvmStatic
@@ -165,7 +169,7 @@ class CacheProviderTest : BehaviorSpec() {
                         .setConnectTimeout(500)
                         .setRetryAttempts(0)
                     val client = Redisson.create(config)
-                    val resilient = CacheProvider(client, SimpleMeterRegistry())
+                    val resilient = CacheProvider(client, SimpleMeterRegistry(), jsonMapper)
 
                     try {
                         val cache = resilient.getCache("resilient")

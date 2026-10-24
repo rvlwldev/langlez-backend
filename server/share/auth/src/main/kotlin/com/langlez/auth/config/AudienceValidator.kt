@@ -11,6 +11,6 @@ class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt
         if (audience in (token.audience ?: emptyList())) {
             OAuth2TokenValidatorResult.success()
         } else {
-            OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "허용되지 않은 aud 이다", null))
+            OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "audience is not allowed", null))
         }
 }

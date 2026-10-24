@@ -11,6 +11,8 @@ dependencies {
     implementation(project(":share:rdb"))
     implementation(project(":share:mongodb"))
     implementation(project(":share:kafka"))
+    implementation(project(":share:jackson"))
+    implementation(project(":share:logger"))
 
     implementation(libs.dependency.kotlin.reflect)
 
@@ -19,14 +21,11 @@ dependencies {
     implementation("org.springframework:spring-messaging")
     implementation(libs.dependency.springboot.validation)
     implementation(libs.dependency.swagger3)
-    implementation(libs.dependency.kotlin.jackson)
     implementation(libs.dependency.springboot.actuator)
     implementation(libs.dependency.springboot.aop)
     implementation(libs.dependency.micrometer.prometheus)
     implementation(libs.dependency.micrometer.tracing.brave)
-    implementation(libs.dependency.zipkin.reporter.brave)
     implementation(libs.dependency.p6spy.starter)
-    implementation(libs.dependency.kotlin.logging)
     implementation(libs.dependency.logstash.encoder)
 
     testImplementation(libs.test.springboot)

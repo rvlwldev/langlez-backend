@@ -10,7 +10,7 @@
 4. 직접 실행한다.
    - 변경된 모듈의 테스트: `server/`에서 `./gradlew :<모듈>:test`
    - 의심되는 엣지 케이스는 임시 테스트(Kotest `BehaviorSpec`, 필요하면 Testcontainers)를 써서 돌려 본다.
-   - HTTP 동작은 가능하면 앱을 띄워 실제 요청을 보낸다 (`./local-infra-start.sh`, `./gradlew :app:bootRun`, `curl`).
+   - HTTP 동작은 가능하면 앱을 띄워 실제 요청을 보낸다 (`docker/start.sh`, `./gradlew :app:bootRun`, `curl`).
 5. 항상 통과하는 테스트, 구현 세부에 묶인 테스트가 있는지 본다.
 
 ## 규칙

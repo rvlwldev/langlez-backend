@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Caffeine
 import io.micrometer.core.instrument.MeterRegistry
 import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
+import tools.jackson.databind.json.JsonMapper
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -12,10 +13,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 class CacheProvider internal constructor(
     private val redisson: RedissonClient,
     private val registry: MeterRegistry,
+    jsonMapper: JsonMapper,
 ) : AutoCloseable {
 
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val codec = CacheCodec()
+    private val codec = CacheCodec(jsonMapper)
     private val caches = ConcurrentHashMap<String, Entry>()
     private val redisAvailable = AtomicBoolean(true)
 

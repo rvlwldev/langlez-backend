@@ -9,7 +9,7 @@ dependencies {
     implementation(libs.dependency.redisson)
     implementation(libs.dependency.springboot.aop)
     implementation(libs.dependency.kotlin.reflect)
-    implementation(libs.dependency.kotlin.jackson)
+    implementation(project(":share:jackson"))
     implementation(libs.dependency.caffeine)
     implementation("org.springframework:spring-tx")
     implementation("io.micrometer:micrometer-core")

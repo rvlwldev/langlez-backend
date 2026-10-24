@@ -40,7 +40,7 @@ class KafkaSupportTest : BehaviorSpec() {
     lateinit var factory: ConcurrentKafkaListenerContainerFactory<Any, Any>
 
     companion object {
-        private val kafka = KafkaContainer("apache/kafka:3.9.1").also { it.start() }
+        private val kafka = KafkaContainer("apache/kafka:4.3.1").also { it.start() }
 
         @JvmStatic
         @DynamicPropertySource

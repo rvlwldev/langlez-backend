@@ -13,11 +13,13 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.transaction.PlatformTransactionManager
+import tools.jackson.databind.json.JsonMapper
 
-@AutoConfiguration
+@AutoConfiguration(after = [JacksonAutoConfiguration::class])
 @ConditionalOnClass(RedissonClient::class)
 @EnableConfigurationProperties(RedisConnectionProperties::class)
 class RedisAutoConfiguration {
@@ -52,6 +54,6 @@ class RedisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun cacheProvider(redisson: RedissonClient, registry: ObjectProvider<MeterRegistry>) =
-        CacheProvider(redisson, registry.getIfAvailable { SimpleMeterRegistry() })
+    fun cacheProvider(redisson: RedissonClient, registry: ObjectProvider<MeterRegistry>, jsonMapper: JsonMapper) =
+        CacheProvider(redisson, registry.getIfAvailable { SimpleMeterRegistry() }, jsonMapper)
 }

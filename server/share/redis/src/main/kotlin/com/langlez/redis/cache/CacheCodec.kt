@@ -1,13 +1,8 @@
 package com.langlez.redis.cache
 
 import tools.jackson.databind.json.JsonMapper
-import tools.jackson.module.kotlin.KotlinModule
 
-internal class CacheCodec {
-
-    private val mapper: JsonMapper = JsonMapper.builder()
-        .addModule(KotlinModule.Builder().build())
-        .build()
+internal class CacheCodec(private val mapper: JsonMapper) {
 
     fun encode(value: Any): String = mapper.writeValueAsString(value)
 

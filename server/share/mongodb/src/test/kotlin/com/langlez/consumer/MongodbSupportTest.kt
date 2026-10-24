@@ -1,7 +1,7 @@
 package com.langlez.consumer
 
-import com.langlez.demo.mongo.Note
-import com.langlez.demo.mongo.NoteRepository
+import com.langlez.consumer.note.Note
+import com.langlez.consumer.note.NoteRepository
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -31,7 +31,7 @@ class MongodbSupportTest : BehaviorSpec() {
     }
 
     init {
-        Given("앱 패키지 밖의 mongo 패키지에 리포지토리가 있을 때") {
+        Given("앱 패키지 아래 아무 패키지에 리포지토리가 있을 때") {
             When("저장하고 조회하면") {
                 Then("리포지토리가 등록돼 있어 저장과 조회가 된다") {
                     val saved = repository.save(Note(text = "안녕"))

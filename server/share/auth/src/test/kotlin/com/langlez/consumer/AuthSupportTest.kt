@@ -37,7 +37,7 @@ class AuthSupportTest : BehaviorSpec() {
 
     override fun extensions() = listOf(SpringExtension)
 
-    @Value("\${local.server.port}")
+    @Value($$"${local.server.port}")
     private var port: Int = 0
 
     companion object {

@@ -26,6 +26,9 @@ allprojects {
 }
 
 subprojects {
+    extra["jackson-bom.version"] = rootProject.libs.versions.jackson.get()
+    extra["jackson-2-bom.version"] = rootProject.libs.versions.jackson2.get()
+
     plugins.withId("java") {
         configure<JavaPluginExtension> {
             toolchain {

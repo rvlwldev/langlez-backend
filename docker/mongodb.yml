@@ -13,5 +13,16 @@ services:
     volumes:
       - ./volume/mongodb/data:/data/db
       - ./config/mongo/mongod.conf:/etc/mongod.conf
+    command: [ "--config", "/etc/mongod.conf" ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
     networks:
       - langlez-net

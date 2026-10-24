@@ -26,13 +26,16 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = ["management.server.port=0"])
 class LanglezApplicationTest : BehaviorSpec() {
 
     override fun extensions() = listOf(SpringExtension)
 
-    @Value("\${local.server.port}")
+    @Value($$"${local.server.port}")
     private var port: Int = 0
+
+    @Value($$"${local.management.port}")
+    private var managementPort: Int = 0
 
     @Autowired
     lateinit var context: ApplicationContext
@@ -41,7 +44,7 @@ class LanglezApplicationTest : BehaviorSpec() {
         private val postgres = PostgreSQLContainer("postgres:16").also { it.start() }
         private val mongo = MongoDBContainer("mongo:6.0").also { it.start() }
         private val redis = GenericContainer(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379).also { it.start() }
-        private val kafka = KafkaContainer("apache/kafka:3.9.1").also { it.start() }
+        private val kafka = KafkaContainer("apache/kafka:4.3.1").also { it.start() }
 
         @JvmStatic
         @DynamicPropertySource
@@ -57,7 +60,7 @@ class LanglezApplicationTest : BehaviorSpec() {
         }
     }
 
-    private fun get(path: String): HttpResponse<String> =
+    private fun get(path: String, port: Int = this.port): HttpResponse<String> =
         HttpClient.newHttpClient().send(
             HttpRequest.newBuilder(URI("http://localhost:$port$path")).GET().build(),
             HttpResponse.BodyHandlers.ofString(),
@@ -65,12 +68,37 @@ class LanglezApplicationTest : BehaviorSpec() {
 
     init {
         Given("앱이 모든 인프라와 함께 떠 있을 때") {
-            When("토큰 없이 헬스 체크를 호출하면") {
+            When("관리 포트에서 토큰 없이 liveness·readiness 를 호출하면") {
                 Then("200 이고 상태는 UP 이다") {
-                    val response = get("/actuator/health")
+                    listOf("/actuator/health/liveness", "/actuator/health/readiness").forEach { path ->
+                        val response = get(path, managementPort)
+
+                        response.statusCode() shouldBe 200
+                        response.body() shouldContain "\"UP\""
+                    }
+                }
+            }
+
+            When("관리 포트에서 토큰 없이 Prometheus 지표를 긁으면") {
+                Then("200 이고 지표가 나온다") {
+                    val response = get("/actuator/prometheus", managementPort)
 
                     response.statusCode() shouldBe 200
-                    response.body() shouldContain "\"UP\""
+                    response.body() shouldContain "jvm_memory_used_bytes"
+                }
+            }
+
+            When("관리 포트에서 토큰 없이 그 밖의 actuator 를 호출하면") {
+                Then("401 이다") {
+                    listOf("/actuator/health", "/actuator/metrics", "/actuator/info").forEach { path ->
+                        get(path, managementPort).statusCode() shouldBe 401
+                    }
+                }
+            }
+
+            When("서비스 포트에서 actuator 를 찾으면") {
+                Then("서비스 포트에는 actuator 가 없다") {
+                    get("/actuator/prometheus").statusCode() shouldBe 404
                 }
             }
 

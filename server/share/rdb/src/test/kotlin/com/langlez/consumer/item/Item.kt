@@ -1,4 +1,4 @@
-package com.langlez.demo.jpa
+package com.langlez.consumer.item
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

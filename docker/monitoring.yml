@@ -33,7 +33,6 @@ services:
     depends_on:
       - prometheus
       - loki
-      - tempo
     networks:
       - langlez-net
 
@@ -48,27 +47,3 @@ services:
     networks:
       - langlez-net
 
-  promtail:
-    image: grafana/promtail:3.3.2
-    container_name: langlez-promtail
-    volumes:
-      - ./config/monitoring/promtail-config.yaml:/etc/promtail/config.yaml
-      - ../server/app/log:/var/log/apps
-    command: -config.file=/etc/promtail/config.yaml
-    depends_on:
-      - loki
-    networks:
-      - langlez-net
-
-  tempo:
-    image: grafana/tempo:2.6.1
-    container_name: langlez-tempo
-    command: -config.file=/etc/tempo/tempo.yaml
-    volumes:
-      - ./config/monitoring/tempo.yaml:/etc/tempo/tempo.yaml
-      - ./volume/tempo:/var/tempo
-    ports:
-      - "3200:3200"   # Tempo API
-      - "9411:9411"   # zipkin receiver (앱 트레이스 수신)
-    networks:
-      - langlez-net
