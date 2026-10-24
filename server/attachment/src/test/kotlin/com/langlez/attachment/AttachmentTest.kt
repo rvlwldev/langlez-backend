@@ -12,7 +12,9 @@ import com.nimbusds.jwt.SignedJWT
 import com.sun.net.httpserver.HttpServer
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
@@ -23,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.web.server.ResponseStatusException
 import org.testcontainers.containers.MinIOContainer
 import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
@@ -59,6 +62,9 @@ class AttachmentTest : BehaviorSpec() {
 
     @Autowired
     lateinit var jdbc: JdbcTemplate
+
+    @Autowired
+    lateinit var storage: ObjectStorage
 
     companion object {
         private const val BUCKET = "langlez-attachments-test"
@@ -121,9 +127,11 @@ class AttachmentTest : BehaviorSpec() {
     private val http = HttpClient.newHttpClient()
     private val random = Random(7)
 
-    private fun tokenOf(userId: UUID): String {
+    private fun tokenOf(userId: UUID): String = tokenOf(userId.toString())
+
+    private fun tokenOf(subject: String): String {
         val claims = JWTClaimsSet.Builder()
-            .subject(userId.toString())
+            .subject(subject)
             .issuer("$supabaseUrl/auth/v1")
             .audience("authenticated")
             .expirationTime(Date(System.currentTimeMillis() + 600_000))
@@ -203,12 +211,12 @@ class AttachmentTest : BehaviorSpec() {
                 uploads[0]["headers"]["Content-Length"].asString() shouldBe first.size.toString()
             }
 
-            Then("object key 는 source 소문자/UTC 날짜/UUID.확장자 이다") {
+            Then("업로드 key 는 staging/source 소문자/UTC 날짜/UUID.확장자 이다") {
                 val today = LocalDate.now(ZoneOffset.UTC)
                 val keyPath = uploads[0]["key"].asString()
 
-                keyPath shouldStartWith "profile/$today/"
-                UUID.fromString(keyPath.removePrefix("profile/$today/").removeSuffix(".jpg")).shouldNotBeNull()
+                keyPath shouldStartWith "staging/profile/$today/"
+                UUID.fromString(keyPath.removePrefix("staging/profile/$today/").removeSuffix(".jpg")).shouldNotBeNull()
             }
 
             upload(uploads[0], first) shouldBe 200
@@ -221,7 +229,7 @@ class AttachmentTest : BehaviorSpec() {
                 Then("URL 이 발급 순서대로 오고 각 URL 의 내용이 올린 바이트와 같다") {
                     completed.statusCode() shouldBe 200
                     urls shouldHaveSize 2
-                    urls[0] shouldBe "${minio.s3URL}/$BUCKET/${uploads[0]["key"].asString()}"
+                    urls[0] shouldBe "${minio.s3URL}/$BUCKET/${uploads[0]["key"].asString().removePrefix("staging/")}"
                     download(urls[0]).contentEquals(first) shouldBe true
                     download(urls[1]).contentEquals(second) shouldBe true
                 }
@@ -237,10 +245,23 @@ class AttachmentTest : BehaviorSpec() {
                         row["position"] shouldBe index
                         row["status"] shouldBe "UPLOADED"
                         row["uploaded_at"].shouldNotBeNull()
-                        row["object_key"] shouldBe uploads[index]["key"].asString()
+                        row["object_key"] shouldBe uploads[index]["key"].asString().removePrefix("staging/")
                     }
                     rows[0]["size_bytes"] shouldBe first.size.toLong()
                     rows[0]["content_type"] shouldBe "image/jpeg"
+                }
+
+                Then("공개 URL 은 staging 이 아닌 최종 key 이고 staging 객체도 남아 있다") {
+                    urls.none { it.contains("staging/") } shouldBe true
+                    download("${minio.s3URL}/$BUCKET/${uploads[0]["key"].asString()}").contentEquals(first) shouldBe true
+                }
+
+                Then("complete 뒤 같은 presigned URL 로 같은 크기의 다른 바이트를 올려도 공개 URL 내용은 그대로이다") {
+                    val tampered = jpeg(first.size)
+
+                    upload(uploads[0], tampered) shouldBe 200
+
+                    download(urls[0]).contentEquals(first) shouldBe true
                 }
 
                 Then("다시 완료 확인해도 같은 URL 리스트이다") {
@@ -424,6 +445,37 @@ class AttachmentTest : BehaviorSpec() {
                 Then("404 이다") {
                     complete(token, UUID.randomUUID().toString()).statusCode() shouldBe 404
                 }
+            }
+        }
+
+        Given("검증한 뒤 staging 객체가 바뀌면") {
+            val original = jpeg(1000)
+            val issued = json(issue(token, "PROFILE", "IMAGE", "image/jpeg" to original.size.toLong()))
+            val ticket = issued["uploads"][0]
+            val stagingKey = ticket["key"].asString()
+
+            upload(ticket, original) shouldBe 200
+            val verifiedEtag = storage.head(stagingKey).shouldNotBeNull().etag
+            upload(ticket, jpeg(original.size)) shouldBe 200
+
+            When("검증 때의 ETag 를 조건으로 복사하면") {
+                Then("409 로 실패하고 최종 key 는 만들어지지 않는다") {
+                    val failure = shouldThrow<ResponseStatusException> {
+                        storage.copy(stagingKey, stagingKey.removePrefix("staging/"), verifiedEtag)
+                    }
+
+                    failure.statusCode.value() shouldBe 409
+                    storage.head(stagingKey.removePrefix("staging/")).shouldBeNull()
+                }
+            }
+        }
+
+        Given("sub 가 UUID 가 아닌 토큰으로") {
+            val badToken = tokenOf("not-a-uuid")
+
+            Then("발급도 완료 확인도 401 이다") {
+                issue(badToken, "PROFILE", "IMAGE", "image/jpeg" to 10L).statusCode() shouldBe 401
+                complete(badToken, UUID.randomUUID().toString()).statusCode() shouldBe 401
             }
         }
 

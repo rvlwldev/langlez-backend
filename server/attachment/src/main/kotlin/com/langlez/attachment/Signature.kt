@@ -16,7 +16,7 @@ private fun ByteArray.hasAscii(offset: Int, text: String): Boolean =
 private fun ByteArray.isoBrand(): String? =
     if (size >= 12 && hasAscii(4, "ftyp")) String(this, 8, 4, StandardCharsets.ISO_8859_1) else null
 
-enum class Signature(private val test: (ByteArray) -> Boolean) {
+enum class Signature(val matches: (ByteArray) -> Boolean) {
     JPEG({ it.startsWith(0xFF, 0xD8, 0xFF) }),
     PNG({ it.startsWith(0x89, 0x50, 0x4E, 0x47) }),
     GIF({ it.hasAscii(0, "GIF8") }),
@@ -30,7 +30,5 @@ enum class Signature(private val test: (ByteArray) -> Boolean) {
     MP3({ it.hasAscii(0, "ID3") || (it.startsWith(0xFF) && it.size > 1 && (it[1].toInt() and 0xE0) == 0xE0 && (it[1].toInt() and 0x06) != 0) }),
     AAC_ADTS({ it.startsWith(0xFF, 0xF1) || it.startsWith(0xFF, 0xF9) }),
     AMR({ it.hasAscii(0, "#!AMR") }),
-    CAF({ it.hasAscii(0, "caff") });
-
-    fun matches(head: ByteArray): Boolean = test(head)
+    CAF({ it.hasAscii(0, "caff") }),
 }

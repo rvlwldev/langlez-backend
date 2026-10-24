@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 @RestController
@@ -18,9 +19,13 @@ class AttachmentController(private val service: AttachmentService) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun issue(@AuthenticationPrincipal jwt: Jwt, @RequestBody request: IssueBatchRequest): IssuedBatch =
-        service.issue(UUID.fromString(jwt.subject), request)
+        service.issue(uploaderId(jwt), request)
 
     @PostMapping("/{batchId}/complete")
     fun complete(@AuthenticationPrincipal jwt: Jwt, @PathVariable batchId: UUID): CompletedBatch =
-        service.complete(UUID.fromString(jwt.subject), batchId)
+        service.complete(uploaderId(jwt), batchId)
+
+    private fun uploaderId(jwt: Jwt): UUID =
+        runCatching { UUID.fromString(jwt.subject) }
+            .getOrElse { throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "토큰의 sub 가 UUID 가 아닙니다") }
 }
