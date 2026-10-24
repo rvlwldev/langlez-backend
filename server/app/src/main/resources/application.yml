@@ -55,6 +55,14 @@ langlez:
       - /actuator/health/liveness
       - /actuator/health/readiness
       - /actuator/prometheus
+  attachment:
+    endpoint: http://localhost:9000
+    region: us-east-1
+    bucket: langlez-attachments
+    access-key: ${ATTACHMENT_ACCESS_KEY:langlez}
+    secret-key: ${ATTACHMENT_SECRET_KEY:langlez-local}
+    public-base-url: http://localhost:9000/langlez-attachments
+    path-style: true
 
 management:
   server:

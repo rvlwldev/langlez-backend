@@ -6,6 +6,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":attachment"))
     implementation(project(":share:auth"))
     implementation(project(":share:redis"))
     implementation(project(":share:rdb"))
