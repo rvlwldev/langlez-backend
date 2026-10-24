@@ -115,6 +115,8 @@ gh pr create --base main --head <브랜치명> --title "<제목>" --body-file <�
 
 `VERDICT: CHANGES`면 재작업한다. 재작업은 단위마다 최대 3라운드다.
 
+- `VERDICT: APPROVE`와 함께 달린 비차단 제안을 "묻지 않는다" 규칙에 따라 재작업으로 돌리면 이것도 재작업 라운드로 센다. 재리뷰 범위는 `VERDICT: CHANGES`일 때와 같다 (리뷰A의 지적을 고쳤으면 리뷰A부터, 리뷰B의 지적만 고쳤으면 리뷰B만).
+
 - 라운드 1, 2: 같은 sonnet 구현자에게 PR 번호와 "최신 리뷰 코멘트를 처리하라"를 준다.
 - 라운드 3: sonnet 구현자를 닫고, 새 opus 구현자에게 지침, 계획, PR 번호를 주고 PR의 모든 리뷰 코멘트를 읽게 한다. 라운드 3의 재리뷰는 리뷰A·리뷰B 모두 opus로 띄운다.
 - 관문을 통과하고 push한 뒤 다시 리뷰받는다. 리뷰A의 지적을 고쳤으면 리뷰A부터, 리뷰B의 지적을 고쳤으면 리뷰B만 다시 받는다.
@@ -128,7 +130,7 @@ gh pr create --base main --head <브랜치명> --title "<제목>" --body-file <�
 2. `gh pr merge <번호> --squash`
 3. 구현자를 닫고 탭을 닫는다.
 4. `git -C <api 루트> worktree remove worktree/<브랜치명>`, `git -C <api 루트> pull --ff-only`
-5. `git -C <api 루트> branch -D <브랜치명>`, `git -C <api 루트> push origin --delete <브랜치명>`
+5. `git -C <api 루트> branch -D <브랜치명>`, `git -C <api 루트> push origin --delete <브랜치명>`. 원격 브랜치가 이미 없으면(자동 삭제 등) 그 실패는 무시하고 넘어간다.
 6. 이 단위를 기다리던 단위를 시작한다.
 
 ## 4. 완료 보고
