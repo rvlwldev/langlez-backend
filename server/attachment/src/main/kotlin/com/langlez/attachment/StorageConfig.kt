@@ -1,0 +1,41 @@
+package com.langlez.attachment
+
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import java.net.URI
+
+@Configuration
+@EnableConfigurationProperties(AttachmentProperties::class)
+class StorageConfig {
+
+    @Bean
+    fun s3Client(properties: AttachmentProperties): S3Client =
+        S3Client.builder()
+            .endpointOverride(URI.create(properties.endpoint))
+            .region(Region.of(properties.region))
+            .credentialsProvider(credentials(properties))
+            .serviceConfiguration(pathStyle(properties))
+            .build()
+
+    @Bean
+    fun s3Presigner(properties: AttachmentProperties): S3Presigner =
+        S3Presigner.builder()
+            .endpointOverride(URI.create(properties.endpoint))
+            .region(Region.of(properties.region))
+            .credentialsProvider(credentials(properties))
+            .serviceConfiguration(pathStyle(properties))
+            .build()
+
+    private fun credentials(properties: AttachmentProperties) =
+        StaticCredentialsProvider.create(AwsBasicCredentials.create(properties.accessKey, properties.secretKey))
+
+    private fun pathStyle(properties: AttachmentProperties) =
+        S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle).build()
+}

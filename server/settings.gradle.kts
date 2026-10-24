@@ -9,6 +9,7 @@ pluginManagement {
 }
 
 include("app")
+include("attachment")
 include("share:auth")
 include("share:kafka")
 include("share:redis")
