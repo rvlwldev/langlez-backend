@@ -34,6 +34,7 @@ MINIO_BUCKET=langlez-attachments
 mc() {
   docker run --rm --network langlez_langlez-net \
     -e MC_HOST_local=http://langlez:langlez-local@langlez-minio:9000 \
+    -v "$PWD/config/minio:/policy:ro" \
     cgr.dev/chainguard/minio-client@sha256:5830e3a2faa7b2141c07675976240759afcda4cab7a9c25011adf5ca056fb142 \
     "$@"
 }
@@ -44,6 +45,6 @@ else
   mc mb "local/$MINIO_BUCKET"
   echo "minio 버킷 $MINIO_BUCKET: 만듦"
 fi
-mc anonymous set download "local/$MINIO_BUCKET"
+mc anonymous set-json /policy/public-read.json "local/$MINIO_BUCKET"
 
 compose ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'
