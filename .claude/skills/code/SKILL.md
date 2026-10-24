@@ -16,6 +16,17 @@ disable-model-invocation: true
 - `review-simplicity.md`: 리뷰A, 복잡도·성능
 - `review-verify.md`: 리뷰B, 실행 검증
 
+## 묻지 않는다
+
+사용자에게 묻는 것은 두 경우뿐이다: 계획 확정(1. 계획)과, 3라운드 뒤에도 승인이 안 날 때. 그 밖에는 오케스트레이터가 정하고 완료 보고에 적는다.
+
+- 서브에이전트의 권한 확인 창은 오케스트레이터가 승인한다. 이번 세션만 허용하는 선택지를 우선한다.
+- 단위의 worktree와 langlez compose 스택 밖을 지우거나 바꾸는 것, 워커가 push·PR 생성·merge를 하려는 것, 비밀값을 외부로 보내는 것은 거절하고 오케스트레이터가 직접 처리하거나 보고한다.
+- 구현 중 기술 결정(이미지·라이브러리 선택 등)은 오케스트레이터가 정해서 구현자에게 알려 준다.
+- 리뷰어의 비차단 제안이라도 계획의 목표(사용자가 말한 목적)와 어긋나거나 실제 결함이면 재작업으로 돌린다. 사소한 제안은 같은 재작업 라운드에 함께 넣거나 버리고, 어느 쪽인지 보고에 적는다.
+- PR을 열기 전에 루트 `main`이 `origin/main`보다 앞서 있으면 push한다.
+- merge가 끝난 단위의 브랜치는 로컬·원격 모두 바로 지운다.
+
 ## 1. 계획 (사용자와)
 
 - 요구사항을 내 말로 다시 말하고, 틀린 전제, 과설계, 더 단순한 방법을 짚는다. 사용자가 확정하기 전에는 구현을 시작하지 않는다.
@@ -47,7 +58,7 @@ disable-model-invocation: true
   - 폴더 신뢰 대화상자에서 멈추면 `herdr agent send-keys <이름> down enter`, 그다음 `herdr agent wait <이름>`.
 - 지시: `herdr agent prompt <이름> "<프롬프트>" --wait --timeout 3600000`. 여러 단위를 동시에 돌릴 때는 단위마다 백그라운드 Bash로 띄운다.
 - 결과: `herdr agent read <이름> --source recent-unwrapped --lines 200`
-- `blocked`면 `agent read`로 화면을 확인한다. 권한 요청이면 사용자에게 묻는다.
+- `blocked`면 `agent read`로 화면을 확인한다. 권한 요청이면 "묻지 않는다" 규칙대로 오케스트레이터가 승인하거나 거절한다.
 - 닫기: `~/.claude/skills/herdr/scripts/close-claude-worker.sh <이름>`. 단위가 끝나면 `herdr tab close <tab_id>`.
 
 ### Agent 도구
@@ -117,10 +128,9 @@ gh pr create --base main --head <브랜치명> --title "<제목>" --body-file <�
 2. `gh pr merge <번호> --squash`
 3. 구현자를 닫고 탭을 닫는다.
 4. `git -C <api 루트> worktree remove worktree/<브랜치명>`, `git -C <api 루트> pull --ff-only`
-5. 이 단위를 기다리던 단위를 시작한다.
-
-브랜치 삭제는 사용자에게 확인받는다.
+5. `git -C <api 루트> branch -D <브랜치명>`, `git -C <api 루트> push origin --delete <브랜치명>`
+6. 이 단위를 기다리던 단위를 시작한다.
 
 ## 4. 완료 보고
 
-모든 단위가 merge되면 단위마다 한 줄로 보고한다: PR 링크, 재작업 라운드 수, 리뷰에서 나온 주요 지적.
+모든 단위가 merge되면 단위마다 한 줄로 보고한다: PR 링크, 재작업 라운드 수, 리뷰에서 나온 주요 지적, 사용자에게 묻지 않고 내린 결정.

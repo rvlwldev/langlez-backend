@@ -45,7 +45,7 @@ git worktree add -b <브랜치명> worktree/<브랜치명> main
 - 작업은 만든 worktree 안에서 한다. Gradle도 그 안의 `server/`에서 실행한다 (`worktree/<브랜치명>/server`).
 - `worktree/`는 `.gitignore` 대상이다. worktree 안의 변경은 그 브랜치에 커밋한다.
 - Claude Code가 기본 위치에 worktree를 만드는 기능(`isolation: "worktree"`, `EnterWorktree` 등)은 쓰지 않고 위 명령으로 직접 만든다.
-- PR이 merge되면 `git worktree remove worktree/<브랜치명>`으로 지운다. 브랜치 삭제는 확인받고 한다.
+- PR이 merge되면 `git worktree remove worktree/<브랜치명>`으로 지운다. 브랜치 삭제는 `/code` 세션에서는 merge 뒤 바로 하고, 그 밖에는 확인받고 한다.
 
 ### legacy
 
