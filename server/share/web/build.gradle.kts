@@ -6,7 +6,8 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.dependency.springboot.web)
+    api(libs.dependency.springboot.web)
+
     implementation(libs.dependency.kotlin.reflect)
     implementation(libs.dependency.kotlin.logging)
 

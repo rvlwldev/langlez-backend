@@ -35,6 +35,7 @@ class WebAutoConfigurationConditionTest : BehaviorSpec({
         When("자동설정을 올리면") {
             val context = contextWith(null)
             Then("공통·Security·Data·Validation 핸들러가 모두 만들어진다") {
+                context.containsBean("intendedExceptionHandler") shouldBe true
                 context.containsBean("globalExceptionHandler") shouldBe true
                 context.containsBean("securityExceptionHandler") shouldBe true
                 context.containsBean("dataExceptionHandler") shouldBe true
@@ -49,6 +50,7 @@ class WebAutoConfigurationConditionTest : BehaviorSpec({
             Then("기동되고 공통 핸들러만 만들어진다") {
                 context.containsBean("messageSource") shouldBe true
                 context.containsBean("localeResolver") shouldBe true
+                context.containsBean("intendedExceptionHandler") shouldBe true
                 context.containsBean("globalExceptionHandler") shouldBe true
                 context.containsBean("securityExceptionHandler") shouldBe false
                 context.containsBean("dataExceptionHandler") shouldBe false

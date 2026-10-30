@@ -35,6 +35,10 @@ class WebAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun intendedExceptionHandler(messageSource: MessageSource) = IntendedExceptionHandler(messageSource)
+
+    @Bean
+    @ConditionalOnMissingBean
     fun globalExceptionHandler(messageSource: MessageSource) = GlobalExceptionHandler(messageSource)
 
     @Bean

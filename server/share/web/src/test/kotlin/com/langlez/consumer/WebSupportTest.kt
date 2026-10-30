@@ -156,6 +156,8 @@ class WebSupportTest : BehaviorSpec() {
                 Triple("DataIntegrityViolationException", { get("/data-conflict") }, 409 to "This information is already in use. Please try something different."),
                 Triple("낙관적 락 실패", { get("/optimistic") }, 409 to "Someone else made a change at the same time. Please refresh and try again."),
                 Triple("ResponseStatusException 사유 없음", { get("/rse?status=404") }, 404 to "The page or content you’re looking for doesn’t exist."),
+                Triple("ResponseStatusException 빈 사유", { get("/rse?status=404&reason=") }, 404 to "The page or content you’re looking for doesn’t exist."),
+                Triple("ResponseStatusException 공백 사유", { get("/rse?status=404&reason=%20") }, 404 to "The page or content you’re looking for doesn’t exist."),
                 Triple("ErrorResponse 4xx", { get("/error-response?status=422") }, 422 to badRequest.getValue("en")),
                 Triple("ErrorResponse 5xx", { get("/error-response?status=503") }, 503 to "Something went wrong on our end. Please try again in a moment."),
                 Triple("받아들일 수 없는 Accept", { get("/json-only", accept = "application/xml") }, 406 to badRequest.getValue("en")),

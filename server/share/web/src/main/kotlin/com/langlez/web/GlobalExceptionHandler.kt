@@ -17,8 +17,6 @@ import org.springframework.web.ErrorResponse
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.multipart.MultipartException
-import org.springframework.web.method.annotation.HandlerMethodValidationException
-import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 import java.util.Locale
@@ -29,12 +27,6 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
 
     private val logger = KotlinLogging.logger {}
 
-    @ExceptionHandler(LanglezException::class)
-    fun handleLanglez(e: LanglezException, locale: Locale): ResponseEntity<ExceptionResponse> {
-        if (e.status.is5xxServerError) logger.error(e) { "Langlez ${e.status.value()}: ${e.key}" }
-        return respond(e.status, messages.getMessage(e.key, e.args, e.key, locale)!!)
-    }
-
     @ExceptionHandler(HttpMessageNotReadableException::class, TypeMismatchException::class)
     fun handleBadRequest(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> =
         respond(HttpStatus.BAD_REQUEST, messages.translate(I18N.COMMON.BAD_REQUEST, locale))
@@ -43,27 +35,9 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
     fun handleBind(e: BindException, locale: Locale): ResponseEntity<ExceptionResponse> =
         respondInvalid(e.allErrors.map { (it as? FieldError)?.field to it.defaultMessage }, locale)
 
-    @ExceptionHandler(HandlerMethodValidationException::class)
-    fun handleMethodValidation(e: HandlerMethodValidationException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respondInvalid(
-            e.parameterValidationResults.flatMap { result ->
-                result.resolvableErrors.map { error ->
-                    ((error as? FieldError)?.field ?: result.methodParameter.parameterName) to error.defaultMessage
-                }
-            },
-            locale,
-        )
-
     @ExceptionHandler(NoResourceFoundException::class, NoHandlerFoundException::class)
     fun handleNotFound(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> =
         respond(HttpStatus.NOT_FOUND, messages.translate(I18N.COMMON.NOT_FOUND_ENDPOINT, locale))
-
-    @ExceptionHandler(ResponseStatusException::class)
-    fun handleResponseStatus(e: ResponseStatusException, locale: Locale): ResponseEntity<ExceptionResponse> {
-        if (e.statusCode.is5xxServerError) logger.error(e) { "ResponseStatusException ${e.statusCode.value()}: ${e.reason}" }
-        val message = messages.translate(e.reason ?: statusKey(e.statusCode.value()), locale)
-        return respond(e.statusCode, message, e.headers)
-    }
 
     @ExceptionHandler(MultipartException::class)
     fun handleMultipart(e: MultipartException, locale: Locale): ResponseEntity<ExceptionResponse> =
