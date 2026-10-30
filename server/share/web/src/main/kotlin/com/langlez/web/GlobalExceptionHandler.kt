@@ -1,20 +1,19 @@
 package com.langlez.web
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.beans.TypeMismatchException
 import org.springframework.context.MessageSource
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
-import org.springframework.beans.TypeMismatchException
 import org.springframework.validation.BindException
 import org.springframework.validation.FieldError
-import org.springframework.web.HttpMediaTypeNotSupportedException
-import org.springframework.web.HttpRequestMethodNotSupportedException
-import org.springframework.web.bind.ServletRequestBindingException
+import org.springframework.web.ErrorResponse
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.HandlerMethodValidationException
@@ -35,13 +34,9 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
         return respond(e.status, messages.getMessage(e.key, e.args, e.key, locale)!!)
     }
 
-    @ExceptionHandler(
-        HttpMessageNotReadableException::class,
-        ServletRequestBindingException::class,
-        TypeMismatchException::class,
-    )
+    @ExceptionHandler(HttpMessageNotReadableException::class, TypeMismatchException::class)
     fun handleBadRequest(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respond(HttpStatus.BAD_REQUEST, translate(I18N.COMMON.BAD_REQUEST, locale))
+        respond(HttpStatus.BAD_REQUEST, messages.translate(I18N.COMMON.BAD_REQUEST, locale))
 
     @ExceptionHandler(BindException::class)
     fun handleBind(e: BindException, locale: Locale): ResponseEntity<ExceptionResponse> =
@@ -60,42 +55,33 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
 
     @ExceptionHandler(NoResourceFoundException::class, NoHandlerFoundException::class)
     fun handleNotFound(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respond(HttpStatus.NOT_FOUND, translate(I18N.COMMON.NOT_FOUND_ENDPOINT, locale))
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
-    fun handleMethodNotAllowed(e: HttpRequestMethodNotSupportedException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respond(HttpStatus.METHOD_NOT_ALLOWED, translate(I18N.COMMON.METHOD_NOT_ALLOWED, locale), e.headers)
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException::class)
-    fun handleUnsupportedMediaType(e: HttpMediaTypeNotSupportedException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respond(HttpStatus.UNSUPPORTED_MEDIA_TYPE, translate(I18N.COMMON.UNSUPPORTED_MEDIA_TYPE, locale), e.headers)
+        respond(HttpStatus.NOT_FOUND, messages.translate(I18N.COMMON.NOT_FOUND_ENDPOINT, locale))
 
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(e: ResponseStatusException, locale: Locale): ResponseEntity<ExceptionResponse> {
         if (e.statusCode.is5xxServerError) logger.error(e) { "ResponseStatusException ${e.statusCode.value()}: ${e.reason}" }
-        val reason = e.reason
-        val message = if (reason == null) translate(I18N.COMMON.UNEXPECTED, locale) else messages.getMessage(reason, null, reason, locale)!!
+        val message = messages.translate(e.reason ?: statusKey(e.statusCode.value()), locale)
         return respond(e.statusCode, message, e.headers)
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleUnexpected(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> {
-        logger.error(e) { "처리되지 않은 예외" }
-        return respond(HttpStatus.INTERNAL_SERVER_ERROR, translate(I18N.COMMON.UNEXPECTED, locale))
+    fun handleOthers(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> {
+        val status = if (e is ErrorResponse) e.statusCode else HttpStatus.INTERNAL_SERVER_ERROR
+        if (status.is5xxServerError) logger.error(e) { "처리되지 않은 예외" }
+        val headers = if (e is ErrorResponse) e.headers else HttpHeaders.EMPTY
+        return respond(status, messages.translate(statusKey(status.value()), locale), headers)
     }
 
     private fun respondInvalid(errors: List<Pair<String?, String?>>, locale: Locale): ResponseEntity<ExceptionResponse> {
         val message = errors
             .joinToString(", ") { (field, text) ->
-                val translated = text?.let { messages.getMessage(it, null, it, locale)!! } ?: translate(I18N.COMMON.INVALID_ARGUMENT, locale)
+                val translated = text ?: messages.translate(I18N.COMMON.INVALID_ARGUMENT, locale)
                 if (field == null) translated else "$field: $translated"
             }
-            .ifBlank { translate(I18N.COMMON.INVALID_ARGUMENT, locale) }
+            .ifBlank { messages.translate(I18N.COMMON.INVALID_ARGUMENT, locale) }
         return respond(HttpStatus.BAD_REQUEST, message)
     }
 
-    private fun translate(key: String, locale: Locale): String = messages.getMessage(key, null, key, locale)!!
-
     private fun respond(status: HttpStatusCode, message: String, headers: HttpHeaders = HttpHeaders.EMPTY): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(status).headers(headers).body(ExceptionResponse(message))
+        ResponseEntity.status(status).headers(headers).contentType(MediaType.APPLICATION_JSON).body(ExceptionResponse(message))
 }

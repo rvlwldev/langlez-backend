@@ -55,6 +55,7 @@ dependency-springboot-kafka = { module = "org.springframework.boot:spring-boot-s
 # Boot 4 BOM 은 spring-retry 를 더 이상 관리하지 않는다(Spring Framework 7 에 재시도가 내장됨)
 dependency-spring-retry = { module = "org.springframework.retry:spring-retry", version = "2.0.13" }
 dependency-spring-security-core = { module = "org.springframework.security:spring-security-core" }
+dependency-spring-tx = { module = "org.springframework:spring-tx" }
 
 # QueryDSL
 dependency-querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }

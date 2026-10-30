@@ -6,6 +6,7 @@ import org.springframework.core.annotation.Order
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -24,5 +25,5 @@ class DataExceptionHandler(private val messages: MessageSource) {
         respond(I18N.COMMON.OPTIMISTIC_LOCK_FAILURE, locale)
 
     private fun respond(key: String, locale: Locale): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(HttpStatus.CONFLICT).body(ExceptionResponse(messages.getMessage(key, null, key, locale)!!))
+        ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(ExceptionResponse(messages.translate(key, locale)))
 }

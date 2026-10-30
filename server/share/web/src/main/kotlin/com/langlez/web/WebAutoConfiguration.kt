@@ -4,6 +4,8 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
+import org.springframework.boot.webmvc.error.ErrorAttributes
+import org.springframework.boot.webmvc.error.ErrorController
 import org.springframework.context.MessageSource
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -37,6 +39,10 @@ class WebAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(TranslatedErrorAttributes::class)
     fun errorAttributes(messageSource: MessageSource) = TranslatedErrorAttributes(messageSource)
+
+    @Bean
+    @ConditionalOnMissingBean(ErrorController::class)
+    fun jsonErrorController(errorAttributes: ErrorAttributes) = JsonErrorController(errorAttributes)
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(AuthenticationException::class)

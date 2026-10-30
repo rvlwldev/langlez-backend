@@ -20,8 +20,11 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.ErrorResponseException
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
 
 @SpringBootApplication
@@ -49,8 +52,17 @@ class DemoController {
     fun size(@RequestParam @Min(1, message = "{consumer.size.min}") size: Int): String = "size $size"
 
     @GetMapping("/rse")
-    fun rse(@RequestParam status: Int, @RequestParam reason: String): String =
+    fun rse(@RequestParam status: Int, @RequestParam(required = false) reason: String?): String =
         throw ResponseStatusException(HttpStatus.valueOf(status), reason)
+
+    @GetMapping("/error-response")
+    fun errorResponse(@RequestParam status: Int): String = throw ErrorResponseException(HttpStatus.valueOf(status))
+
+    @GetMapping("/json-only", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun jsonOnly(): String = "ok"
+
+    @PostMapping("/part", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun part(@RequestPart("file") file: MultipartFile): String = "ok"
 
     @GetMapping("/unauthorized")
     fun unauthorized(): String = throw BadCredentialsException("bad")

@@ -46,11 +46,12 @@ class WebSupportTest : BehaviorSpec() {
             language: String? = null,
             body: String? = null,
             contentType: String = "application/json",
+            accept: String = "application/json",
         ): Pair<Int, Map<*, *>> {
             if (!webLogger.isAttached(logs)) webLogger.addAppender(logs)
             logs.list.clear()
             val builder = HttpRequest.newBuilder(URI("http://localhost:$port$path"))
-                .header("Accept", "application/json")
+                .header("Accept", accept)
                 .header("Content-Type", contentType)
                 .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
             language?.let { builder.header("Accept-Language", it) }
@@ -58,7 +59,8 @@ class WebSupportTest : BehaviorSpec() {
             return response.statusCode() to jsonMapper.readValue(response.body(), Map::class.java)
         }
 
-        fun get(path: String, language: String? = null) = call("GET", path, language)
+        fun get(path: String, language: String? = null, accept: String = "application/json") =
+            call("GET", path, language, accept = accept)
 
         fun Pair<Int, Map<*, *>>.shouldBe(status: Int, message: String) {
             first shouldBe status
@@ -71,6 +73,13 @@ class WebSupportTest : BehaviorSpec() {
             "zh_CN" to "无法处理您的请求，请重试。",
             "zh_TW" to "無法處理您的請求，請再試。",
             "en" to "We couldn’t process your request. Please try again.",
+            "es" to "No pudimos procesar tu solicitud. Por favor, inténtalo de nuevo.",
+            "fr" to "Nous n'avons pas pu traiter votre demande. Veuillez réessayer.",
+            "de" to "Deine Anfrage konnte nicht verarbeitet werden. Bitte versuche es erneut.",
+            "pt" to "Não conseguimos processar sua solicitação. Por favor, tente novamente.",
+            "ru" to "Не удалось обработать запрос. Пожалуйста, попробуйте ещё раз.",
+            "vi" to "Chúng tôi không thể xử lý yêu cầu của bạn. Vui lòng thử lại.",
+            "id" to "Permintaanmu tidak dapat diproses. Silakan coba lagi.",
         )
 
         Given("Accept-Language 헤더가 있을 때") {
@@ -88,6 +97,14 @@ class WebSupportTest : BehaviorSpec() {
                 "xx,ko;q=0.8" to "ko",
                 "ko;q=0,ja;q=0.5" to "ja",
                 "ko_KR" to "en",
+                "es" to "es",
+                "fr" to "fr",
+                "de" to "de",
+                "pt" to "pt",
+                "pt-BR" to "pt",
+                "ru" to "ru",
+                "vi" to "vi",
+                "id" to "id",
             ).forEach { (header, language) ->
                 When("Accept-Language: $header 로 요청하면") {
                     val reply = get("/page?page=abc", header)
@@ -134,6 +151,11 @@ class WebSupportTest : BehaviorSpec() {
                 Triple("AccessDeniedException", { get("/forbidden") }, 403 to "Access denied."),
                 Triple("DataIntegrityViolationException", { get("/data-conflict") }, 409 to "This information is already in use. Please try something different."),
                 Triple("낙관적 락 실패", { get("/optimistic") }, 409 to "Someone else made a change at the same time. Please refresh and try again."),
+                Triple("ResponseStatusException 사유 없음", { get("/rse?status=404") }, 404 to "The page or content you’re looking for doesn’t exist."),
+                Triple("ErrorResponse 4xx", { get("/error-response?status=422") }, 422 to badRequest.getValue("en")),
+                Triple("ErrorResponse 5xx", { get("/error-response?status=503") }, 503 to "Something went wrong on our end. Please try again in a moment."),
+                Triple("받아들일 수 없는 Accept", { get("/json-only", accept = "application/xml") }, 406 to badRequest.getValue("en")),
+                Triple("누락된 multipart 파트", { call("POST", "/part", body = "--b\r\nContent-Disposition: form-data; name=\"other\"\r\n\r\nx\r\n--b--\r\n", contentType = "multipart/form-data; boundary=b") }, 400 to badRequest.getValue("en")),
                 Triple("처리되지 않은 예외", { get("/boom") }, 500 to "Something went wrong on our end. Please try again in a moment."),
             )
             cases.forEach { (name, request, expected) ->
@@ -173,6 +195,8 @@ class WebSupportTest : BehaviorSpec() {
                 "/data-conflict",
                 "/optimistic",
                 "/size?size=0",
+                "/rse?status=404",
+                "/error-response?status=422",
             ).forEach { path ->
                 When("4xx 인 $path 를 요청하면") {
                     get(path)
@@ -183,6 +207,7 @@ class WebSupportTest : BehaviorSpec() {
                 "/langlez?status=500&key=error.unexpected",
                 "/rse?status=503&reason=common.not-found",
                 "/boom",
+                "/error-response?status=503",
             ).forEach { path ->
                 When("5xx 인 $path 를 요청하면") {
                     get(path)
@@ -190,6 +215,25 @@ class WebSupportTest : BehaviorSpec() {
                         logs.list shouldHaveSize 1
                         logs.list.single().level shouldBe Level.ERROR
                         (logs.list.single().throwableProxy != null) shouldBe true
+                    }
+                }
+            }
+        }
+
+        Given("JSON 을 받지 않는 Accept") {
+            val cases = listOf(
+                Triple("advice 의 4xx", { accept: String -> get("/langlez?status=404&key=common.not-found", accept = accept) }, 404 to "The page or content you’re looking for doesn’t exist."),
+                Triple("처리되지 않은 예외", { accept: String -> get("/boom", accept = accept) }, 500 to "Something went wrong on our end. Please try again in a moment."),
+                Triple("허용 안 된 메서드", { accept: String -> call("POST", "/langlez", body = "{}", accept = accept) }, 405 to "This request method isn’t allowed."),
+                Triple("없는 경로", { accept: String -> get("/nowhere", accept = accept) }, 404 to "The API endpoint you’re looking for doesn’t exist."),
+                Triple("필터가 던진 예외", { accept: String -> get("/filter-boom", accept = accept) }, 500 to "Something went wrong on our end. Please try again in a moment."),
+                Triple("필터의 sendError", { accept: String -> get("/filter-forbidden", accept = accept) }, 403 to "Access denied."),
+            )
+            listOf("application/xml", "text/plain", "text/html").forEach { accept ->
+                cases.forEach { (name, request, expected) ->
+                    When("Accept: $accept 로 $name") {
+                        val reply = request(accept)
+                        Then("상태 코드를 지키고 JSON body 로 답한다") { reply.shouldBe(expected.first, expected.second) }
                     }
                 }
             }

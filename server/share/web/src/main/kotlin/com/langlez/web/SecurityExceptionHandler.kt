@@ -4,6 +4,7 @@ import org.springframework.context.MessageSource
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
@@ -24,5 +25,5 @@ class SecurityExceptionHandler(private val messages: MessageSource) {
         respond(HttpStatus.FORBIDDEN, I18N.COMMON.FORBIDDEN, locale)
 
     private fun respond(status: HttpStatus, key: String, locale: Locale): ResponseEntity<ExceptionResponse> =
-        ResponseEntity.status(status).body(ExceptionResponse(messages.getMessage(key, null, key, locale)!!))
+        ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(ExceptionResponse(messages.translate(key, locale)))
 }

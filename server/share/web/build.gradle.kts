@@ -11,12 +11,12 @@ dependencies {
     implementation(libs.dependency.kotlin.logging)
 
     compileOnly(libs.dependency.spring.security.core)
-    compileOnly("org.springframework:spring-tx")
+    compileOnly(libs.dependency.spring.tx)
 
     testImplementation(libs.dependency.springboot.validation)
     testImplementation(libs.dependency.kotlin.jackson)
     testImplementation(libs.dependency.spring.security.core)
-    testImplementation("org.springframework:spring-tx")
+    testImplementation(libs.dependency.spring.tx)
     testImplementation(libs.test.springboot)
     testImplementation(libs.test.kotest.spring)
 }
