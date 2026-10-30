@@ -64,6 +64,7 @@ server/   Gradle 멀티모듈
     rdb/      JPA, Flyway, QueryDSL
     mongodb/  MongoDB 리포지토리
     kafka/    Kafka 리스너 컨테이너, 에러 핸들러, DLT
+    web/      다국어 메시지(i18n), 전역 예외 처리, 에러 응답 형식
 docker/   로컬 인프라 compose. 볼륨 데이터(docker/volume)는 git에서 제외
 worktree/ git worktree 모음
 ```
@@ -83,6 +84,13 @@ worktree/ git worktree 모음
 - **Jackson 버전은 루트 `build.gradle.kts`가 정한다.** `jackson-bom.version`(3.x)과 `jackson-2-bom.version`(2.x, Jackson 3가 쓰는 `jackson-annotations` 포함)을 version catalog 값으로 덮어써서 모든 모듈이 같은 버전을 쓴다. Jackson은 `tools.jackson.databind.json.JsonMapper` 빈을 주입받아 쓴다 (`com.fasterxml.jackson.databind.ObjectMapper`는 Jackson 2라 빈이 없다).
 - **`share:logger`**: `langlez.logger.loki.push-url`이 있을 때만 루트 로거에 Loki appender를 붙인다. 라벨은 `service`(=`spring.application.name`)와 `level`이고, 본문은 MDC(`traceId` 등)를 담은 JSON이다. 빈이 만들어지기 전의 기동 로그는 보내지 않고, 종료할 때 남은 로그는 보낸다. Grafana Cloud면 `username`/`password`를 함께 준다.
 - **`attachment`**: 업로드는 `staging/` 접두사로 받고, 완료 확인 때 검증된 파일만 최종 key로 복사한다. 운영 버킷(R2)에는 `staging/` 접두사를 1일 뒤 만료시키는 수명주기 규칙을 건다. 최종 key 파일은 지우지 않는다.
+- **`share:web`**: 서블릿(WebMVC) 전용이고 의존만 추가하면 뜬다.
+  - i18n: 지원 언어는 `ko`, `en`, `ja`, `zh_CN`, `zh_TW`, `es`, `fr`, `de`, `pt`, `ru`, `vi`, `id` 12개이고 언어는 `Accept-Language`로만 정한다 (`zh-Hant`·`zh-TW` → `zh_TW`, `zh`·`zh-Hans` → `zh_CN`). 헤더가 없거나 지원하지 않는 언어는 시스템 로케일이 아니라 `en`이다. 메시지 파일은 각 모듈이 `src/main/resources/i18n/<모듈>/messages_<언어>.properties`에 두고, `share:web`이 `classpath*:i18n/*/messages*.properties`를 모두 찾아 `messageSource` 빈 하나로 묶는다 (UTF-8). 어떤 언어 파일에 키가 없거나 언어 파일 자체가 없으면 `en` 문장으로 대체하므로 모듈마다 `messages_en.properties`를 둔다 (없으면 요청마다 WARN이 남는다). 소비 모듈은 따로 설정하지 않는다.
+  - 키는 모듈마다 Kotlin 상수 객체 `I18N`(`I18N.<DOMAIN>.<NAME>`)으로 쓰고, 값이 properties 키다 (`common.not-found` 같은 소문자·점·하이픈). `share:web`의 공통 키는 `com.langlez.web.i18n.I18N.COMMON`에 있다. 도메인 키(`member.*` 등)는 그 모듈의 properties로 둔다. 인자가 있는 문장은 `MessageFormat`이라 작은따옴표를 `''`로 써야 한다.
+  - 의도한 에러는 `LanglezException(status, key, vararg args, cause)`(`com.langlez.web.exception`)로 던진다. 모든 에러 응답 body는 `Accept`와 상관없이 항상 `application/json`의 `{"error": true, "message": "<요청 언어로 번역된 문장>"}`이고 상태는 HTTP 상태 코드로만 전달한다. `@Valid`·`@Validated` 검증 메시지는 애노테이션에 `message = "{키}"`로 쓰면 같은 `MessageSource`로 번역되고, 응답에는 필드나 파라미터 이름을 붙여 `이름: 문장`으로 이어 붙인다. 검증 애노테이션 메시지는 항상 `{키}`로 쓴다 (안 쓰면 Hibernate Validator가 JVM 로케일 문장을 쓴다). Boot의 `/error`(필터 등 컨트롤러 밖에서 난 에러)도 `JsonErrorController`와 `ErrorAttributes`로 같은 형식으로 나간다.
+  - advice는 `LanglezException`·`ResponseStatusException`(`IntendedExceptionHandler`), Security·DAO·Bean Validation, 나머지(`GlobalExceptionHandler`) 순서로 검사된다. Spring이 advice마다 예외의 `cause`까지 따라가며 핸들러를 찾으므로 이 둘은 `cause`와 상관없이 자기 상태·키·로그 규칙을 따른다. 반대로 일반 예외가 감싼 예외는 `cause`를 따라 처리된다. `IllegalStateException(cause = DataIntegrityViolationException)`은 500이 아니라 409이고, 검증 예외를 감싸면 400이고, `LanglezException`을 감싸면 그 예외의 상태다. 이때 감싼 쪽의 ERROR 로그는 남지 않는다. `HandlerMethodValidationException`은 `ResponseStatusException`의 하위 클래스라서 `IntendedExceptionHandler`에 함께 둔다. `ResponseStatusException` 하위 클래스를 따로 처리하려면 그 핸들러도 여기에 둬야 한다.
+  - 로그: 4xx는 `ConstraintViolationException`을 포함해 어떤 advice도 아무것도 남기지 않는다. 5xx `LanglezException`·5xx `ResponseStatusException`·5xx `ErrorResponse`·처리되지 않은 예외는 ERROR로 스택까지 남긴다.
+  - Spring Security(`AuthenticationException`·`AccessDeniedException` → 401·403), DAO(`DataIntegrityViolationException`·낙관적 락 실패 → 409), Bean Validation(클래스 레벨 `@Validated` 컨트롤러가 던지는 `ConstraintViolationException` → 400, 서비스 계층에서 난 같은 예외도 400이다) 처리는 그 클래스가 classpath에 있을 때만 켜진다 (`compileOnly` + `@ConditionalOnClass`). `ErrorResponse`를 구현한 Spring MVC 예외(406, multipart 파트 누락 등)와 `ResponseStatusException`은 자기 상태 코드를 쓰고 메시지는 상태→키 매핑(`statusKey`)으로 정한다. `MultipartException`(multipart가 아닌 요청 등)은 400이다. 그 밖의 예외만 500이다.
 - **Boot 4 프로퍼티·패키지 이름**이 3.x와 다르다: Mongo URI는 `spring.mongodb.uri`, 자동설정 클래스는 `org.springframework.boot.<모듈>.autoconfigure.*`.
 - **새 실행 서비스를 추가할 때**: `settings.gradle.kts`에 include하고, 루트 `build.gradle.kts`의 `bootJar` 조건(`project.path != ":app"`이면 비활성화)에 그 경로를 포함시켜야 jar가 만들어진다. 아직 Dockerfile과 Railway 배포 설정은 없다.
 
