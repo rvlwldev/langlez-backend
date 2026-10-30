@@ -61,7 +61,7 @@ class DemoController {
     @GetMapping("/json-only", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun jsonOnly(): String = "ok"
 
-    @PostMapping("/part", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @PostMapping("/part")
     fun part(@RequestPart("file") file: MultipartFile): String = "ok"
 
     @GetMapping("/unauthorized")

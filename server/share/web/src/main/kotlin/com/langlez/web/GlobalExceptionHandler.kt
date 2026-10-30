@@ -16,6 +16,7 @@ import org.springframework.validation.FieldError
 import org.springframework.web.ErrorResponse
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.multipart.MultipartException
 import org.springframework.web.method.annotation.HandlerMethodValidationException
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.NoHandlerFoundException
@@ -63,6 +64,11 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
         val message = messages.translate(e.reason ?: statusKey(e.statusCode.value()), locale)
         return respond(e.statusCode, message, e.headers)
     }
+
+    @ExceptionHandler(MultipartException::class)
+    fun handleMultipart(e: MultipartException, locale: Locale): ResponseEntity<ExceptionResponse> =
+        if (e is ErrorResponse) handleOthers(e, locale)
+        else respond(HttpStatus.BAD_REQUEST, messages.translate(I18N.COMMON.BAD_REQUEST, locale))
 
     @ExceptionHandler(Exception::class)
     fun handleOthers(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> {

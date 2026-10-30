@@ -22,7 +22,11 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.Properties
 
-@SpringBootTest(classes = [ConsumerApp::class], webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    classes = [ConsumerApp::class],
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = ["spring.servlet.multipart.max-file-size=10B"],
+)
 class WebSupportTest : BehaviorSpec() {
 
     override fun extensions() = listOf(SpringExtension)
@@ -156,6 +160,8 @@ class WebSupportTest : BehaviorSpec() {
                 Triple("ErrorResponse 5xx", { get("/error-response?status=503") }, 503 to "Something went wrong on our end. Please try again in a moment."),
                 Triple("받아들일 수 없는 Accept", { get("/json-only", accept = "application/xml") }, 406 to badRequest.getValue("en")),
                 Triple("누락된 multipart 파트", { call("POST", "/part", body = "--b\r\nContent-Disposition: form-data; name=\"other\"\r\n\r\nx\r\n--b--\r\n", contentType = "multipart/form-data; boundary=b") }, 400 to badRequest.getValue("en")),
+                Triple("multipart 가 아닌 요청", { call("POST", "/part", body = "{}") }, 400 to badRequest.getValue("en")),
+                Triple("업로드 크기 초과", { call("POST", "/part", body = "--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\r\n${"x".repeat(100)}\r\n--b--\r\n", contentType = "multipart/form-data; boundary=b") }, 413 to badRequest.getValue("en")),
                 Triple("처리되지 않은 예외", { get("/boom") }, 500 to "Something went wrong on our end. Please try again in a moment."),
             )
             cases.forEach { (name, request, expected) ->
