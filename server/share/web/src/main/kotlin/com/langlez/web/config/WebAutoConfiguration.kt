@@ -1,5 +1,14 @@
-package com.langlez.web
+package com.langlez.web.config
 
+import com.langlez.web.error.JsonErrorController
+import com.langlez.web.error.TranslatedErrorAttributes
+import com.langlez.web.exception.DataExceptionHandler
+import com.langlez.web.exception.GlobalExceptionHandler
+import com.langlez.web.exception.IntendedExceptionHandler
+import com.langlez.web.exception.SecurityExceptionHandler
+import com.langlez.web.exception.ValidationExceptionHandler
+import com.langlez.web.i18n.AcceptLanguageLocaleResolver
+import com.langlez.web.i18n.FallbackMessageSource
 import jakarta.validation.ConstraintViolationException
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass

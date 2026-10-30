@@ -1,5 +1,9 @@
-package com.langlez.web
+package com.langlez.web.exception
 
+import com.langlez.web.i18n.I18N
+import com.langlez.web.i18n.statusKey
+import com.langlez.web.i18n.translate
+import com.langlez.web.i18n.translateInvalid
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.beans.TypeMismatchException
 import org.springframework.context.MessageSource
@@ -33,7 +37,8 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
 
     @ExceptionHandler(BindException::class)
     fun handleBind(e: BindException, locale: Locale): ResponseEntity<ExceptionResponse> =
-        respondInvalid(e.allErrors.map { (it as? FieldError)?.field to it.defaultMessage }, locale)
+        if (e.allErrors.any { it.codes.isNullOrEmpty() || (it as? FieldError)?.isBindingFailure == true }) handleBadRequest(e, locale)
+        else respondInvalid(e.allErrors.map { (it as? FieldError)?.field to it.defaultMessage }, locale)
 
     @ExceptionHandler(NoResourceFoundException::class, NoHandlerFoundException::class)
     fun handleNotFound(e: Exception, locale: Locale): ResponseEntity<ExceptionResponse> =

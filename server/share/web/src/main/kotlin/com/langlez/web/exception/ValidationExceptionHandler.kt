@@ -1,6 +1,8 @@
-package com.langlez.web
+package com.langlez.web.exception
 
+import com.langlez.web.i18n.translateInvalid
 import jakarta.validation.ConstraintViolationException
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.MessageSource
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import java.util.Locale
 
 @RestControllerAdvice
+@ConditionalOnClass(name = ["jakarta.validation.ConstraintViolationException"])
 @Order(Ordered.LOWEST_PRECEDENCE - 1)
 class ValidationExceptionHandler(private val messages: MessageSource) {
 

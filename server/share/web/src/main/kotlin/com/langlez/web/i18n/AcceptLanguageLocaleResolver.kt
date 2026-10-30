@@ -1,4 +1,4 @@
-package com.langlez.web
+package com.langlez.web.i18n
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -11,7 +11,7 @@ class AcceptLanguageLocaleResolver : LocaleResolver {
         val header = request.getHeader("Accept-Language") ?: return DEFAULT
         val ranges = try {
             Locale.LanguageRange.parse(header)
-        } catch (_: IllegalArgumentException) {
+        } catch (_: RuntimeException) {
             return DEFAULT
         }
         return ranges.asSequence()

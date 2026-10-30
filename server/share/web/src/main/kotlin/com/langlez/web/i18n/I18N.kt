@@ -1,4 +1,4 @@
-package com.langlez.web
+package com.langlez.web.i18n
 
 object I18N {
 

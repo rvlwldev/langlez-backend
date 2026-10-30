@@ -1,6 +1,6 @@
 package com.langlez.consumer
 
-import com.langlez.web.LanglezException
+import com.langlez.web.exception.LanglezException
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse

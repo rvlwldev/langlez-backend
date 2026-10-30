@@ -1,5 +1,7 @@
-package com.langlez.web
+package com.langlez.web.error
 
+import com.langlez.web.i18n.statusKey
+import com.langlez.web.i18n.translate
 import jakarta.servlet.RequestDispatcher
 import org.springframework.boot.web.error.ErrorAttributeOptions
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes

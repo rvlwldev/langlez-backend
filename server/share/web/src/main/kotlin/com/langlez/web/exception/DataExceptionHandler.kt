@@ -1,5 +1,8 @@
-package com.langlez.web
+package com.langlez.web.exception
 
+import com.langlez.web.i18n.I18N
+import com.langlez.web.i18n.translate
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.MessageSource
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import java.util.Locale
 
 @RestControllerAdvice
+@ConditionalOnClass(name = ["org.springframework.dao.DataAccessException"])
 @Order(Ordered.LOWEST_PRECEDENCE - 1)
 class DataExceptionHandler(private val messages: MessageSource) {
 

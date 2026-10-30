@@ -1,4 +1,4 @@
-package com.langlez.web
+package com.langlez.web.exception
 
 import org.springframework.http.HttpStatus
 

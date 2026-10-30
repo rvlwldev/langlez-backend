@@ -1,4 +1,4 @@
-package com.langlez.web
+package com.langlez.web.i18n
 
 import org.springframework.context.MessageSource
 import org.springframework.http.HttpStatus

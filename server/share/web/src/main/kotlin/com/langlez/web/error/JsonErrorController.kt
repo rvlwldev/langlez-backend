@@ -1,4 +1,4 @@
-package com.langlez.web
+package com.langlez.web.error
 
 import jakarta.servlet.RequestDispatcher
 import jakarta.servlet.http.HttpServletRequest
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.request.ServletWebRequest
 
 @RestController
-@RequestMapping($$"${server.error.path:${error.path:/error}}")
+@RequestMapping($$"${spring.web.error.path:${error.path:/error}}")
 class JsonErrorController(private val errorAttributes: ErrorAttributes) : ErrorController {
 
     @RequestMapping

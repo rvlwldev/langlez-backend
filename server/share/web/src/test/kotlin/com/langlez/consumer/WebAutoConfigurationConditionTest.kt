@@ -1,11 +1,10 @@
 package com.langlez.consumer
 
-import com.langlez.web.WebAutoConfiguration
+import com.langlez.web.config.WebAutoConfiguration
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext
-import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.ImportSelector
 import org.springframework.core.type.AnnotationMetadata
@@ -17,7 +16,6 @@ class WebAutoConfigurationSelector : ImportSelector {
         arrayOf(WebAutoConfiguration::class.java.name)
 }
 
-@Configuration
 @Import(WebAutoConfigurationSelector::class)
 class WebAutoConfigurationHolder
 
