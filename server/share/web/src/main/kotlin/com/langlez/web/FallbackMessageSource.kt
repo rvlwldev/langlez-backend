@@ -9,7 +9,7 @@ class FallbackMessageSource(basenames: List<String>) : ResourceBundleMessageSour
     init {
         setBasenames(*basenames.toTypedArray())
         setDefaultEncoding("UTF-8")
-        setFallbackToSystemLocale(false)
+        setDefaultLocale(AcceptLanguageLocaleResolver.DEFAULT)
     }
 
     override fun resolveCodeWithoutArguments(code: String, locale: Locale): String? =

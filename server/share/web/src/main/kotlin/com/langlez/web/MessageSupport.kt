@@ -6,6 +6,14 @@ import java.util.Locale
 
 fun MessageSource.translate(key: String, locale: Locale): String = getMessage(key, null, key, locale)!!
 
+fun MessageSource.translateInvalid(errors: List<Pair<String?, String?>>, locale: Locale): String =
+    errors
+        .joinToString(", ") { (field, text) ->
+            val translated = text ?: translate(I18N.COMMON.INVALID_ARGUMENT, locale)
+            if (field == null) translated else "$field: $translated"
+        }
+        .ifBlank { translate(I18N.COMMON.INVALID_ARGUMENT, locale) }
+
 fun statusKey(status: Int): String =
     when (status) {
         HttpStatus.UNAUTHORIZED.value() -> I18N.COMMON.UNAUTHORIZED

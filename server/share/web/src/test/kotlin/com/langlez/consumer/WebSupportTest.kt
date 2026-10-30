@@ -188,6 +188,34 @@ class WebSupportTest : BehaviorSpec() {
                 val reply = get("/size?size=0", "ja")
                 Then("파라미터 이름과 번역 문장으로 답한다") { reply.shouldBe(400, "size: サイズは1以上にしてください。") }
             }
+            When("클래스 레벨 @Validated 컨트롤러의 파라미터 제약이 틀리면") {
+                val reply = get("/classlevel?n=0", "ja")
+                Then("파라미터 이름과 번역 문장으로 답한다") { reply.shouldBe(400, "n: サイズは1以上にしてください。") }
+            }
+            When("클래스 레벨 @Validated 컨트롤러의 파라미터 여러 개가 틀리면") {
+                val reply = get("/classlevel-pair?first=0&second=0", "ko")
+                Then("파라미터별 번역 문장을 이어 붙인다") {
+                    reply.first shouldBe 400
+                    reply.second.keys shouldBe setOf("error", "message")
+                    reply.second["error"] shouldBe true
+                    val message = reply.second["message"] as String
+                    message shouldContain "first: 크기는 1 이상이어야 합니다."
+                    message shouldContain "second: 크기는 1 이상이어야 합니다."
+                }
+            }
+        }
+
+        Given("요청 언어의 파일이 없는 소비 모듈") {
+            When("fr 로 그 모듈의 키를 요청하면") {
+                val reply = get("/langlez?status=404&key=${I18N.CONSUMER.GREETING}&arg=Mina", "fr")
+                Then("en 문장으로 대체한다") { reply.shouldBe(404, "Hello, Mina!") }
+                Then("로그를 남기지 않는다") { logs.list.shouldBeEmpty() }
+            }
+            When("fr 로 share:web 키를 요청하면") {
+                val reply = get("/page?page=abc", "fr")
+                Then("fr 문장으로 답한다") { reply.shouldBe(400, badRequest.getValue("fr")) }
+                Then("로그를 남기지 않는다") { logs.list.shouldBeEmpty() }
+            }
         }
 
         Given("처리하는 예외의 로그") {
@@ -201,6 +229,7 @@ class WebSupportTest : BehaviorSpec() {
                 "/data-conflict",
                 "/optimistic",
                 "/size?size=0",
+                "/classlevel?n=0",
                 "/rse?status=404",
                 "/error-response?status=422",
             ).forEach { path ->

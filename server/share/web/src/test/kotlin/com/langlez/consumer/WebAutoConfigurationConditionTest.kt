@@ -31,26 +31,28 @@ class WebAutoConfigurationConditionTest : BehaviorSpec({
             refresh()
         }
 
-    Given("Spring Security 와 DAO 클래스가 있는 classpath") {
+    Given("Spring Security, DAO, Bean Validation 클래스가 있는 classpath") {
         When("자동설정을 올리면") {
             val context = contextWith(null)
-            Then("공통·Security·Data 핸들러가 모두 만들어진다") {
+            Then("공통·Security·Data·Validation 핸들러가 모두 만들어진다") {
                 context.containsBean("globalExceptionHandler") shouldBe true
                 context.containsBean("securityExceptionHandler") shouldBe true
                 context.containsBean("dataExceptionHandler") shouldBe true
+                context.containsBean("validationExceptionHandler") shouldBe true
             }
         }
     }
 
-    Given("Spring Security 와 DAO 클래스가 없는 classpath") {
+    Given("Spring Security, DAO, Bean Validation 클래스가 없는 classpath") {
         When("자동설정을 올리면") {
-            val context = contextWith(FilteredClassLoader("org.springframework.security", "org.springframework.dao"))
+            val context = contextWith(FilteredClassLoader("org.springframework.security", "org.springframework.dao", "jakarta.validation"))
             Then("기동되고 공통 핸들러만 만들어진다") {
                 context.containsBean("messageSource") shouldBe true
                 context.containsBean("localeResolver") shouldBe true
                 context.containsBean("globalExceptionHandler") shouldBe true
                 context.containsBean("securityExceptionHandler") shouldBe false
                 context.containsBean("dataExceptionHandler") shouldBe false
+                context.containsBean("validationExceptionHandler") shouldBe false
             }
         }
     }

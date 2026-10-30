@@ -78,15 +78,8 @@ class GlobalExceptionHandler(private val messages: MessageSource) {
         return respond(status, messages.translate(statusKey(status.value()), locale), headers)
     }
 
-    private fun respondInvalid(errors: List<Pair<String?, String?>>, locale: Locale): ResponseEntity<ExceptionResponse> {
-        val message = errors
-            .joinToString(", ") { (field, text) ->
-                val translated = text ?: messages.translate(I18N.COMMON.INVALID_ARGUMENT, locale)
-                if (field == null) translated else "$field: $translated"
-            }
-            .ifBlank { messages.translate(I18N.COMMON.INVALID_ARGUMENT, locale) }
-        return respond(HttpStatus.BAD_REQUEST, message)
-    }
+    private fun respondInvalid(errors: List<Pair<String?, String?>>, locale: Locale): ResponseEntity<ExceptionResponse> =
+        respond(HttpStatus.BAD_REQUEST, messages.translateInvalid(errors, locale))
 
     private fun respond(status: HttpStatusCode, message: String, headers: HttpHeaders = HttpHeaders.EMPTY): ResponseEntity<ExceptionResponse> =
         ResponseEntity.status(status).headers(headers).contentType(MediaType.APPLICATION_JSON).body(ExceptionResponse(message))

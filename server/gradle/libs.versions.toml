@@ -56,6 +56,7 @@ dependency-springboot-kafka = { module = "org.springframework.boot:spring-boot-s
 dependency-spring-retry = { module = "org.springframework.retry:spring-retry", version = "2.0.13" }
 dependency-spring-security-core = { module = "org.springframework.security:spring-security-core" }
 dependency-spring-tx = { module = "org.springframework:spring-tx" }
+dependency-jakarta-validation = { module = "jakarta.validation:jakarta.validation-api" }
 
 # QueryDSL
 dependency-querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }

@@ -12,6 +12,7 @@ dependencies {
 
     compileOnly(libs.dependency.spring.security.core)
     compileOnly(libs.dependency.spring.tx)
+    compileOnly(libs.dependency.jakarta.validation)
 
     testImplementation(libs.dependency.springboot.validation)
     testImplementation(libs.dependency.kotlin.jackson)

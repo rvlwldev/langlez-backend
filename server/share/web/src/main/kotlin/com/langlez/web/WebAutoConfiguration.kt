@@ -1,5 +1,6 @@
 package com.langlez.web
 
+import jakarta.validation.ConstraintViolationException
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -60,6 +61,15 @@ class WebAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun dataExceptionHandler(messageSource: MessageSource) = DataExceptionHandler(messageSource)
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(ConstraintViolationException::class)
+    class ValidationExceptionConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        fun validationExceptionHandler(messageSource: MessageSource) = ValidationExceptionHandler(messageSource)
     }
 
     private fun messageBasenames(): List<String> =

@@ -16,6 +16,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.stereotype.Component
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -78,6 +79,20 @@ class DemoController {
 
     @GetMapping("/boom")
     fun boom(): String = throw IllegalStateException("boom")
+}
+
+@RestController
+@Validated
+class ClassLevelValidatedController {
+
+    @GetMapping("/classlevel")
+    fun classLevel(@RequestParam @Min(1, message = "{consumer.size.min}") n: Int): String = "ok"
+
+    @GetMapping("/classlevel-pair")
+    fun classLevelPair(
+        @RequestParam @Min(1, message = "{consumer.size.min}") first: Int,
+        @RequestParam @Min(1, message = "{consumer.size.min}") second: Int,
+    ): String = "ok"
 }
 
 @Component
